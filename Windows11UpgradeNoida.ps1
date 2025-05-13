@@ -1,0 +1,318 @@
+# Define system locale
+$systemLocale = (dism /online /get-intl | Where-Object { $_ -match '^Installed language\(s\):' }) -replace '.*:\s*',''
+
+# Define network path and destination folder
+$sourceFolder = "\\10.131.45.121\Basic Softwares"
+$destinationFolder = "$env:Temp"
+$MountDrive = "Y"
+
+# Remove existing drive mapping if exists
+if (Test-Path "$MountDrive`:") {
+    Remove-PSDrive -Name $MountDrive -Force
+    Start-Sleep -Seconds 2  # Wait to ensure removal is completed
+}
+
+# Map network drive temporarily
+try {
+    New-PSDrive -Name $MountDrive -PSProvider FileSystem -Root $sourceFolder -Persist -ErrorAction Stop
+} catch {
+    Write-Output "Failed to map network drive. Check connectivity."
+    exit 1
+}
+
+# Ensure destination folder exists
+if (-not (Test-Path $destinationFolder)) {
+    New-Item -Path $destinationFolder -ItemType Directory | Out-Null
+    Write-Output "Created folder: $destinationFolder"
+}
+
+# Select ISO based on locale
+switch ($systemLocale) {
+    "en-US" { $sourceISO = "$MountDrive`:Win11_24H2_ENUS.iso" }
+    "en-GB" { $sourceISO = "$MountDrive`:Win11_24H2_ENGB.iso" }
+    default { 
+        Write-Output "No matching ISO found for system locale: $systemLocale"
+        Remove-PSDrive -Name $MountDrive -Force -ErrorAction SilentlyContinue
+        exit 1
+    }
+}
+
+# Check if source ISO exists
+if (-not (Test-Path $sourceISO)) {
+    Write-Output "Source ISO not found: $sourceISO"
+    Remove-PSDrive -Name $MountDrive -Force
+    exit 1
+}
+
+# Define destination path
+$destinationISO = Join-Path $destinationFolder (Split-Path $sourceISO -Leaf)
+
+# Get file size
+$fileInfo = Get-Item "$sourceISO"
+$totalSize = $fileInfo.Length
+$totalMB = [math]::Round($totalSize / 1MB, 2)
+
+Write-Output "File Size: $totalMB MB"
+
+# If the file is small, use normal Copy-Item
+if ($totalMB -lt 1) {
+    Copy-Item -Path $sourceISO -Destination $destinationISO -Force
+    Write-Output "File copied successfully (small file, fast copy)."
+    Remove-PSDrive -Name $MountDrive -Force
+    exit 0
+}
+
+# Initialize progress
+$blockSize = 10MB  # Adjusted for performance
+$copiedBytes = 0
+$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+# Create file streams
+$sourceStream = [System.IO.File]::OpenRead($sourceISO)
+$destStream = [System.IO.File]::Create($destinationISO)
+
+try {
+    $buffer = New-Object byte[] $blockSize
+    while (($readBytes = $sourceStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+        $destStream.Write($buffer, 0, $readBytes)
+        $copiedBytes += $readBytes
+
+        # Progress Calculation
+        $elapsedTime = $stopwatch.Elapsed.TotalSeconds
+        $speed = if ($elapsedTime -gt 0) { [math]::Round($copiedBytes / $elapsedTime / 1MB, 2) } else { 0 }
+        $percentComplete = [math]::Round(($copiedBytes / $totalSize) * 100, 2)
+        
+        # ETA Calculation
+        $remainingBytes = $totalSize - $copiedBytes
+        $etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / ($speed * 1MB), 2) } else { "Calculating..." }
+
+        if ($etaSeconds -is [double]) {
+            $etaHours = [math]::Floor($etaSeconds / 3600)
+            $etaMinutes = [math]::Floor(($etaSeconds % 3600) / 60)
+            $etaRemainingSeconds = [math]::Floor($etaSeconds % 60)
+            
+            $etaFormatted = ""
+            if ($etaHours -gt 0) { $etaFormatted += "${etaHours}h " }
+            if ($etaMinutes -gt 0) { $etaFormatted += "${etaMinutes}m " }
+            if ($etaRemainingSeconds -gt 0 -or $etaFormatted -eq "") { $etaFormatted += "${etaRemainingSeconds}s" }
+        } else {
+            $etaFormatted = "Calculating..."
+        }
+
+        Write-Progress -Activity "Copying File..." -Status "$percentComplete% Complete - ETA: $etaFormatted" -PercentComplete $percentComplete
+        Write-Host "`rTotal: $totalMB MB | Copied: $([math]::Round($copiedBytes / 1MB, 2)) MB | Speed: $speed MB/s | ETA: $etaFormatted" -NoNewline
+    }
+
+    $stopwatch.Stop()
+    Write-Host "`nCopy complete in $($stopwatch.Elapsed.ToString())."
+
+} catch {
+    Write-Output "Error occurred during file copy: $_"
+} finally {
+    $sourceStream.Close()
+    $destStream.Close()
+    $sourceStream.Dispose()
+    $destStream.Dispose()
+    Remove-PSDrive -Name $MountDrive -Force
+}
+
+Write-Output "File copy completed successfully!"
+
+# --- Install Windows 11 ---
+# Find Downloaded ISO File
+$isoPath = Get-ChildItem -Path "$env:Temp\" -Filter "Win11*.iso" -File | Select-Object -ExpandProperty FullName -First 1
+
+if (-not $isoPath) {
+    Write-Host "No ISO file found in Temp Folder." -ForegroundColor Red
+    exit
+}
+
+Write-Host "ISO found: $isoPath"
+
+# Mount ISO
+Write-Host "Mounting ISO..."
+try {
+    Mount-DiskImage -ImagePath $isoPath -ErrorAction Stop
+    Write-Host "ISO Mounted Successfully." -ForegroundColor Green
+} catch {
+    Write-Host "Failed to mount ISO: $_" -ForegroundColor Red
+    exit
+}
+
+# Get Drive Letter of Mounted ISO
+$driveLetter = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
+$setupPath = "$driveLetter`:\setup.exe"
+
+if (-not (Test-Path $setupPath)) {
+    Write-Host "Setup file not found on mounted ISO. Exiting..." -ForegroundColor Red
+    exit
+}
+
+# Start Windows 11 upgrade (Silent Install)
+# GitHub CPU lists
+$intelListUrl = "https://raw.githubusercontent.com/rcmaehl/WhyNotWin11/main/includes/SupportedProcessorsIntel.txt"
+$amdListUrl = "https://raw.githubusercontent.com/rcmaehl/WhyNotWin11/main/includes/SupportedProcessorsAMD.txt"
+$qualcommListUrl = "https://raw.githubusercontent.com/rcmaehl/WhyNotWin11/main/includes/SupportedProcessorsQualcomm.txt"
+
+# Get raw CPU name
+$cpu = Get-CimInstance -ClassName Win32_Processor
+$rawCpuName = $cpu.Name.Trim()
+
+# Extract clean CPU model string (e.g., "Core(TM) i5-1135G7")
+$cleanCpuName = if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
+    $matches[0]
+} elseif ($rawCpuName -match "Core\s+i[3579]-\S+") {
+    $matches[0] -replace "Core", "Core(TM)" # Normalize format if needed
+} else {
+    ""
+}
+
+# Fallback if match fails
+if (-not $cleanCpuName) {
+    Write-Host "⚠️ Could not extract a matching CPU model from '$rawCpuName'" -ForegroundColor Yellow
+    return
+}
+
+# Load System.Net.Http.dll for PowerShell 5.1
+if (-not ("System.Net.Http.HttpClient" -as [type])) {
+    Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll"
+}
+
+# Use HttpClient instead of Invoke-WebRequest
+Add-Type -AssemblyName "System.Net.Http"
+$httpClientHandler = New-Object System.Net.Http.HttpClientHandler
+$httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
+
+# Download CPU lists
+try {
+    $intelList = $httpClient.GetStringAsync($intelListUrl).Result
+    $amdList = $httpClient.GetStringAsync($amdListUrl).Result
+    $qualcommList = $httpClient.GetStringAsync($qualcommListUrl).Result
+} catch {
+    Write-Host "⚠️ Failed to download processor support lists." -ForegroundColor Yellow
+    return
+}
+
+# Split lists into lines
+$intelList = $intelList -split "`n" | ForEach-Object { $_.Trim() }
+$amdList = $amdList -split "`n" | ForEach-Object { $_.Trim() }
+$qualcommList = $qualcommList -split "`n" | ForEach-Object { $_.Trim() }
+
+# Determine manufacturer and check support
+$cpuSupported = $false
+switch -Regex ($cpu.Manufacturer) {
+    "Intel"    { $cpuSupported = $intelList -contains $cleanCpuName }
+    "AMD"      { $cpuSupported = $amdList -contains $cleanCpuName }
+    "Qualcomm" { $cpuSupported = $qualcommList -contains $cleanCpuName }
+    default    { Write-Host "❓ Unknown manufacturer: $($cpu.Manufacturer)" }
+}
+
+# Function to check TPM 2.0
+function Check-TPM {
+    $tpm = Get-WmiObject -Namespace "Root\CIMv2\Security\MicrosoftTpm" -Class Win32_Tpm -ErrorAction SilentlyContinue
+    return $tpm.SpecVersion -match "2.0"
+}
+
+# Check if the processor is 64-bit
+$architecture = $cpu.AddressWidth
+$cpu64Bit = $architecture -eq 64
+
+# Check CPU Speed (Minimum 1 GHz)
+$cpuSpeedGHz = $cpu.MaxClockSpeed / 1000
+$cpuSpeedCompatible = $cpuSpeedGHz -ge 1
+
+# Get Secure Boot status
+$secureBoot = Confirm-SecureBootUEFI -ErrorAction SilentlyContinue
+$secureBootEnabled = $secureBoot -eq $true
+
+# Check TPM 2.0 Support
+$tpmCompatible = Check-TPM
+
+# Display results
+Write-Host "`nWindows 11 Compatibility Check" -ForegroundColor Cyan
+Write-Host "-----------------------------------"
+Write-Host "Processor: $rawCpuName"
+
+# Architecture Check
+if ($cpu64Bit) {
+    Write-Host "64-bit CPU: ✔ Compatible" -ForegroundColor Green
+} else {
+    Write-Host "64-bit CPU: ❌ Not Compatible" -ForegroundColor Red
+}
+
+# CPU Speed Check
+if ($cpuSpeedCompatible) {
+    Write-Host "CPU Speed: $cpuSpeedGHz GHz (✔ Compatible)" -ForegroundColor Green
+} else {
+    Write-Host "CPU Speed: $cpuSpeedGHz GHz (❌ Not Compatible)" -ForegroundColor Red
+}
+
+# Secure Boot Check
+if ($secureBootEnabled) {
+    Write-Host "Secure Boot Enabled: ✔ Yes" -ForegroundColor Green
+} else {
+    Write-Host "Secure Boot Enabled: ❌ No" -ForegroundColor Red
+}
+
+# TPM 2.0 Check
+if ($tpmCompatible) {
+    Write-Host "TPM 2.0 Support: ✔ Yes" -ForegroundColor Green
+} else {
+    Write-Host "TPM 2.0 Support: ❌ No" -ForegroundColor Red
+}
+
+# CPU Support Check
+if ($cpuSupported) {
+    Write-Host "CPU Compatibility: ✔ $cleanCpuName is supported" -ForegroundColor Green
+} else {
+    Write-Host "CPU Compatibility: ❌ $cleanCpuName is NOT supported" -ForegroundColor Red
+}
+
+# Store failed checks
+$incompatibilityReasons = @()
+if (-not $cpu64Bit) { $incompatibilityReasons += "CPU is not 64-bit." }
+if (-not $cpuSpeedCompatible) { $incompatibilityReasons += "CPU speed is below 1 GHz." }
+if (-not $secureBootEnabled) { $incompatibilityReasons += "Secure Boot is not enabled." }
+if (-not $tpmCompatible) { $incompatibilityReasons += "TPM 2.0 not supported or not enabled." }
+if (-not $cpuSupported) { $incompatibilityReasons += "CPU is not on the supported list." }
+
+# Final verdict
+if ($incompatibilityReasons.Count -gt 0) {
+    Write-Host "`n❌ Your System is NOT fully compatible with Windows 11 due to:" -ForegroundColor Yellow
+    foreach ($reason in $incompatibilityReasons) {
+        Write-Host " - $reason" -ForegroundColor Red
+    }
+    Write-Host "`n⚙ Registry Tweaks will be applied to bypass the checks..." -ForegroundColor Yellow
+	reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\MoSetup" /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1 /f
+    reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassTPMCheck /t REG_DWORD /d 1 /f
+    reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassSecureBootCheck /t REG_DWORD /d 1 /f
+    reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassRAMCheck /t REG_DWORD /d 1 /f
+    reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassStorageCheck /t REG_DWORD /d 1 /f
+    reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassCPUCheck /t REG_DWORD /d 1 /f
+    Write-Host "✅ Bypass Applied Successfully. Now Proceed for installation..." -ForegroundColor Green
+	$installArgs = "/product server /auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
+} else {
+    Write-Host "`n✅ Your System is fully compatible with Windows 11! Proceed with normal installation." -ForegroundColor Green
+	$installArgs = "/auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
+}
+
+# Start Windows 11 Upgrade
+Write-Host "Starting Windows 11 upgrade..."
+Start-Process -FilePath $setupPath -ArgumentList $installArgs -Wait
+
+# Unmount ISO
+Write-Host "Unmounting ISO..."
+
+# Unmount the ISO after installation
+Write-Host "Cleaning up downloaded ISO..."
+try {
+	Write-Host "✅ Windows 11 upgrade process complete."
+    Dismount-DiskImage -ImagePath $isoPath -ErrorAction Stop
+    Remove-Item -Path $isoPath -Force
+    Write-Host "ISO dismounted and deleted successfully." -ForegroundColor Green
+} catch {
+    Write-Host "Failed to clean up ISO: $_" -ForegroundColor Yellow
+}
+
+Write-Host "Rebooting System..."
+#Restart-Computer -Force
