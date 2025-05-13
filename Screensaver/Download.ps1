@@ -1,4 +1,4 @@
-$url = "https://github.com/bprasad884uu/Gainwell/raw/e191d9db492538af6c02930d832d6890e2ef12e6/Screensaver/Company_Screensaver.ps1"
+$url = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/Screensaver/Company_Screensaver.ps1"
 $output = "$env:Temp\Screensaver.ps1"
 
 # Remove if it already exists
