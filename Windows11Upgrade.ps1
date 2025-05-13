@@ -7,7 +7,59 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 #Check Registry (Original Install Language)
 $locale = (dism /online /get-intl | Where-Object { $_ -match '^Installed language\(s\):' }) -replace '.*:\s*',''
 
-# Set Download URL & Destination Based on Locale
+# Set variables
+$fidoUrl = "https://github.com/pbatard/Fido/raw/refs/heads/master/Fido.ps1"
+$fidoPath = "$env:TEMP\Fido.ps1"
+
+# Download Fido.ps1 using HttpClient
+Add-Type -AssemblyName System.Net.Http
+$client = [System.Net.Http.HttpClient]::new()
+$response = $client.GetAsync($fidoUrl).Result
+if ($response.IsSuccessStatusCode) {
+    [System.IO.File]::WriteAllText($fidoPath, $response.Content.ReadAsStringAsync().Result)
+    Write-Host "✅ Fido.ps1 downloaded successfully to $fidoPath"
+} else {
+    Write-Host "❌ Failed to download Fido.ps1. Status Code: $($response.StatusCode)" -ForegroundColor Red
+    exit 1
+}
+
+# Set locale (manually define for demo or detect dynamically)
+#$locale = (Get-Culture).Name
+
+# Map PowerShell DISM language to Fido language codes
+switch ($locale) {
+    "en-GB" { $fidoLang = "English International" }
+    "en-US" { $fidoLang = "English" }
+    default {
+        Write-Host "Unsupported language: $locale" -ForegroundColor Red
+        exit
+    }
+}
+
+# Build Fido arguments (e.g., Windows 11, version 24H2, English/International, x64)
+$fidoArgs = @(
+    "-Win", "11",
+    "-Rel", "24H2",
+    "-Ed", "Pro",
+    "-Lang", $fidoLang,
+    "-Arch", "x64",
+    "-GetUrl"
+)
+
+# Run Fido.ps1 and capture output
+$isoUrl = powershell.exe -NoProfile -ExecutionPolicy Bypass -File $fidoPath @fidoArgs
+#$isoUrl = ($downloadOutput | Where-Object { $_ -match '^https:\/\/' }) -split '\s+' | Select-Object -First 1
+
+if (-not $isoUrl) {
+    Write-Host "❌ Could not extract download URL from Fido output." -ForegroundColor Red
+    exit
+}
+
+# Set destination filename
+$destination = "$env:TEMP\Win11_24H2_${locale}.iso"
+Write-Host "Detected Language: $locale - Downloading ISO..."
+
+<## Set Download URL & Destination Based on Locale
 if ($locale -eq "en-GB") { #en-GB 0809
     $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_EnglishInternational_x64.iso?t=700a06e6-bd9f-4630-a7c2-3020772b9bb2&P1=1746613911&P2=601&P3=2&P4=wuRVz9S73l2SP8KpWuuTpk551hgJVt8z%2fM8jhfCTjuaZbCyDKLYK%2fo9Rq0v9VkQFOk3zaua94Q7Yu1WSRS%2bxxnC737Gs2Tuu585o9IqdSx9vXQeEL6nNemwPZY9pngDY4MNg8S4r1zKAjft82b7rMvuS5TiaWfEiJkSIfWku5EWFWi8bS5ZChYhGZmj5PpUjhwg%2fgAUlAlcXgOXplj2ecRc%2fX6MdsA29iV3%2fMvJiq9i2yW0FOuDRyttHLwsvAibpo9wdfNvIWH3TBZmaWRcYpWl6jBVDRSbB8DB5LvWJR%2bD%2f4tm5avxBOKPUg2v3rowsxK9ql%2bqT1aHQZ4wNllj7rQ%3d%3d"
     Write-Host "Detected Language: English (UK) - Downloading ISO..."
@@ -19,7 +71,7 @@ if ($locale -eq "en-GB") { #en-GB 0809
 } else {
     Write-Host "Unsupported Language. No ISO available." -ForegroundColor Red
     exit
-}
+}#>
 
 <# Assign language based on locale
 if ($Locale -eq "0809") {
