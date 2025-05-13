@@ -1,4 +1,4 @@
-$url = "https://acceleronsolutions-my.sharepoint.com/:u:/g/personal/bishnu_panigrahi_acceleronsolutions_io/EbmXIBAvrzJFtgb31Bb_2ZgBrYhCj0R_DugZTONNW5YtVg?download=1"
+$url = "https://github.com/bprasad884uu/Gainwell/raw/e191d9db492538af6c02930d832d6890e2ef12e6/Screensaver/Company_Screensaver.ps1"
 $output = "$env:Temp\Screensaver.ps1"
 
 # Remove if it already exists
