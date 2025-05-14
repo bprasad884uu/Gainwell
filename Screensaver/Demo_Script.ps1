@@ -36,9 +36,9 @@ $isDomainJoined = $system.PartOfDomain
 
 # Dynamic company config
 $CompanyConfig = @(
-    @{ Name = "GCPL"; Domains = @("gainwellindia.com");			HostnamePatterns = @("GCPL") },
-    @{ Name = "GEPL"; Domains = @("gainwellengineering.com");	HostnamePatterns = @("GEPL") },
-    @{ Name = "RMSPL"; Domains = @();							HostnamePatterns = @("RMSPL") },
+	@{ Name = "GCPL"; Domains = @("gainwellindia.com");			HostnamePatterns = @("GCPL") },
+	@{ Name = "GEPL"; Domains = @("gainwellengineering.com");	HostnamePatterns = @("GEPL") },
+	@{ Name = "RMSPL"; Domains = @();							HostnamePatterns = @("RMSPL") },
 	@{ Name = "ASPL"; Domains = @();							HostnamePatterns = @("ASPL") },
 	@{ Name = "Gainwell"; Domains = @();						HostnamePatterns = @("Gainwell") }
 )
@@ -180,8 +180,8 @@ $LogoMap = @{
 
 # Backgrounds for each language
 $backgrounds = @{
-    "HI"  = $base64BackgroundHI
-    "ENG" = $base64BackgroundENG
+	"HI"  = $base64BackgroundHI
+	"ENG" = $base64BackgroundENG
 }
 
 #======================================================
