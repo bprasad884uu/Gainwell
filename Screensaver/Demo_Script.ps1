@@ -171,8 +171,8 @@ function Generate-MergedImage {
 
 # Company-to-logo mapping
 $LogoMap = @{
-    "GCPL" = $base64LogoGCPL
-    "GEPL" = $base64LogoGEPL
+	"GCPL" = $base64LogoGCPL
+	"GEPL" = $base64LogoGEPL
 	"RMSPL" = $base64LogoRMSPL
 	"ASPL" = $base64LogoASPL
 	"Gainwell" = $base64LogoGainwell
