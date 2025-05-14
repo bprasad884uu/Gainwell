@@ -36,11 +36,11 @@ $isDomainJoined = $system.PartOfDomain
 
 # Dynamic company config
 $CompanyConfig = @(
-    @{ Name = "GCPL"; Domains = @("gainwellindia.com");       HostnamePatterns = @("GCPL") },
-    @{ Name = "GEPL"; Domains = @("gainwellengineering.com"); HostnamePatterns = @("GEPL") },
-    @{ Name = "RMSPL"; Domains = @();                         HostnamePatterns = @("RMSPL") },
-	@{ Name = "ASPL"; Domains = @();                         HostnamePatterns = @("ASPL") },
-	@{ Name = "Gainwell"; Domains = @();                         HostnamePatterns = @("Gainwell") }
+    @{ Name = "GCPL"; Domains = @("gainwellindia.com");			HostnamePatterns = @("GCPL") },
+    @{ Name = "GEPL"; Domains = @("gainwellengineering.com");	HostnamePatterns = @("GEPL") },
+    @{ Name = "RMSPL"; Domains = @();							HostnamePatterns = @("RMSPL") },
+	@{ Name = "ASPL"; Domains = @();							HostnamePatterns = @("ASPL") },
+	@{ Name = "Gainwell"; Domains = @();						HostnamePatterns = @("Gainwell") }
 )
 
 # Company detection logic
