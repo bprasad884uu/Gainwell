@@ -5,12 +5,6 @@ $softwarePath = Split-Path -Parent $MyInvocation.MyCommand.Definition
 # Prompt for Office version
 $officeVersion = Read-Host "Enter MS Office version to install (2016, 2019, O365). Press Enter to skip"
 
-if ([string]::IsNullOrWhiteSpace($officeVersion)) {
-    Write-Output "No Office version entered. Skipping Office installation."
-} else {
-    Install-MSOffice -version $officeVersion
-}
-
 # Function to mount and install Office from ISO
 function Install-MSOffice {
     param (
@@ -105,6 +99,13 @@ function Install-SoftwareFromFolder {
 }
 
 # --- Main Execution ---
+
+if ([string]::IsNullOrWhiteSpace($officeVersion)) {
+    Write-Output "No Office version entered. Skipping Office installation."
+} else {
+    Install-MSOffice -version $officeVersion
+}
+
 Write-Output "Starting software installations..."
 
 Install-SoftwareFromFolder -name "7zip"
