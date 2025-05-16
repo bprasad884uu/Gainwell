@@ -1,62 +1,58 @@
-# Get the folder where the script is located
-#$basePath = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$softwarePath = Split-Path -Parent $MyInvocation.MyCommand.Definition
+# Path setup
+$basePath = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$softwarePath = Join-Path $basePath "Software"
+$officePath = Join-Path $softwarePath "Office"
 
-# Prompt for Office version
-$officeVersion = Read-Host "Enter MS Office version to install (2016, 2019, O365). Press Enter to skip"
-
-# Function to mount and install Office from ISO
-function Install-MSOffice {
-    param (
-        [string]$version
-    )
-
-    $officeFolder = Join-Path $softwarePath "Office\$version"
-    if (!(Test-Path $officeFolder)) {
-        Write-Warning "Office folder not found: $officeFolder"
-        return
-    }
-
-    $isoFile = Get-ChildItem -Path $officeFolder -Filter *.iso -File -ErrorAction SilentlyContinue | Select-Object -First 1
-    if (-not $isoFile) {
-        Write-Warning "No ISO found in $officeFolder"
-        return
-    }
-
-    Write-Output "Mounting ISO: $($isoFile.FullName)"
-    $mountResult = Mount-DiskImage -ImagePath $isoFile.FullName -PassThru
-    $mountedDrive = ($mountResult | Get-Volume).DriveLetter + ":"
-    Start-Sleep -Seconds 3
-
-    # Find setup.exe recursively
-    $setupExe = Get-ChildItem -Path "$mountedDrive\" -Recurse -Filter setup.exe -File -ErrorAction SilentlyContinue | Select-Object -First 1
-
-    if ($setupExe) {
-        Write-Output "Installing MS Office $version..."
-        switch ($version) {
-            "2016" {
-                $mspFile = Join-Path $setupExe.DirectoryName "setup.msp"
-                if (Test-Path $mspFile) {
-                    Start-Process -FilePath $setupExe.FullName -ArgumentList "/adminfile setup.msp" -Wait
-                    Write-Output "MS Office 2016 installed using setup.msp."
-                } else {
-                    Start-Process -FilePath $setupExe.FullName -Wait
-                    Write-Output "MS Office 2016 installed without setup.msp."
-                }
-            }
-            default {
-                Start-Process -FilePath $setupExe.FullName -Wait
-                Write-Output "MS Office $version installed."
-            }
-        }
-    } else {
-        Write-Warning "setup.exe not found in mounted ISO."
-    }
-
-    Dismount-DiskImage -ImagePath $isoFile.FullName
+# Office version selector
+$officeOptions = @{
+    "1" = "2016"
+    "2" = "2019"
+    "3" = "O365"
 }
 
-# Function to install EXE/MSI from specific folders
+Write-Host "Select the MS Office version to install:"
+Write-Host "1. Office 2016"
+Write-Host "2. Office 2019"
+Write-Host "3. Office 365"
+Write-Host "Press Enter to skip Office installation."
+$selection = Read-Host "Enter the number corresponding to your choice"
+
+if ([string]::IsNullOrWhiteSpace($selection)) {
+    Write-Output "No selection made. Skipping Office installation."
+    $officeVersion = ""
+} elseif ($officeOptions.ContainsKey($selection)) {
+    $officeVersion = $officeOptions[$selection]
+    Write-Output "You selected Office $officeVersion."
+} else {
+    Write-Warning "Invalid selection. Skipping Office installation."
+    $officeVersion = ""
+}
+
+# Office installer
+if ($officeVersion) {
+    try {
+        $officeFolder = Join-Path $officePath $officeVersion
+        $isoFile = Get-ChildItem -Path $officeFolder -Filter *.iso | Select-Object -First 1
+        if (-not $isoFile) { throw "No ISO found for Office $officeVersion." }
+
+        $mount = Mount-DiskImage -ImagePath $isoFile.FullName -PassThru
+        $driveLetter = ($mount | Get-Volume).DriveLetter + ":"
+
+        $setupBat = Join-Path "$driveLetter\" "setup.bat"
+        if (-not (Test-Path $setupBat)) { throw "setup.bat not found in mounted ISO." }
+
+        Write-Host "Running Office installer from: $setupBat"
+        Push-Location $driveLetter
+        & $setupBat
+        Pop-Location
+
+        Dismount-DiskImage -ImagePath $isoFile.FullName
+    } catch {
+        Write-Error "Failed to mount or run Office ${officeVersion}: $($_.Exception.Message)"
+    }
+}
+
+# Install Other Software
 function Install-SoftwareFromFolder {
     param (
         [string]$name
@@ -98,18 +94,10 @@ function Install-SoftwareFromFolder {
     }
 }
 
-# --- Main Execution ---
-
-if ([string]::IsNullOrWhiteSpace($officeVersion)) {
-    Write-Output "No Office version entered. Skipping Office installation."
-} else {
-    Install-MSOffice -version $officeVersion
-}
-
 Write-Output "Starting software installations..."
 
 Install-SoftwareFromFolder -name "7zip"
 Install-SoftwareFromFolder -name "Adobe"
 Install-SoftwareFromFolder -name "Chrome"
 
-Write-Output "All installations completed."
+Write-Host "`nAll done!"
