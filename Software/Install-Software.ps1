@@ -100,4 +100,28 @@ Install-SoftwareFromFolder -name "7zip"
 Install-SoftwareFromFolder -name "Adobe"
 Install-SoftwareFromFolder -name "Chrome"
 
-Write-Host "`nAll done!"
+# Update All Installed Apps Using winget
+# Accepts all agreements and runs silently
+
+# Optional: Ensure Winget is available
+if (-not (Get-Command "winget" -ErrorAction SilentlyContinue)) {
+    Write-Host "winget is not available. Please install App Installer from the Microsoft Store."
+    exit 1
+}
+
+# Get list of available updates
+$updates = winget upgrade --accept-source-agreements --accept-package-agreements | Select-String "^\S"
+
+if ($updates.Count -eq 0) {
+    Write-Host "No updates available."
+    exit 0
+}
+
+Write-Host "Updating all upgradable apps..." -ForegroundColor Cyan
+
+# Run the update command for each app
+winget upgrade --all --accept-source-agreements --accept-package-agreements
+
+Write-Host "`nAll updates completed." 
+
+Write-Host "`nAll done!" -ForegroundColor Green
