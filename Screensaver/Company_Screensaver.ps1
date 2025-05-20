@@ -70,7 +70,7 @@ if (-not $company -and $isDomainJoined) {
 }
 
 if (-not $company) {
-    Write-Error "Unable to detect company from domain or hostname. Please check the Hostname or Domain. Exiting..."
+    Write-Warning "Unable to detect company from domain or hostname. Please check the Hostname or Domain. Exiting..."
     exit 1
 }
 
