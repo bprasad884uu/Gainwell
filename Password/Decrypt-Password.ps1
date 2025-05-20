@@ -1,7 +1,11 @@
 # AES Decryption Script
 
-# Input the encrypted text
-$EncryptedText = "/VUVh8SnruKH1mJNSpoFvA=="
+# Prompt for password
+$Password = Read-Host -AsSecureString "Enter the password to Decrypt:"
+
+# Convert SecureString to plaintext
+$BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Password)
+$EncryptedText = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
 
 # Define the same AES key and IV used during encryption (Base64 format)
 $KeyBase64 = "9IJWXVERkspUYB7SsoaBZtNrQ50BxB8o31HSx6Xl3/k="   	# 32 bytes = AES-256
