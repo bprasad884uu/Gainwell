@@ -102,7 +102,7 @@ try {
 				$downloaded = 0
 				$startTime = Get-Date
 
-				Write-Host "📥 Downloading Windows 11 ISO ($locale)..."
+				Write-Host "📥 Downloading Google Chrome..."
 				while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
 					$fileStream.Write($buffer, 0, $bytesRead)
 					$downloaded += $bytesRead
