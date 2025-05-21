@@ -45,15 +45,11 @@ try {
         
         # Check if update is available
         if ($chromeVersion -ne $installedVersion) {
-            Write-Host "Update available: $chromeVersion"
+            Write-Host "`nUpdate available: $chromeVersion"
             
 			# Run update script if version mismatched
             Write-Host "Current Version - $installedVersion"
             # Download installer
-            $Path = $env:TEMP
-            $Installer = "chrome_installer.exe"
-            $installerPath = "$Path\$Installer"
-            Write-Host "`nDownloading Google Chrome..."
             $downloadUrl = "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi"
 			$installerPath = "$env:TEMP\chrome_installer.msi"
 
@@ -68,8 +64,6 @@ try {
 			$httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
 
 			try {
-				Write-Host "🚀 Starting download using HttpClient..."
-
 				# Send GET Request
 				$response = $httpClient.GetAsync($downloadUrl, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
 
@@ -102,7 +96,7 @@ try {
 				$downloaded = 0
 				$startTime = Get-Date
 
-				Write-Host "📥 Downloading Google Chrome..."
+				Write-Host "`n📥 Downloading Google Chrome..."
 				while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
 					$fileStream.Write($buffer, 0, $bytesRead)
 					$downloaded += $bytesRead
@@ -140,7 +134,7 @@ try {
 				$downloadSuccess = $true
 				Write-Host "`n✅ Download Complete: $installerPath"
 			} catch {
-				Write-Host "❌ HttpClient download failed: $_" -ForegroundColor Red
+				Write-Host "❌ Download failed: $_" -ForegroundColor Red
 				exit
 			}
 
@@ -193,14 +187,14 @@ try {
             Set-ItemProperty -Path $updateKey -Name "UpdatesSuppressedDuration" -Value 0 -Force
             Set-ItemProperty -Path $updateKey -Name "UpdateDefault" -Value 2 -Force
 
-            Write-Host "Automatic updates for Google Chrome have been enabled."
+            Write-Host "`nAutomatic updates for Google Chrome have been enabled."
             $installedVersion = Get-ChromeVersion
-            Write-Host "Updated Version - $installedVersion"
+            Write-Host "`nUpdated Version - $installedVersion"
         } else {
-            Write-Host "Chrome is up to date. Installed version: $installedVersion."
+            Write-Host "`nChrome is up to date. Installed version: $installedVersion."
         }
     } else {
-        Write-Host "Google Chrome is not installed on this system."
+        Write-Host "`nGoogle Chrome is not installed on this system."
     }
 } catch {
     Write-Host "Error: $($_.Exception.Message)"
