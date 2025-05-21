@@ -53,8 +53,97 @@ try {
             $Path = $env:TEMP
             $Installer = "chrome_installer.exe"
             $installerPath = "$Path\$Installer"
-            Write-Host "Downloading Google Chrome..."
-            Invoke-WebRequest "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi" -OutFile $installerPath -ErrorAction Stop
+            Write-Host "`nDownloading Google Chrome..."
+            $downloadUrl = "https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi"
+			$installerPath = "$env:TEMP\chrome_installer.msi"
+
+			$downloadSuccess = $false
+			# Load System.Net.Http.dll for PowerShell 5.1
+			if (-not ("System.Net.Http.HttpClient" -as [type])) {
+				Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll"
+			}
+
+			# Create HttpClient Instance
+			$httpClientHandler = New-Object System.Net.Http.HttpClientHandler
+			$httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
+
+			try {
+				Write-Host "🚀 Starting download using HttpClient..."
+
+				# Send GET Request
+				$response = $httpClient.GetAsync($downloadUrl, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+
+				# Validate Response
+				if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
+					Write-Host "❌ HttpClient request failed: $($response.StatusCode) ($($response.ReasonPhrase))" -ForegroundColor Red
+					exit
+				}
+
+				# Get Content Stream
+				$stream = $response.Content.ReadAsStreamAsync().Result
+				if (-not $stream) {
+					Write-Host "❌ Failed to retrieve response stream." -ForegroundColor Red
+					exit
+				}
+
+				# Get File Size
+				$totalSize = $response.Content.Headers.ContentLength
+				if (-not $totalSize) {
+					Write-Host "⚠ Warning: File size unknown. Assuming large file to prevent errors." -ForegroundColor Yellow
+					$totalSize = 1GB
+				}
+
+				# Open Output File
+				$fileStream = [System.IO.File]::OpenWrite($installerPath)
+
+				# Set Large Buffer for Fast Download
+				$bufferSize = 10MB
+				$buffer = New-Object byte[] ($bufferSize)
+				$downloaded = 0
+				$startTime = Get-Date
+
+				Write-Host "📥 Downloading Windows 11 ISO ($locale)..."
+				while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+					$fileStream.Write($buffer, 0, $bytesRead)
+					$downloaded += $bytesRead
+					$elapsed = (Get-Date) - $startTime
+
+					# Calculate Speed (MB/s)
+					$speed = ($downloaded / $elapsed.TotalSeconds) / 1MB
+
+					# Calculate Progress (%)
+					$progress = ($downloaded / $totalSize) * 100
+
+					# ETA Calculation
+					$remainingBytes = $totalSize - $downloaded
+					$etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / ($speed * 1MB), 2) } else { "Calculating..." }
+
+					if ($etaSeconds -is [double]) {
+						$etaHours = [math]::Floor($etaSeconds / 3600)
+						$etaMinutes = [math]::Floor(($etaSeconds % 3600) / 60)
+						$etaRemainingSeconds = [math]::Floor($etaSeconds % 60)
+
+						$etaFormatted = ""
+						if ($etaHours -gt 0) { $etaFormatted += "${etaHours}h " }
+						if ($etaMinutes -gt 0) { $etaFormatted += "${etaMinutes}m " }
+						if ($etaRemainingSeconds -gt 0 -or $etaFormatted -eq "") { $etaFormatted += "${etaRemainingSeconds}s" }
+					} else {
+						$etaFormatted = "Calculating..."
+					}
+
+					Write-Host "`r📊 Progress: $([math]::Round($progress,2))% | Downloaded: $([math]::Round($downloaded / 1MB, 2)) MB | ⚡ Speed: $([math]::Round($speed,2)) MB/s | ⏳ ETA: $etaFormatted" -NoNewline
+
+				}
+
+				# Close Streams
+				$fileStream.Close()
+				$downloadSuccess = $true
+				Write-Host "`n✅ Download Complete: $installerPath"
+			} catch {
+				Write-Host "❌ HttpClient download failed: $_" -ForegroundColor Red
+				exit
+			}
+
             
             if (Test-Path $installerPath) {
                 Write-Host "Installing Google Chrome..."
