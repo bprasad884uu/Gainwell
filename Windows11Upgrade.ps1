@@ -13,11 +13,11 @@ Write-Host "Detected Language: $locale - Downloading ISO..."
 
 # Set Download URL & Destination Based on Locale
 if ($locale -eq "en-GB") { #en-GB 0809
-    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_EnglishInternational_x64.iso?t=fb8261f5-b1a2-4411-9d06-6909dbfb9c9f&P1=1748504980&P2=601&P3=2&P4=HdLWre9bSBQAiqT9wGkAS8WoPA2XOKISqUzYUo%2f2fO3WrrfWHdh2%2fVzwy98okgUz0R8DjvAJP7MRG4MmwTURbQkYjiwr1DiFf66mVAiLNgk9ZSmnftFpvQGy2XokjZHQedfRm7o8JmouPZodjXEbqbXGXwUandplte21S2eLiuZISRaG7ZKP%2fMvBVgA%2byTkeswEC6nSG%2bcHqJ8yxDFIqWht5M6bx452nAML8YEzC8A2xEdOSGRcRnu8LtrZDK2VAvvQ3CpjKpIOZ1stPnIy8fpMmX9VM2%2bMmiVuc2eQT%2fFBtQNlRYrwfs62Do88yC4W2P7i%2fTo5A3eU4I%2bXJirZmEQ%3d%3d"
+    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_EnglishInternational_x64.iso?t=e9713b42-b188-4e21-bbab-15f2984ea13c&P1=1748679776&P2=601&P3=2&P4=HIOojbxnysdmUAJrgV6GntXJMwx4De%2bkcDnouTEoAY%2fUG9NZsMNsQ7qagf1XmWCllHyGMD7TDxVijSkoi4NjQ1FaRogKzij4sMT3cVh6P%2b2pdzVAfnGlh4OKjxWMSPYsGo6KYe3i9UeGHrgIf3HtmO%2b%2b%2fyqROEZR8v4EZuszI8GcQwjuk4MopPyw9%2bddVLva3AmI0gs1Jn%2bq0AvzSyC1zMvpsF1MG6%2bBMq1ufgCogVZi36wTuEfDNM%2f7MlZBxganFbCLXVgSTC%2fHy%2fmEIC%2fXwyQyc4ChZez8lFqy9I0owrDTkKd02elNNo5ieuTjQ%2fzre%2fDFZlMvH6ozbTWfAopGUg%3d%3d"
     Write-Host "Detected Language: English (UK) - Downloading ISO..."
     $destination = "$env:Temp\Win11_24H2_ENGB.iso"
 } elseif ($locale -eq "en-US") { #en-US 0409
-    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=404202bd-952c-4e3e-b504-6f33ab375607&P1=1748504948&P2=601&P3=2&P4=0%2fMwyHuL2JIbtyO%2fEqpCd5SozxuUVHHTk%2fIflGvlMoupbBouBhewb8e5WLNSjL5E5lrLtaA1ocx2qJwklpN5%2fiWSi0tDAafEP3wCWfqfTS3TSJPLL%2bYujUMb7v7mdjo6gEU%2fyBS%2bqrH0u5rMqQPUM23hVxb8hoT7XNOZNEXqzEVov0d32gJx%2bzskMOt2klGq0RNlj4vyNUQfMHUqv5ZqZC4FMfORJfI1vKMXgGawGqAreJcCYrTTiInOugU0lHp8%2frfWWhhenFTYhoV3DIX2Y%2bxkM%2fdgD2MLx5MH0J0L8Wl7%2btmYRKEdMjQRi2BOb7k0NAqpatX5FMZEY%2b2q44223g%3d%3d"
+    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=458e6475-663d-49b0-b8ad-3e780082f098&P1=1748679754&P2=601&P3=2&P4=skb9535EwOB%2fjOMSpqClCbZDs5Ac4UJwHrIaDAsJQ3X%2focq55c1jdyIFyrZrZCxMt%2fSBtwBTmdItdiuh47yLgbytwY%2bpJMiq%2fIbQcgV9rWSRMD10XXud%2bWEiCBAIQul9Jmu088NbIG7iAe2wmsu5FaN5GQK%2fjeEUO%2fHQIcNl8vcfOeXmX2gL3CHtVBr63a90KrRed2uI7dCVqeT7Rm5bkFIpS67PDCbGIS7ZflgjGxiMHMSOoeYpSGY2aAxKITvzL5npjsRy0BAax3K9O0LDncmhAI0mVdyWGKJ0X25dgpBbtezI6Q%2fhAWsrtgR9UHxjes5%2fK7X4P%2f3oW2OshOtefQ%3d%3d"
     $destination = "$env:Temp\Win11_24H2_ENUS.iso"
     Write-Host "Detected Language: English (US) - Downloading ISO..."
 } else {
@@ -176,7 +176,18 @@ if (-not $downloadSuccess) {
 
 # --- Step 4: Mount ISO ---
 Write-Host "Unmounting existing ISOs..."
-Get-DiskImage | Where-Object { $_.Mounted } | ForEach-Object { Dismount-DiskImage -ImagePath $_.ImagePath }
+# Get all mounted ISO disk images
+$mountedISOs = Get-DiskImage | Where-Object { $_.ImagePath -like "*.iso" -and $_.DevicePath }
+
+# Unmount each mounted ISO
+foreach ($iso in $mountedISOs) {
+    try {
+        Dismount-DiskImage -ImagePath $iso.ImagePath
+        Write-Output "✅ Unmounted: $($iso.ImagePath)"
+    } catch {
+        Write-Warning "❌ Failed to unmount: $($iso.ImagePath) - $_"
+    }
+}
 
 # Find Downloaded ISO File
 $isoPath = Get-ChildItem -Path "$env:Temp\" -Filter "Win11*.iso" -File | Select-Object -ExpandProperty FullName -First 1
@@ -360,22 +371,86 @@ if ($incompatibilityReasons.Count -gt 0) {
         Write-Host " - $reason" -ForegroundColor Red
     }
     Write-Host "`n⚙ Registry Tweaks will be applied to bypass the checks..." -ForegroundColor Yellow
-	reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\MoSetup" /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1 /f
-    reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassTPMCheck /t REG_DWORD /d 1 /f
-    reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassSecureBootCheck /t REG_DWORD /d 1 /f
-    reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassRAMCheck /t REG_DWORD /d 1 /f
-    reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassStorageCheck /t REG_DWORD /d 1 /f
-    reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassCPUCheck /t REG_DWORD /d 1 /f
+	$null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\MoSetup" /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1 /f
+    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassTPMCheck /t REG_DWORD /d 1 /f
+    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassSecureBootCheck /t REG_DWORD /d 1 /f
+    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassRAMCheck /t REG_DWORD /d 1 /f
+    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassStorageCheck /t REG_DWORD /d 1 /f
+    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassCPUCheck /t REG_DWORD /d 1 /f
     Write-Host "✅ Bypass Applied Successfully. Now Proceed for installation..." -ForegroundColor Green
-	$installArgs = "/product server /auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable /noreboot"
+	$installArgs = "/product server /auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
 } else {
     Write-Host "`n✅ Your System is fully compatible with Windows 11! Proceed with normal installation." -ForegroundColor Green
-	$installArgs = "/auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable /noreboot"
+	$installArgs = "/auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
 }
 
 # Start Windows 11 Upgrade
-Write-Host "Starting Windows 11 upgrade..."
-Start-Process -FilePath $setupPath -ArgumentList $installArgs -Wait
+Write-Host "`nStarting Windows 11 upgrade..."
+$null = Start-Process -FilePath $setupPath -ArgumentList $installArgs -PassThru
+
+# Path to the setup log file
+$logPath = 'C:\$WINDOWS.~BT\Sources\Panther\setupact.log'
+
+# Function to draw a progress bar
+function Show-ProgressBar {
+    param (
+        [int]$Percent
+    )
+    $width = 50
+    $filled = [math]::Round($Percent * $width / 100)
+    $empty = $width - $filled
+    $bar = ('#' * $filled) + ('-' * $empty)
+    Write-Host -NoNewline "`r[$bar] $Percent%" -ForegroundColor Cyan
+}
+
+# Wait for the log file to be created (timeout: 2 minutes)
+$maxWaitSeconds = 120
+$waited = 0
+while (-not (Test-Path $logPath) -and $waited -lt $maxWaitSeconds) {
+    Start-Sleep -Seconds 1
+    $waited++
+}
+if (-not (Test-Path $logPath)) {
+    Write-Host "Log file not found after waiting $maxWaitSeconds seconds: $logPath" -ForegroundColor Red
+    exit 1
+}
+
+# Start monitoring loop
+Write-Host "Your PC will restart several times. This might take a while." -ForegroundColor Green
+$lastPercent = -1
+
+while ($true) {
+    Start-Sleep -Seconds 1
+
+    if (Test-Path $logPath) {
+        # Read last 200 lines to find progress updates
+        $content = Get-Content $logPath -Tail 200
+
+        # Find latest progress line with Overall progress percentage
+        $progressLines = $content | Where-Object { $_ -match "Overall progress: \[(\d+)%\]" }
+        if ($progressLines) {
+            $lastLine = $progressLines[-1]
+            if ($lastLine -match "Overall progress: \[(\d+)%\]") {
+                $currentPercent = [int]$matches[1]
+
+                if ($currentPercent -ne $lastPercent) {
+                    Show-ProgressBar -Percent $currentPercent
+                    $lastPercent = $currentPercent
+                }
+
+                if ($currentPercent -ge 100) {
+                    # Clear progress bar line and write completion message
+                    Write-Host "`r" + (' ' * 60) + "`r" -NoNewline
+                    Write-Host "Upgrade completed! Your PC will restart in a few moments" -ForegroundColor Green
+                    break
+                }
+            }
+        }
+    } else {
+        Write-Host "Log file not found: $logPath" -ForegroundColor Red
+        break
+    }
+}
 
 # Unmount ISO
 Write-Host "Unmounting ISO..."
