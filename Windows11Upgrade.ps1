@@ -220,7 +220,6 @@ if (-not (Test-Path $setupPath)) {
 }
 
 # --- Step 5: Windows 11 upgrade (Silent Install)
-
 # Get Manufacturer
 $manufacturer = (Get-WmiObject -Class Win32_ComputerSystem).Manufacturer
 Write-Host "Detected System Manufacturer: $manufacturer"
@@ -396,34 +395,42 @@ $null = Start-Process -FilePath $setupPath -ArgumentList $installArgs -PassThru
 
 # Path to the setup log file
 $logPath = 'C:\$WINDOWS.~BT\Sources\Panther\setupact.log'
+$setupFolder = 'C:\$WINDOWS.~BT'
 
-# Function to draw a progress bar
-function Show-ProgressBar {
-    param (
-        [int]$Percent
-    )
-    $width = 50
-    $filled = [math]::Round($Percent * $width / 100)
-    $empty = $width - $filled
-    $bar = ('#' * $filled) + ('-' * $empty)
-    Write-Host -NoNewline "`r[$bar] $Percent%" -ForegroundColor Cyan
+# Delete the log file if it exists
+if (Test-Path $logPath) {
+        $null = Remove-Item -Path $logPath -Force -ErrorAction SilentlyContinue
 }
 
-# Wait for the log file to be created (timeout: 2 minutes)
-$maxWaitSeconds = 120
-$waited = 0
-while (-not (Test-Path $logPath) -and $waited -lt $maxWaitSeconds) {
+function Is-SetupRunning {
+    Get-Process -Name 'setupprep','SetupHost' -ErrorAction SilentlyContinue | Where-Object { $_ } | ForEach-Object { return $true }
+    return $false
+}
+
+while ($true) {
+    $folderExists = Test-Path $setupFolder
+    $logExists = Test-Path $logPath
+    $setupRunning = Is-SetupRunning
+
+    if ($logExists) {
+		$null = Remove-Item -Path $logPath -Force -ErrorAction SilentlyContinue
+        break
+    }
+
+    if (-not $folderExists -and -not $setupRunning) {
+        Write-Host "Neither setup folder nor upgrade process found. Exiting..." -ForegroundColor Red
+        exit 1
+    }
+
     Start-Sleep -Seconds 1
-    $waited++
-}
-if (-not (Test-Path $logPath)) {
-    Write-Host "Log file not found after waiting $maxWaitSeconds seconds: $logPath" -ForegroundColor Red
-    exit 1
 }
 
 # Start monitoring loop
 Write-Host "Your PC will restart several times. This might take a while." -ForegroundColor Green
 $lastPercent = -1
+
+# Initial output
+Write-Host -NoNewline "`r0% complete     " -ForegroundColor Cyan
 
 while ($true) {
     Start-Sleep -Seconds 1
@@ -440,12 +447,11 @@ while ($true) {
                 $currentPercent = [int]$matches[1]
 
                 if ($currentPercent -ne $lastPercent) {
-                    Show-ProgressBar -Percent $currentPercent
+                    Write-Host -NoNewline "`r$currentPercent% complete     " -ForegroundColor Cyan
                     $lastPercent = $currentPercent
                 }
 
                 if ($currentPercent -ge 100) {
-                    # Clear progress bar line and write completion message
                     Write-Host "`r" + (' ' * 60) + "`r" -NoNewline
                     Write-Host "Upgrade completed! Your PC will restart in a few moments" -ForegroundColor Green
                     break
@@ -453,7 +459,7 @@ while ($true) {
             }
         }
     } else {
-        Write-Host "Log file not found: $logPath" -ForegroundColor Red
+        Write-Host -NoNewline "`rWindows 11 installation failed. Please restart the installation or try again after restarting your PC." -ForegroundColor Red
         break
     }
 }
