@@ -333,33 +333,10 @@ $null = Start-Process -FilePath $setupPath -ArgumentList $installArgs -PassThru
 
 # Path to the setup log file
 $logPath = 'C:\$WINDOWS.~BT\Sources\Panther\setupact.log'
-$setupFolder = 'C:\$WINDOWS.~BT'
 
 # Delete the log file if it exists
 if (Test-Path $logPath) {
         $null = Remove-Item -Path $logPath -Force -ErrorAction SilentlyContinue
-}
-
-function Is-SetupRunning {
-    Get-Process -Name 'setupprep','SetupHost' -ErrorAction SilentlyContinue | Where-Object { $_ } | ForEach-Object { return $true }
-    return $false
-}
-
-while ($true) {
-    $folderExists = Test-Path $setupFolder
-    $logExists = Test-Path $logPath
-    $setupRunning = Is-SetupRunning
-
-    if ($logExists) {
-        break
-    }
-
-    if (-not $folderExists -and -not $setupRunning) {
-        Write-Host "Neither setup folder nor upgrade process found. Exiting..." -ForegroundColor Red
-        exit 1
-    }
-
-    Start-Sleep -Seconds 1
 }
 
 # Start monitoring loop
