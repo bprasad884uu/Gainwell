@@ -9,30 +9,24 @@ $locale = (dism /online /get-intl | Where-Object { $_ -match '^Installed languag
 
 # Set destination filename
 $destination = "$env:TEMP\Win11_24H2_${locale}.iso"
-Write-Host "Detected Language: $locale - Downloading ISO..."
+switch ($locale) {
+    "en-GB" { $languageName = "English (UK)" }
+    "en-US" { $languageName = "English (US)" }
+    default { $languageName = $locale }
+}
+Write-Host "Detected Language: $languageName - Downloading ISO..."
 
 # Set Download URL & Destination Based on Locale
-if ($locale -eq "en-GB") { #en-GB 0809
+if ($locale -eq "en-GB") {
     $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_EnglishInternational_x64.iso?t=e9713b42-b188-4e21-bbab-15f2984ea13c&P1=1748679776&P2=601&P3=2&P4=HIOojbxnysdmUAJrgV6GntXJMwx4De%2bkcDnouTEoAY%2fUG9NZsMNsQ7qagf1XmWCllHyGMD7TDxVijSkoi4NjQ1FaRogKzij4sMT3cVh6P%2b2pdzVAfnGlh4OKjxWMSPYsGo6KYe3i9UeGHrgIf3HtmO%2b%2b%2fyqROEZR8v4EZuszI8GcQwjuk4MopPyw9%2bddVLva3AmI0gs1Jn%2bq0AvzSyC1zMvpsF1MG6%2bBMq1ufgCogVZi36wTuEfDNM%2f7MlZBxganFbCLXVgSTC%2fHy%2fmEIC%2fXwyQyc4ChZez8lFqy9I0owrDTkKd02elNNo5ieuTjQ%2fzre%2fDFZlMvH6ozbTWfAopGUg%3d%3d"
-    Write-Host "Detected Language: English (UK) - Downloading ISO..."
     $destination = "$env:Temp\Win11_24H2_ENGB.iso"
-} elseif ($locale -eq "en-US") { #en-US 0409
+} elseif ($locale -eq "en-US") {
     $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=458e6475-663d-49b0-b8ad-3e780082f098&P1=1748679754&P2=601&P3=2&P4=skb9535EwOB%2fjOMSpqClCbZDs5Ac4UJwHrIaDAsJQ3X%2focq55c1jdyIFyrZrZCxMt%2fSBtwBTmdItdiuh47yLgbytwY%2bpJMiq%2fIbQcgV9rWSRMD10XXud%2bWEiCBAIQul9Jmu088NbIG7iAe2wmsu5FaN5GQK%2fjeEUO%2fHQIcNl8vcfOeXmX2gL3CHtVBr63a90KrRed2uI7dCVqeT7Rm5bkFIpS67PDCbGIS7ZflgjGxiMHMSOoeYpSGY2aAxKITvzL5npjsRy0BAax3K9O0LDncmhAI0mVdyWGKJ0X25dgpBbtezI6Q%2fhAWsrtgR9UHxjes5%2fK7X4P%2f3oW2OshOtefQ%3d%3d"
-    $destination = "$env:Temp\Win11_24H2_ENUS.iso"
     Write-Host "Detected Language: English (US) - Downloading ISO..."
 } else {
     Write-Host "Unsupported Language. No ISO available." -ForegroundColor Red
     exit
 }
-
-<# Assign language based on locale
-if ($Locale -eq "0809") {
-    $Language = "en-GB"
-} elseif ($Locale -eq "0409") {
-    $Language = "en-US"
-} else {
-    $Language = "Unknown"
-}#>
 
 # --- Step 1: Try HttpClient (Fastest) ---
 $downloadSuccess = $false
@@ -66,9 +60,9 @@ try {
 
     # Get File Size
     $totalSize = $response.Content.Headers.ContentLength
-    if (-not $totalSize) {
+    if ($null -eq $totalSize) {
         Write-Host "⚠ Warning: File size unknown. Assuming large file to prevent errors." -ForegroundColor Yellow
-        $totalSize = 1GB
+        $totalSize = 1024 * 1024 * 1024
     }
 
     # Open Output File
@@ -113,11 +107,10 @@ try {
 	
 	# Close Streams
     $fileStream.Close()
-        Write-Host "`n✅ Download Complete: $destination"
-        $downloadSuccess = $true
-    }
-    catch {
-    Write-Host ("`n❌ HttpClient download failed for {0}: {1}" -f $fileName, $_) -ForegroundColor Red
+	Write-Host "`n✅ Download Complete: $destination"
+	$downloadSuccess = $true
+    } catch {
+    Write-Host "❌ HttpClient download failed: $_" -ForegroundColor Red
 	exit
 	}
 
@@ -211,13 +204,12 @@ if (-not $cleanCpuName) {
     return
 }
 
-# Load System.Net.Http.dll for PowerShell 5.1
+# Load System.Net.Http.dll for PowerShell 5.1 if needed
 if (-not ("System.Net.Http.HttpClient" -as [type])) {
     Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll"
 }
 
 # Use HttpClient instead of Invoke-WebRequest
-Add-Type -AssemblyName "System.Net.Http"
 $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
 $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
 
@@ -327,7 +319,7 @@ if (-not $cpuSupported) {
 
 # Final verdict
 if ($incompatibilityReasons.Count -gt 0) {
-    Write-Host "`n❌ Your System is NOT fully compatible with Windows 11 due to:" -ForegroundColor Yellow
+    Write-Host "`n❌ This system does not meet below Windows 11 requirements:" -ForegroundColor Yellow
     foreach ($reason in $incompatibilityReasons) {
         Write-Host " - $reason" -ForegroundColor Red
     }
@@ -341,7 +333,7 @@ if ($incompatibilityReasons.Count -gt 0) {
     Write-Host "✅ Bypass Applied Successfully. Now Proceed for installation..." -ForegroundColor Green
 	$installArgs = "/product server /auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
 } else {
-    Write-Host "`n✅ Your System is fully compatible with Windows 11! Proceed with normal installation." -ForegroundColor Green
+    Write-Host "`n✅ This system meets all Windows 11 hardware requirements." -ForegroundColor Green
 	$installArgs = "/auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
 }
 
