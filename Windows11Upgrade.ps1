@@ -235,13 +235,19 @@ $qualcommListUrl = "https://raw.githubusercontent.com/rcmaehl/WhyNotWin11/main/i
 $cpu = Get-CimInstance -ClassName Win32_Processor
 $rawCpuName = $cpu.Name.Trim()
 
-# Extract clean CPU model string (e.g., "Core(TM) i5-1135G7")
-$cleanCpuName = if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
-    $matches[0]
+# Extract clean CPU model string
+if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
+    $cleanCpuName = $matches[0]
 } elseif ($rawCpuName -match "Core\s+i[3579]-\S+") {
-    $matches[0] -replace "Core", "Core(TM)" # Normalize format if needed
+    $cleanCpuName = $matches[0] -replace "Core", "Core(TM)"
+} elseif ($rawCpuName -match "AMD\s+Ryzen\s+\d+\s+\d{4}") {
+    $cleanCpuName = $matches[0] -replace "^AMD\s+", ""
+} elseif ($rawCpuName -match "AMD\s+Ryzen\s+\S+") {
+    $cleanCpuName = $matches[0]
+} elseif ($rawCpuName -match "Qualcomm\s+\S+") {
+    $cleanCpuName = $matches[0]
 } else {
-    ""
+    $cleanCpuName = ""
 }
 
 # Fallback if match fails
