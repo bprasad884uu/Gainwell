@@ -108,73 +108,29 @@ try {
 		} else {
 			$etaFormatted = "Calculating..."
 		}
-
 		Write-Host "`r📊 Progress: $([math]::Round($progress,2))% | Downloaded: $([math]::Round($downloaded / 1MB, 2)) MB | ⚡ Speed: $([math]::Round($speed,2)) MB/s | ⏳ ETA: $etaFormatted" -NoNewline
-
     }
-
-    # Close Streams
+	
+	# Close Streams
     $fileStream.Close()
-	$downloadSuccess = $true
-    Write-Host "`n✅ Download Complete: $destination"
-} catch {
-    Write-Host "❌ HttpClient download failed: $_" -ForegroundColor Red
-    exit
-}
-
-# --- Step 2: Try BITS Transfer ---
-if (-not $downloadSuccess) {
-    Write-Host "Checking BITS service..."
-    $bitsService = Get-Service -Name BITS -ErrorAction SilentlyContinue
-
-    if (-not $bitsService) {
-        Write-Host "BITS service is not installed. Using Invoke-WebRequest instead." -ForegroundColor Yellow
-    } else {
-        if ($bitsService.Status -ne 'Running') {
-            Write-Host "Starting BITS service..."
-            Start-Service -Name BITS
-            Start-Sleep -Seconds 2
-            $bitsService = Get-Service -Name BITS
-        }
-
-        if ($bitsService.Status -eq 'Running') {
-            try {
-                Write-Host "📥 Downloading using BITS Transfer..."
-                Start-BitsTransfer -Source $isoUrl -Destination $destination -Priority Foreground
-                Write-Host "✅ Download completed: $destination" -ForegroundColor Green
-                $downloadSuccess = $true
-            } catch {
-                Write-Host "❌ BITS Transfer failed. Falling back to Invoke-WebRequest..." -ForegroundColor Yellow
-            }
-        }
+        Write-Host "`n✅ Download Complete: $destination"
+        $downloadSuccess = $true
     }
-}
+    catch {
+    Write-Host ("`n❌ HttpClient download failed for {0}: {1}" -f $fileName, $_) -ForegroundColor Red
+	exit
+	}
 
-# --- Step 3: Fallback to Invoke-WebRequest ---
-if (-not $downloadSuccess) {
-    $maxAttempts = 3
-    $attempts = 0
-    do {
-        try {
-            Write-Host "📡 Attempting download via Invoke-WebRequest... (Attempt $($attempts+1)/$maxAttempts)"
-            Invoke-WebRequest -Uri $isoUrl -OutFile $destination -ErrorAction Stop
-            Write-Host "✅ Download completed: $destination" -ForegroundColor Green
-            $downloadSuccess = $true
-            break
-        } catch {
-            Write-Host "❌ Download failed. Retrying..." -ForegroundColor Yellow
-            Start-Sleep -Seconds 5
-            $attempts++
-        }
-    } while ($attempts -lt $maxAttempts)
-}
-
-if (-not $downloadSuccess) {
+    finally {
+        $httpClient.Dispose()
+    }
+	
+	if (-not $downloadSuccess) {
     Write-Host "❌ All download methods failed. Please check your internet connection." -ForegroundColor Red
     exit
 }
 
-# --- Step 4: Mount ISO ---
+# --- Step 2: Mount ISO ---
 Write-Host "Unmounting existing ISOs..."
 # Get all mounted ISO disk images
 $mountedISOs = Get-DiskImage | Where-Object { $_.ImagePath -like "*.iso" -and $_.DevicePath }
@@ -219,7 +175,7 @@ if (-not (Test-Path $setupPath)) {
     exit
 }
 
-# --- Step 5: Windows 11 upgrade (Silent Install)
+# --- Step 3: Windows 11 upgrade (Silent Install)
 # Get Manufacturer
 $manufacturer = (Get-WmiObject -Class Win32_ComputerSystem).Manufacturer
 Write-Host "Detected System Manufacturer: $manufacturer"
