@@ -360,15 +360,12 @@ while ($true) {
     $logExists = Test-Path $logPath
     $setupRunning = Is-SetupRunning
 
-    if ($logExists) {
-        break
-    }
-
+   if ($logExists -or (-not $folderExists -and -not $setupRunning)) {
     if (-not $folderExists -and -not $setupRunning) {
-        Write-Host "Neither setup folder nor upgrade process found. Exiting..." -ForegroundColor Red
-        exit 1
-    }
-
+        Write-Host "Neither setup folder nor upgrade process found. Exiting..." -ForegroundColor Yellow
+		}
+    break
+	}
     Start-Sleep -Seconds 1
 }
 
