@@ -361,7 +361,6 @@ while ($true) {
     $setupRunning = Is-SetupRunning
 
     if ($logExists) {
-		$null = Remove-Item -Path $logPath -Force -ErrorAction SilentlyContinue
         break
     }
 
