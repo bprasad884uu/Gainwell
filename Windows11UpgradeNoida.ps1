@@ -148,7 +148,13 @@ if (-not (Test-Path $setupPath)) {
     exit
 }
 
-# Start Windows 11 upgrade (Silent Install)
+# --- Step 5: Windows 11 upgrade (Silent Install)
+
+# Get Manufacturer
+$manufacturer = (Get-WmiObject -Class Win32_ComputerSystem).Manufacturer
+Write-Host "Detected System Manufacturer: $manufacturer"
+
+# Windows 11 CPU Compatibility Check Script with Bypass
 # GitHub CPU lists
 $intelListUrl = "https://raw.githubusercontent.com/rcmaehl/WhyNotWin11/main/includes/SupportedProcessorsIntel.txt"
 $amdListUrl = "https://raw.githubusercontent.com/rcmaehl/WhyNotWin11/main/includes/SupportedProcessorsAMD.txt"
@@ -158,13 +164,19 @@ $qualcommListUrl = "https://raw.githubusercontent.com/rcmaehl/WhyNotWin11/main/i
 $cpu = Get-CimInstance -ClassName Win32_Processor
 $rawCpuName = $cpu.Name.Trim()
 
-# Extract clean CPU model string (e.g., "Core(TM) i5-1135G7")
-$cleanCpuName = if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
-    $matches[0]
+# Extract clean CPU model string
+if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
+    $cleanCpuName = $matches[0]
 } elseif ($rawCpuName -match "Core\s+i[3579]-\S+") {
-    $matches[0] -replace "Core", "Core(TM)" # Normalize format if needed
+    $cleanCpuName = $matches[0] -replace "Core", "Core(TM)"
+} elseif ($rawCpuName -match "AMD\s+Ryzen\s+\d+\s+\d{4}") {
+    $cleanCpuName = $matches[0] -replace "^AMD\s+", ""
+} elseif ($rawCpuName -match "AMD\s+Ryzen\s+\S+") {
+    $cleanCpuName = $matches[0]
+} elseif ($rawCpuName -match "Qualcomm\s+\S+") {
+    $cleanCpuName = $matches[0]
 } else {
-    ""
+    $cleanCpuName = ""
 }
 
 # Fallback if match fails
@@ -270,11 +282,22 @@ if ($cpuSupported) {
 
 # Store failed checks
 $incompatibilityReasons = @()
-if (-not $cpu64Bit) { $incompatibilityReasons += "CPU is not 64-bit." }
-if (-not $cpuSpeedCompatible) { $incompatibilityReasons += "CPU speed is below 1 GHz." }
-if (-not $secureBootEnabled) { $incompatibilityReasons += "Secure Boot is not enabled." }
-if (-not $tpmCompatible) { $incompatibilityReasons += "TPM 2.0 not supported or not enabled." }
-if (-not $cpuSupported) { $incompatibilityReasons += "CPU is not on the supported list." }
+
+if (-not $cpu64Bit) {
+    $incompatibilityReasons += "CPU is not 64-bit"
+}
+if (-not $cpuSpeedCompatible) {
+    $incompatibilityReasons += "CPU speed is less than 1 GHz"
+}
+if (-not $secureBootEnabled) {
+    $incompatibilityReasons += "Secure Boot is not enabled"
+}
+if (-not $tpmCompatible) {
+    $incompatibilityReasons += "TPM 2.0 is not supported or not enabled"
+}
+if (-not $cpuSupported) {
+    $incompatibilityReasons += "Unsupported processor: $cleanCpuName"
+}
 
 # Final verdict
 if ($incompatibilityReasons.Count -gt 0) {
@@ -283,12 +306,12 @@ if ($incompatibilityReasons.Count -gt 0) {
         Write-Host " - $reason" -ForegroundColor Red
     }
     Write-Host "`n⚙ Registry Tweaks will be applied to bypass the checks..." -ForegroundColor Yellow
-	reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\MoSetup" /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1 /f
-    reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassTPMCheck /t REG_DWORD /d 1 /f
-    reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassSecureBootCheck /t REG_DWORD /d 1 /f
-    reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassRAMCheck /t REG_DWORD /d 1 /f
-    reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassStorageCheck /t REG_DWORD /d 1 /f
-    reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassCPUCheck /t REG_DWORD /d 1 /f
+	$null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\MoSetup" /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1 /f
+    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassTPMCheck /t REG_DWORD /d 1 /f
+    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassSecureBootCheck /t REG_DWORD /d 1 /f
+    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassRAMCheck /t REG_DWORD /d 1 /f
+    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassStorageCheck /t REG_DWORD /d 1 /f
+    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassCPUCheck /t REG_DWORD /d 1 /f
     Write-Host "✅ Bypass Applied Successfully. Now Proceed for installation..." -ForegroundColor Green
 	$installArgs = "/product server /auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
 } else {
@@ -297,8 +320,72 @@ if ($incompatibilityReasons.Count -gt 0) {
 }
 
 # Start Windows 11 Upgrade
-Write-Host "Starting Windows 11 upgrade..."
-Start-Process -FilePath $setupPath -ArgumentList $installArgs -Wait
+Write-Host "`nStarting Windows 11 upgrade..."
+$null = Start-Process -FilePath $setupPath -ArgumentList $installArgs -PassThru
+
+# Path to the setup log file
+$logPath = 'C:\$WINDOWS.~BT\Sources\Panther\setupact.log'
+
+# Function to draw a progress bar
+function Show-ProgressBar {
+    param (
+        [int]$Percent
+    )
+    $width = 50
+    $filled = [math]::Round($Percent * $width / 100)
+    $empty = $width - $filled
+    $bar = ('#' * $filled) + ('-' * $empty)
+    Write-Host -NoNewline "`r[$bar] $Percent%" -ForegroundColor Cyan
+}
+
+# Wait for the log file to be created (timeout: 2 minutes)
+$maxWaitSeconds = 120
+$waited = 0
+while (-not (Test-Path $logPath) -and $waited -lt $maxWaitSeconds) {
+    Start-Sleep -Seconds 1
+    $waited++
+}
+if (-not (Test-Path $logPath)) {
+    Write-Host "Log file not found after waiting $maxWaitSeconds seconds: $logPath" -ForegroundColor Red
+    exit 1
+}
+
+# Start monitoring loop
+Write-Host "Your PC will restart several times. This might take a while." -ForegroundColor Green
+$lastPercent = -1
+
+while ($true) {
+    Start-Sleep -Seconds 1
+
+    if (Test-Path $logPath) {
+        # Read last 200 lines to find progress updates
+        $content = Get-Content $logPath -Tail 200
+
+        # Find latest progress line with Overall progress percentage
+        $progressLines = $content | Where-Object { $_ -match "Overall progress: \[(\d+)%\]" }
+        if ($progressLines) {
+            $lastLine = $progressLines[-1]
+            if ($lastLine -match "Overall progress: \[(\d+)%\]") {
+                $currentPercent = [int]$matches[1]
+
+                if ($currentPercent -ne $lastPercent) {
+                    Show-ProgressBar -Percent $currentPercent
+                    $lastPercent = $currentPercent
+                }
+
+                if ($currentPercent -ge 100) {
+                    # Clear progress bar line and write completion message
+                    Write-Host "`r" + (' ' * 60) + "`r" -NoNewline
+                    Write-Host "Upgrade completed! Your PC will restart in a few moments" -ForegroundColor Green
+                    break
+                }
+            }
+        }
+    } else {
+        Write-Host "Log file not found: $logPath" -ForegroundColor Red
+        break
+    }
+}
 
 # Unmount ISO
 Write-Host "Unmounting ISO..."
