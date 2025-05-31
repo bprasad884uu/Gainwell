@@ -1,9 +1,9 @@
-# Define system locale
+# --- Step 0: Detect System Locale ---
 $systemLocale = (dism /online /get-intl | Where-Object { $_ -match '^Installed language\(s\):' }) -replace '.*:\s*',''
 
-# Define source folder and destination
+# --- Step 1: Define source and destination paths ---
 $sourceFolder = "\\10.131.126.12\Softwares"
-$destinationFolder = "$env:Temp"
+$destinationFolder = "$env:TEMP"
 
 # Ensure destination folder exists
 if (-not (Test-Path $destinationFolder)) {
@@ -20,63 +20,82 @@ switch ($systemLocale) {
     }
 }
 
-# Define destination path
 $destinationISO = Join-Path $destinationFolder (Split-Path $sourceISO -Leaf)
 
-# Get file size
-$fileInfo = Get-Item "$sourceISO"
-$totalSize = $fileInfo.Length
-$totalMB = [math]::Round($totalSize / 1MB, 2)
+# --- Step 2: Check if file exists and verify integrity ---
+$downloadSuccess = $false
 
-Write-Output "File Size: $totalMB MB"
+if (Test-Path $destinationISO) {
+    Write-Host "File already exists: $destinationISO"
+    Write-Host "Checking file integrity by attempting to mount..."
 
-# Initialize progress
-$blockSize = 10MB
-$copiedBytes = 0
-$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
-
-# Create file streams
-$sourceStream = [System.IO.File]::OpenRead($sourceISO)
-$destStream = [System.IO.File]::Create($destinationISO)
-
-$buffer = New-Object byte[] $blockSize
-while (($readBytes = $sourceStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
-    $destStream.Write($buffer, 0, $readBytes)
-    $copiedBytes += $readBytes
-
-    # Progress Calculation
-    $elapsedTime = $stopwatch.Elapsed.TotalSeconds
-    $speed = if ($elapsedTime -gt 0) { [math]::Round($copiedBytes / $elapsedTime / 1MB, 2) } else { 0 }
-    $percentComplete = [math]::Round(($copiedBytes / $totalSize) * 100, 2)
-
-    # ETA Calculation
-    $remainingBytes = $totalSize - $copiedBytes
-    $etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / ($speed * 1MB), 2) } else { "Calculating..." }
-
-    if ($etaSeconds -is [double]) {
-        $etaHours = [math]::Floor($etaSeconds / 3600)
-        $etaMinutes = [math]::Floor(($etaSeconds % 3600) / 60)
-        $etaRemainingSeconds = [math]::Floor($etaSeconds % 60)
-
-        $etaFormatted = ""
-        if ($etaHours -gt 0) { $etaFormatted += "${etaHours}h " }
-        if ($etaMinutes -gt 0) { $etaFormatted += "${etaMinutes}m " }
-        if ($etaRemainingSeconds -gt 0 -or $etaFormatted -eq "") { $etaFormatted += "${etaRemainingSeconds}s" }
-    } else {
-        $etaFormatted = "Calculating..."
+    try {
+        Mount-DiskImage -ImagePath $destinationISO -ErrorAction Stop
+        Write-Host "ISO mounted successfully. File integrity confirmed."
+        Dismount-DiskImage -ImagePath $destinationISO
+        $downloadSuccess = $true
+    } catch {
+        Write-Warning "Failed to mount ISO. File may be corrupted. Re-copying..."
+        Remove-Item $destinationISO -Force
     }
-
-    Write-Progress -Activity "Copying File..." -Status "$percentComplete% Complete - ETA: $etaFormatted" -PercentComplete $percentComplete
-    Write-Host "Total: $totalMB MB | Copied: $([math]::Round($copiedBytes / 1MB, 2)) MB | Speed: $speed MB/s | ETA: $etaFormatted" -NoNewline
 }
 
-# Close and dispose of file streams
-$sourceStream.Close()
-$destStream.Close()
-$sourceStream.Dispose()
-$destStream.Dispose()
+# --- Step 3: Copy with progress if needed ---
+if (-not $downloadSuccess) {
+    if (-not (Test-Path $sourceISO)) {
+        Write-Host "Source ISO not found: $sourceISO"
+        exit 1
+    }
 
-Write-Output "`nFile copy completed successfully!"
+    $fileInfo = Get-Item "$sourceISO"
+    $totalSize = $fileInfo.Length
+    $totalMB = [math]::Round($totalSize / 1MB, 2)
+
+    Write-Host "Copying ISO ($totalMB MB) from network share..."
+
+    $blockSize = 10MB
+    $copiedBytes = 0
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+    $sourceStream = [System.IO.File]::OpenRead($sourceISO)
+    $destStream = [System.IO.File]::Create($destinationISO)
+
+    $buffer = New-Object byte[] $blockSize
+    while (($readBytes = $sourceStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+        $destStream.Write($buffer, 0, $readBytes)
+        $copiedBytes += $readBytes
+
+        $elapsedTime = $stopwatch.Elapsed.TotalSeconds
+        $speed = if ($elapsedTime -gt 0) { [math]::Round($copiedBytes / $elapsedTime / 1MB, 2) } else { 0 }
+        $percentComplete = [math]::Round(($copiedBytes / $totalSize) * 100, 2)
+
+        $remainingBytes = $totalSize - $copiedBytes
+        $etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / ($speed * 1MB), 2) } else { "Calculating..." }
+
+        if ($etaSeconds -is [double]) {
+            $etaHours = [math]::Floor($etaSeconds / 3600)
+            $etaMinutes = [math]::Floor(($etaSeconds % 3600) / 60)
+            $etaRemainingSeconds = [math]::Floor($etaSeconds % 60)
+
+            $etaFormatted = ""
+            if ($etaHours -gt 0) { $etaFormatted += "${etaHours}h " }
+            if ($etaMinutes -gt 0) { $etaFormatted += "${etaMinutes}m " }
+            if ($etaRemainingSeconds -gt 0 -or $etaFormatted -eq "") { $etaFormatted += "${etaRemainingSeconds}s" }
+        } else {
+            $etaFormatted = "Calculating..."
+        }
+
+        Write-Progress -Activity "Copying File..." -Status "$percentComplete% Complete - ETA: $etaFormatted" -PercentComplete $percentComplete
+        Write-Host "`rTotal: $totalMB MB | Copied: $([math]::Round($copiedBytes / 1MB, 2)) MB | Speed: $speed MB/s | ETA: $etaFormatted" -NoNewline
+    }
+
+    $sourceStream.Close()
+    $destStream.Close()
+    $sourceStream.Dispose()
+    $destStream.Dispose()
+
+    Write-Host "`nFile copy completed successfully!"
+}
 
 # --- Install Windows 11 ---
 # Find Downloaded ISO File
