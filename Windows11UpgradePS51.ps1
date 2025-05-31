@@ -41,55 +41,46 @@ $totalRead = 0
 $startTime = Get-Date
 
 do {
-    $read = $readStream.Read($buffer, 0, $buffer.Length)
-    if ($read -gt 0) {
-        $writeStream.Write($buffer, 0, $read)
-        $totalRead += $read
+    $read = $readStream.Read($buffer, 0, $buffer.Length)
+    if ($read -gt 0) {
+        $writeStream.Write($buffer, 0, $read)
+        $totalRead += $read
 
-        # Calculate download speed
-        $elapsed = (Get-Date) - $startTime
-        $elapsedSeconds = [Math]::Max($elapsed.TotalSeconds, 1)
-        $speed = $totalRead / 1MB / $elapsedSeconds
+        # Calculate download speed
+        $elapsed = (Get-Date) - $startTime
+        $elapsedSeconds = [Math]::Max($elapsed.TotalSeconds, 1)
+        $speed = $totalRead / 1MB / $elapsedSeconds
+        $percent = ($totalRead / $totalBytes) * 100
+        $downloadedMB = $totalRead / 1MB
 
-        # Format downloaded size
-        if ($totalRead -ge 1TB) {
-            $downloadedFormatted = "{0:N2} TB" -f ($totalRead / 1TB)
-        } elseif ($totalRead -ge 1GB) {
-            $downloadedFormatted = "{0:N2} GB" -f ($totalRead / 1GB)
-        } elseif ($totalRead -ge 1MB) {
-            $downloadedFormatted = "{0:N2} MB" -f ($totalRead / 1MB)
-        } else {
-            $downloadedFormatted = "{0:N2} KB" -f ($totalRead / 1KB)
-        }
-        
-		# Format speed
-		if ($speed -ge 1024) {
-			$speedFormatted = "{0:N2} GB/s" -f ($speed / 1024)
-		} elseif ($speed -ge 1) {
-			$speedFormatted = "{0:N2} MB/s" -f $speed
-		} else {
-			$speedFormatted = "{0:N2} KB/s" -f ($speed * 1024)
-		}
+        # Dynamically adjust speed display
+        if ($speed -ge 1024) {
+            $speedFormatted = "{0:N2} GB/s" -f ($speed / 1024)
+        } elseif ($speed -ge 1) {
+            $speedFormatted = "{0:N2} MB/s" -f $speed
+        } else {
+            $speedFormatted = "{0:N2} KB/s" -f ($speed * 1024)
+        }
 
-        # ETA Calculation
-        $remainingBytes = $totalBytes - $totalRead
-        $etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / ($speed * 1MB), 2) } else { "Calculating..." }
+        # ETA Calculation
+        $remainingBytes = $totalBytes - $totalRead
+        $etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / ($speed * 1MB), 2) } else { "Calculating..." }
 
-        if ($etaSeconds -is [double]) {
-            $etaHours = [math]::Floor($etaSeconds / 3600)
-            $etaMinutes = [math]::Floor(($etaSeconds % 3600) / 60)
-            $etaRemainingSeconds = [math]::Floor($etaSeconds % 60)
+        if ($etaSeconds -is [double]) {
+            $etaHours = [math]::Floor($etaSeconds / 3600)
+            $etaMinutes = [math]::Floor(($etaSeconds % 3600) / 60)
+            $etaRemainingSeconds = [math]::Floor($etaSeconds % 60)
 
-            $etaFormatted = ""
-            if ($etaHours -gt 0) { $etaFormatted += "${etaHours}h " }
-            if ($etaMinutes -gt 0) { $etaFormatted += "${etaMinutes}m " }
-            if ($etaRemainingSeconds -gt 0 -or $etaFormatted -eq "") { $etaFormatted += "${etaRemainingSeconds}s" }
-        } else {
-            $etaFormatted = "Calculating..."
-        }
+            $etaFormatted = ""
+            if ($etaHours -gt 0) { $etaFormatted += "${etaHours}h " }
+            if ($etaMinutes -gt 0) { $etaFormatted += "${etaMinutes}m " }
+            if ($etaRemainingSeconds -gt 0 -or $etaFormatted -eq "") { $etaFormatted += "${etaRemainingSeconds}s" }
+        } else {
+            $etaFormatted = "Calculating..."
+        }
 
-        Write-Host ("`rFile Size: {0} | Downloaded: {1} | Speed: {2} | ETA: {3}" -f $isoSizeFormatted, $downloadedFormatted, $speedFormatted, $etaFormatted) -NoNewline
-    }
+        Write-Host ("`rFile Size: {0} | Downloaded: {1:N2} MB | Speed: {2} | ETA: {3}" -f $isoSizeFormatted, $downloadedMB, $speedFormatted, $etaFormatted) -NoNewline
+    }
 } while ($read -gt 0)
 
 $writeStream.Close()
@@ -100,27 +91,21 @@ Write-Host "`nDownload complete! File saved to: $destination"
 $downloadSuccess = $true
 
 if (-not $downloadSuccess) {
-    Write-Host "❌ ISO download failed." -ForegroundColor Red
+    Write-Host "❌ ISO download failed." -ForegroundColor Red
 }
 
 # --- Step 2: Mount ISO ---
 Write-Host "Unmounting existing ISOs..."
-# Get all volumes that are mounted from ISO files
-$volumes = Get-Volume | Where-Object { $_.DriveType -eq 'CD-ROM' }
+# Get all mounted ISO disk images
+$mountedISOs = Get-DiskImage | Where-Object { $_.ImagePath -like "*.iso" -and $_.DevicePath }
 
-foreach ($volume in $volumes) {
+# Unmount each mounted ISO
+foreach ($iso in $mountedISOs) {
     try {
-        $devicePath = "\\.\$($volume.DriveLetter):"
-        $image = Get-CimInstance -Namespace root\cimv2 -ClassName Win32_DiskDrive | Where-Object {
-            $_.DeviceID -like "*$($volume.DriveLetter)*"
-        }
-
-        # Try to dismount using the drive letter
-        Write-Host "Attempting to dismount image mounted at: $devicePath"
-        Dismount-DiskImage -DevicePath $devicePath -ErrorAction Stop
-        Write-Host "Successfully dismounted: $devicePath"
+        Dismount-DiskImage -ImagePath $iso.ImagePath
+        Write-Output "Unmounted: $($iso.ImagePath)"
     } catch {
-        Write-Warning "Failed to dismount: $devicePath. Error: $_"
+        Write-Warning "Failed to unmount: $($iso.ImagePath) - $_"
     }
 }
 
