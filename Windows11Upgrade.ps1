@@ -111,7 +111,7 @@ $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
 	$httpClient.Dispose()
 	
 	if (-not $downloadSuccess) {
-    Write-Host "❌ All download methods failed. Please check your internet connection." -ForegroundColor Red
+    Write-Host "All download methods failed. Please check your internet connection." -ForegroundColor Red
     exit
 }
 
@@ -226,7 +226,7 @@ switch -Regex ($cpu.Manufacturer) {
     "Intel"    { $cpuSupported = $intelList -contains $cleanCpuName }
     "AMD"      { $cpuSupported = $amdList -contains $cleanCpuName }
     "Qualcomm" { $cpuSupported = $qualcommList -contains $cleanCpuName }
-    default    { Write-Host "❓ Unknown manufacturer: $($cpu.Manufacturer)" }
+    default    { Write-Host "Unknown manufacturer: $($cpu.Manufacturer)" }
 }
 
 # Function to check TPM 2.0
@@ -264,9 +264,9 @@ if ($cpu64Bit) {
 
 # CPU Speed Check
 if ($cpuSpeedCompatible) {
-    Write-Host "CPU Speed: $cpuSpeedGHz GHz (✔ Compatible)" -ForegroundColor Green
+    Write-Host "CPU Speed: $cpuSpeedGHz GHz (Compatible)" -ForegroundColor Green
 } else {
-    Write-Host "CPU Speed: $cpuSpeedGHz GHz (❌ Not Compatible)" -ForegroundColor Red
+    Write-Host "CPU Speed: $cpuSpeedGHz GHz (Not Compatible)" -ForegroundColor Red
 }
 
 # Secure Boot Check
@@ -291,23 +291,13 @@ if ($cpuSupported) {
 }
 
 # Store failed checks
+# Incompatibility reasons
 $incompatibilityReasons = @()
-
-if (-not $cpu64Bit) {
-    $incompatibilityReasons += "CPU is not 64-bit"
-}
-if (-not $cpuSpeedCompatible) {
-    $incompatibilityReasons += "CPU speed is less than 1 GHz"
-}
-if (-not $secureBootEnabled) {
-    $incompatibilityReasons += "Secure Boot is not enabled"
-}
-if (-not $tpmCompatible) {
-    $incompatibilityReasons += "TPM 2.0 is not supported or not enabled"
-}
-if (-not $cpuSupported) {
-    $incompatibilityReasons += "Unsupported processor: $cleanCpuName"
-}
+if (-not $cpu64Bit) { $incompatibilityReasons += "CPU is not 64-bit" }
+if (-not $cpuSpeedCompatible) { $incompatibilityReasons += "CPU speed is less than 1 GHz" }
+if (-not $secureBootEnabled) { $incompatibilityReasons += "Secure Boot is not enabled" }
+if (-not $tpmCompatible) { $incompatibilityReasons += "TPM 2.0 is not supported or not enabled" }
+if (-not $cpuSupported) { $incompatibilityReasons += "Unsupported processor: $cleanCpuName" }
 
 # Final verdict
 if ($incompatibilityReasons.Count -gt 0) {
