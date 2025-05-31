@@ -211,7 +211,7 @@ try {
     $amdList = $httpClient.GetStringAsync($amdListUrl).Result
     $qualcommList = $httpClient.GetStringAsync($qualcommListUrl).Result
 } catch {
-    Write-Host "⚠️ Failed to download processor support lists." -ForegroundColor Yellow
+    Write-Host "Failed to download processor support lists." -ForegroundColor Yellow
     return
 }
 
