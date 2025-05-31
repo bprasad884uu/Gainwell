@@ -173,8 +173,7 @@ if (-not (Test-Path $setupPath)) {
 $manufacturer = (Get-WmiObject -Class Win32_ComputerSystem).Manufacturer
 Write-Host "Detected System Manufacturer: $manufacturer"
 
-# Windows 11 CPU Compatibility Check Script with Bypass
-# GitHub CPU lists
+# CPU Compatibility List URLs
 $intelListUrl = "https://raw.githubusercontent.com/rcmaehl/WhyNotWin11/main/includes/SupportedProcessorsIntel.txt"
 $amdListUrl = "https://raw.githubusercontent.com/rcmaehl/WhyNotWin11/main/includes/SupportedProcessorsAMD.txt"
 $qualcommListUrl = "https://raw.githubusercontent.com/rcmaehl/WhyNotWin11/main/includes/SupportedProcessorsQualcomm.txt"
@@ -198,18 +197,17 @@ if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
     $cleanCpuName = ""
 }
 
-# Fallback if match fails
 if (-not $cleanCpuName) {
-    Write-Host "⚠️ Could not extract a matching CPU model from '$rawCpuName'" -ForegroundColor Yellow
+    Write-Host "Warning: Could not extract a matching CPU model from '$rawCpuName'" -ForegroundColor Yellow
     return
 }
 
-# Load System.Net.Http.dll for PowerShell 5.1 if needed
+# Load System.Net.Http.dll for PowerShell 5.1
 if (-not ("System.Net.Http.HttpClient" -as [type])) {
     Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll"
 }
+Add-Type -AssemblyName "System.Net.Http"
 
-# Use HttpClient instead of Invoke-WebRequest
 $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
 $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
 
@@ -219,11 +217,10 @@ try {
     $amdList = $httpClient.GetStringAsync($amdListUrl).Result
     $qualcommList = $httpClient.GetStringAsync($qualcommListUrl).Result
 } catch {
-    Write-Host "⚠️ Failed to download processor support lists." -ForegroundColor Yellow
+    Write-Host "Warning: Failed to download processor support lists."
     return
 }
 
-# Split lists into lines
 $intelList = $intelList -split "`n" | ForEach-Object { $_.Trim() }
 $amdList = $amdList -split "`n" | ForEach-Object { $_.Trim() }
 $qualcommList = $qualcommList -split "`n" | ForEach-Object { $_.Trim() }
@@ -234,7 +231,7 @@ switch -Regex ($cpu.Manufacturer) {
     "Intel"    { $cpuSupported = $intelList -contains $cleanCpuName }
     "AMD"      { $cpuSupported = $amdList -contains $cleanCpuName }
     "Qualcomm" { $cpuSupported = $qualcommList -contains $cleanCpuName }
-    default    { Write-Host "❓ Unknown manufacturer: $($cpu.Manufacturer)" }
+    default    { Write-Host "Unknown manufacturer: $($cpu.Manufacturer)" }
 }
 
 # Function to check TPM 2.0
@@ -243,7 +240,7 @@ function Check-TPM {
     return $tpm.SpecVersion -match "2.0"
 }
 
-# Check if the processor is 64-bit
+# Check CPU Architecture
 $architecture = $cpu.AddressWidth
 $cpu64Bit = $architecture -eq 64
 
@@ -301,42 +298,40 @@ if (-not $secureBootEnabled) { $incompatibilityReasons += "Secure Boot is not en
 if (-not $tpmCompatible) { $incompatibilityReasons += "TPM 2.0 is not supported or not enabled" }
 if (-not $cpuSupported) { $incompatibilityReasons += "Unsupported processor: $cleanCpuName" }
 
-# Final verdict
 if ($incompatibilityReasons.Count -gt 0) {
-    Write-Host "`n❌ This system does not meet below Windows 11 requirements:" -ForegroundColor Yellow
+    Write-Host "`nSystem is NOT fully compatible with Windows 11 due to:" -ForegroundColor Yellow
     foreach ($reason in $incompatibilityReasons) {
         Write-Host " - $reason" -ForegroundColor Red
     }
-    Write-Host "`n⚙ Registry Tweaks will be applied to bypass the checks..." -ForegroundColor Yellow
-	$null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\MoSetup" /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1 /f
-    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassTPMCheck /t REG_DWORD /d 1 /f
-    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassSecureBootCheck /t REG_DWORD /d 1 /f
-    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassRAMCheck /t REG_DWORD /d 1 /f
-    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassStorageCheck /t REG_DWORD /d 1 /f
-    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassCPUCheck /t REG_DWORD /d 1 /f
-    Write-Host "✅ Bypass Applied Successfully. Now Proceed for installation..." -ForegroundColor Green
-	$installArgs = "/product server /auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
+
+    Write-Host "`nApplying registry bypass for compatibility..."
+    $null = reg add "HKLM\SYSTEM\Setup\MoSetup" /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1 /f
+    $null = reg add "HKLM\SYSTEM\Setup\LabConfig" /v BypassTPMCheck /t REG_DWORD /d 1 /f
+    $null = reg add "HKLM\SYSTEM\Setup\LabConfig" /v BypassSecureBootCheck /t REG_DWORD /d 1 /f
+    $null = reg add "HKLM\SYSTEM\Setup\LabConfig" /v BypassRAMCheck /t REG_DWORD /d 1 /f
+    $null = reg add "HKLM\SYSTEM\Setup\LabConfig" /v BypassStorageCheck /t REG_DWORD /d 1 /f
+    $null = reg add "HKLM\SYSTEM\Setup\LabConfig" /v BypassCPUCheck /t REG_DWORD /d 1 /f
+    $installArgs = "/product server /auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
+	Write-Host "Bypass Applied Successfully. Now Proceed for installation..." -ForegroundColor Green
 } else {
-    Write-Host "`n✅ This system meets all Windows 11 hardware requirements." -ForegroundColor Green
-	$installArgs = "/auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
+    Write-Host "`nSystem is fully compatible with Windows 11." -ForegroundColor Green
+    $installArgs = "/auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
 }
 
 # Start Windows 11 Upgrade
 Write-Host "`nStarting Windows 11 upgrade..."
 $null = Start-Process -FilePath $setupPath -ArgumentList $installArgs -PassThru
 
-# Path to the setup log file
+# Setup log monitoring
 $logPath = 'C:\$WINDOWS.~BT\Sources\Panther\setupact.log'
 $setupFolder = 'C:\$WINDOWS.~BT'
 
-# Delete the log file if it exists
 if (Test-Path $logPath) {
-        $null = Remove-Item -Path $logPath -Force -ErrorAction SilentlyContinue
+    $null = Remove-Item -Path $logPath -Force -ErrorAction SilentlyContinue
 }
 
 function Is-SetupRunning {
-    Get-Process -Name 'setupprep','SetupHost' -ErrorAction SilentlyContinue | Where-Object { $_ } | ForEach-Object { return $true }
-    return $false
+    return (Get-Process -Name 'setupprep','SetupHost' -ErrorAction SilentlyContinue).Count -gt 0
 }
 
 while ($true) {
@@ -344,50 +339,41 @@ while ($true) {
     $logExists = Test-Path $logPath
     $setupRunning = Is-SetupRunning
 
-   if ($logExists -or (-not $folderExists -and -not $setupRunning)) {
-    if (-not $folderExists -and -not $setupRunning) {
-        Write-Host "Neither setup folder nor upgrade process found. Exiting..." -ForegroundColor Yellow
-		}
-    break
-	}
+    if ($logExists -or (-not $folderExists -and -not $setupRunning)) {
+        if (-not $folderExists -and -not $setupRunning) {
+            Write-Host "No setup folder or upgrade process found. Exiting..." -ForegroundColor Yellow
+        }
+        break
+    }
     Start-Sleep -Seconds 1
 }
 
-# Start monitoring loop
 Write-Host "Your PC will restart several times. This might take a while." -ForegroundColor Green
-$lastPercent = -1
 
-# Initial output
+$lastPercent = -1
 Write-Host -NoNewline "`r0% complete     " -ForegroundColor Cyan
 
 while ($true) {
     Start-Sleep -Seconds 1
-
     if (Test-Path $logPath) {
-        # Read last 200 lines to find progress updates
         $content = Get-Content $logPath -Tail 200
-
-        # Find latest progress line with Overall progress percentage
         $progressLines = $content | Where-Object { $_ -match "Overall progress: \[(\d+)%\]" }
         if ($progressLines) {
             $lastLine = $progressLines[-1]
             if ($lastLine -match "Overall progress: \[(\d+)%\]") {
                 $currentPercent = [int]$matches[1]
-
                 if ($currentPercent -ne $lastPercent) {
                     Write-Host -NoNewline "`r$currentPercent% complete     " -ForegroundColor Cyan
                     $lastPercent = $currentPercent
                 }
-
                 if ($currentPercent -ge 100) {
-                    Write-Host "`r" + (' ' * 60) + "`r" -NoNewline
-                    Write-Host "Upgrade completed! Your PC will restart in a few moments" -ForegroundColor Green
+                    Write-Host "`r`nUpgrade completed! Your PC will restart in a few moments" -ForegroundColor Green
                     break
                 }
             }
         }
     } else {
-        Write-Host -NoNewline "`rWindows 11 installation failed. Please restart the installation or try again after restarting your PC." -ForegroundColor Red
+        Write-Host "`rWindows 11 installation failed. Try restarting the upgrade." -ForegroundColor Red
         break
     }
 }
