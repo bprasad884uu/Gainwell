@@ -19,9 +19,9 @@ if (Test-Path "$MountDrive`:") {
 
 # Map network drive temporarily
 try {
-    New-PSDrive -Name $MountDrive -PSProvider FileSystem -Root $sourceFolder -Credential $Credential -Persist -ErrorAction Stop
+    New-PSDrive -Name $MountDrive -PSProvider FileSystem -Root $sourceFolder -Persist -ErrorAction Stop
 } catch {
-    Write-Output "Failed to map network drive. Check credentials and connectivity."
+    Write-Output "Failed to map network drive. Check connectivity."
     exit 1
 }
 
@@ -30,6 +30,9 @@ if (-not (Test-Path $destinationFolder)) {
     New-Item -Path $destinationFolder -ItemType Directory | Out-Null
     Write-Output "Created folder: $destinationFolder"
 }
+
+#Check Registry (Original Install Language)
+$locale = (Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Nls\Language').InstallLanguage
 
 # Define source ISO based on system locale
 switch ($systemLocale) {
@@ -76,7 +79,6 @@ $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 $sourceStream = [System.IO.File]::OpenRead($sourceISO)
 $destStream = [System.IO.File]::Create($destinationISO)
 
-try {
     $buffer = New-Object byte[] $blockSize
     while (($readBytes = $sourceStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
         $destStream.Write($buffer, 0, $readBytes)
@@ -107,25 +109,14 @@ try {
         Write-Progress -Activity "Copying File..." -Status "$percentComplete% Complete - ETA: $etaFormatted" -PercentComplete $percentComplete
         Write-Host "Total: $totalMB MB | Copied: $([math]::Round($copiedBytes / 1MB, 2)) MB | Speed: $speed MB/s | ETA: $etaFormatted" -NoNewline
     }
-} catch {
-    Write-Output "Error occurred during file copy: $_"
-} finally {
     # Close and dispose of file streams
     $sourceStream.Close()
     $destStream.Close()
     $sourceStream.Dispose()
     $destStream.Dispose()
     Remove-PSDrive -Name $MountDrive -Force
-}
 
-Write-Output "File copy completed successfully! ($systemLocale)"
-
-# Verify File Copy
-$copiedFileInfo = Get-Item -Path $destinationISO -ErrorAction SilentlyContinue
-if (-not $copiedFileInfo -or $copiedFileInfo.Length -ne $totalSize) {
-    Write-Output "File copy verification failed. Retrying..."
-    exit 1
-}
+Write-Output "File copy completed successfully!"
 
 # --- Install Windows 11 ---
 # Find Downloaded ISO File
@@ -189,7 +180,7 @@ if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
 
 # Fallback if match fails
 if (-not $cleanCpuName) {
-    Write-Host "⚠️ Could not extract a matching CPU model from '$rawCpuName'" -ForegroundColor Yellow
+    Write-Host "Could not extract a matching CPU model from '$rawCpuName'" -ForegroundColor Yellow
     return
 }
 
@@ -209,7 +200,7 @@ try {
     $amdList = $httpClient.GetStringAsync($amdListUrl).Result
     $qualcommList = $httpClient.GetStringAsync($qualcommListUrl).Result
 } catch {
-    Write-Host "⚠️ Failed to download processor support lists." -ForegroundColor Yellow
+    Write-Host "Failed to download processor support lists." -ForegroundColor Yellow
     return
 }
 
@@ -224,7 +215,7 @@ switch -Regex ($cpu.Manufacturer) {
     "Intel"    { $cpuSupported = $intelList -contains $cleanCpuName }
     "AMD"      { $cpuSupported = $amdList -contains $cleanCpuName }
     "Qualcomm" { $cpuSupported = $qualcommList -contains $cleanCpuName }
-    default    { Write-Host "❓ Unknown manufacturer: $($cpu.Manufacturer)" }
+    default    { Write-Host "Unknown manufacturer: $($cpu.Manufacturer)" }
 }
 
 # Function to check TPM 2.0
@@ -255,61 +246,50 @@ Write-Host "Processor: $rawCpuName"
 
 # Architecture Check
 if ($cpu64Bit) {
-    Write-Host "64-bit CPU: ✔ Compatible" -ForegroundColor Green
+    Write-Host "64-bit CPU: Compatible" -ForegroundColor Green
 } else {
-    Write-Host "64-bit CPU: ❌ Not Compatible" -ForegroundColor Red
+    Write-Host "64-bit CPU: Not Compatible" -ForegroundColor Red
 }
 
 # CPU Speed Check
 if ($cpuSpeedCompatible) {
-    Write-Host "CPU Speed: $cpuSpeedGHz GHz (✔ Compatible)" -ForegroundColor Green
+    Write-Host "CPU Speed: $cpuSpeedGHz GHz (Compatible)" -ForegroundColor Green
 } else {
-    Write-Host "CPU Speed: $cpuSpeedGHz GHz (❌ Not Compatible)" -ForegroundColor Red
+    Write-Host "CPU Speed: $cpuSpeedGHz GHz (Not Compatible)" -ForegroundColor Red
 }
 
 # Secure Boot Check
 if ($secureBootEnabled) {
-    Write-Host "Secure Boot Enabled: ✔ Yes" -ForegroundColor Green
+    Write-Host "Secure Boot Enabled: Yes" -ForegroundColor Green
 } else {
-    Write-Host "Secure Boot Enabled: ❌ No" -ForegroundColor Red
+    Write-Host "Secure Boot Enabled: No" -ForegroundColor Red
 }
 
 # TPM 2.0 Check
 if ($tpmCompatible) {
-    Write-Host "TPM 2.0 Support: ✔ Yes" -ForegroundColor Green
+    Write-Host "TPM 2.0 Support: Yes" -ForegroundColor Green
 } else {
-    Write-Host "TPM 2.0 Support: ❌ No" -ForegroundColor Red
+    Write-Host "TPM 2.0 Support: No" -ForegroundColor Red
 }
 
 # CPU Support Check
 if ($cpuSupported) {
-    Write-Host "CPU Compatibility: ✔ $cleanCpuName is supported" -ForegroundColor Green
+    Write-Host "CPU Compatibility: $cleanCpuName is supported" -ForegroundColor Green
 } else {
-    Write-Host "CPU Compatibility: ❌ $cleanCpuName is NOT supported" -ForegroundColor Red
+    Write-Host "CPU Compatibility: $cleanCpuName is NOT supported" -ForegroundColor Red
 }
 
-# Store failed checks
+# Incompatibility reasons
 $incompatibilityReasons = @()
-
-if (-not $cpu64Bit) {
-    $incompatibilityReasons += "CPU is not 64-bit"
-}
-if (-not $cpuSpeedCompatible) {
-    $incompatibilityReasons += "CPU speed is less than 1 GHz"
-}
-if (-not $secureBootEnabled) {
-    $incompatibilityReasons += "Secure Boot is not enabled"
-}
-if (-not $tpmCompatible) {
-    $incompatibilityReasons += "TPM 2.0 is not supported or not enabled"
-}
-if (-not $cpuSupported) {
-    $incompatibilityReasons += "Unsupported processor: $cleanCpuName"
-}
+if (-not $cpu64Bit) { $incompatibilityReasons += "CPU is not 64-bit" }
+if (-not $cpuSpeedCompatible) { $incompatibilityReasons += "CPU speed is less than 1 GHz" }
+if (-not $secureBootEnabled) { $incompatibilityReasons += "Secure Boot is not enabled" }
+if (-not $tpmCompatible) { $incompatibilityReasons += "TPM 2.0 is not supported or not enabled" }
+if (-not $cpuSupported) { $incompatibilityReasons += "Unsupported processor: $cleanCpuName" }
 
 # Final verdict
 if ($incompatibilityReasons.Count -gt 0) {
-    Write-Host "`n❌ Your System is NOT fully compatible with Windows 11 due to:" -ForegroundColor Yellow
+    Write-Host "`nYour System is NOT fully compatible with Windows 11 due to:" -ForegroundColor Yellow
     foreach ($reason in $incompatibilityReasons) {
         Write-Host " - $reason" -ForegroundColor Red
     }
@@ -320,10 +300,10 @@ if ($incompatibilityReasons.Count -gt 0) {
     $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassRAMCheck /t REG_DWORD /d 1 /f
     $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassStorageCheck /t REG_DWORD /d 1 /f
     $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassCPUCheck /t REG_DWORD /d 1 /f
-    Write-Host "✅ Bypass Applied Successfully. Now Proceed for installation..." -ForegroundColor Green
+    Write-Host "Bypass Applied Successfully. Now Proceed for installation..." -ForegroundColor Green
 	$installArgs = "/product server /auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
 } else {
-    Write-Host "`n✅ Your System is fully compatible with Windows 11! Proceed with normal installation." -ForegroundColor Green
+    Write-Host "`nYour System is fully compatible with Windows 11! Proceed with normal installation." -ForegroundColor Green
 	$installArgs = "/auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
 }
 
@@ -403,7 +383,7 @@ Write-Host "Unmounting ISO..."
 
 # Unmount the ISO after installation
 Dismount-DiskImage -ImagePath $isoPath
-Write-Host "✅ Windows 11 upgrade process complete."
+Write-Host "Windows 11 upgrade process complete."
 
 Write-Host "Rebooting System..."
 #Restart-Computer -Force
