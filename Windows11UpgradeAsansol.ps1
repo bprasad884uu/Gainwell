@@ -7,9 +7,22 @@ $destinationFolder = "$env:Temp"
 $MountDrive = "Y"
 
 # Remove existing drive mapping if exists
-if (Test-Path "$MountDrive`:") {
-    Remove-PSDrive -Name $MountDrive -Force
-    Start-Sleep -Seconds 2  # Wait to ensure removal is completed
+$volumes = Get-Volume | Where-Object { $_.DriveType -eq 'CD-ROM' }
+
+foreach ($volume in $volumes) {
+    try {
+        $devicePath = "\\.\$($volume.DriveLetter):"
+        $image = Get-CimInstance -Namespace root\cimv2 -ClassName Win32_DiskDrive | Where-Object {
+            $_.DeviceID -like "*$($volume.DriveLetter)*"
+        }
+
+        # Try to dismount using the drive letter
+        Write-Host "Attempting to dismount image mounted at: $devicePath"
+        Dismount-DiskImage -DevicePath $devicePath -ErrorAction Stop
+        Write-Host "Successfully dismounted: $devicePath"
+    } catch {
+        Write-Warning "Failed to dismount: $devicePath. Error: $_"
+    }
 }
 
 # Map network drive temporarily
