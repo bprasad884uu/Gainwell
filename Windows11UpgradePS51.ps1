@@ -29,9 +29,20 @@ $response = $webRequest.GetResponse()
 $totalBytes = $response.ContentLength
 
 # Convert total file size to readable format
+$totalSizeKB = $totalBytes / 1KB
 $totalSizeMB = $totalBytes / 1MB
-$totalSizeGB = $totalSizeMB / 1024
-$isoSizeFormatted = if ($totalSizeGB -ge 1) { "{0:N2} GB" -f $totalSizeGB } else { "{0:N2} MB" -f $totalSizeMB }
+$totalSizeGB = $totalBytes / 1GB
+$totalSizeTB = $totalBytes / 1TB
+
+if ($totalSizeTB -ge 1) {
+    $isoSizeFormatted = "{0:N2} TB" -f $totalSizeTB
+} elseif ($totalSizeGB -ge 1) {
+    $isoSizeFormatted = "{0:N2} GB" -f $totalSizeGB
+} elseif ($totalSizeMB -ge 1) {
+    $isoSizeFormatted = "{0:N2} MB" -f $totalSizeMB
+} else {
+    $isoSizeFormatted = "{0:N2} KB" -f $totalSizeKB
+}
 
 $readStream = $response.GetResponseStream()
 $writeStream = [System.IO.File]::OpenWrite($destination)
@@ -41,46 +52,57 @@ $totalRead = 0
 $startTime = Get-Date
 
 do {
-    $read = $readStream.Read($buffer, 0, $buffer.Length)
-    if ($read -gt 0) {
-        $writeStream.Write($buffer, 0, $read)
-        $totalRead += $read
+    $read = $readStream.Read($buffer, 0, $buffer.Length)
+    if ($read -gt 0) {
+        $writeStream.Write($buffer, 0, $read)
+        $totalRead += $read
 
-        # Calculate download speed
-        $elapsed = (Get-Date) - $startTime
-        $elapsedSeconds = [Math]::Max($elapsed.TotalSeconds, 1)
-        $speed = $totalRead / 1MB / $elapsedSeconds
-        $percent = ($totalRead / $totalBytes) * 100
-        $downloadedMB = $totalRead / 1MB
+        # Calculate download speed
+        $elapsed = (Get-Date) - $startTime
+        $elapsedSeconds = [Math]::Max($elapsed.TotalSeconds, 1)
+        $speed = $totalRead / 1MB / $elapsedSeconds
 
-        # Dynamically adjust speed display
-        if ($speed -ge 1024) {
-            $speedFormatted = "{0:N2} GB/s" -f ($speed / 1024)
-        } elseif ($speed -ge 1) {
-            $speedFormatted = "{0:N2} MB/s" -f $speed
-        } else {
-            $speedFormatted = "{0:N2} KB/s" -f ($speed * 1024)
-        }
+        # Format downloaded size
+        if ($totalRead -ge 1TB) {
+            $downloadedFormatted = "{0:N2} TB" -f ($totalRead / 1TB)
+        } elseif ($totalRead -ge 1GB) {
+            $downloadedFormatted = "{0:N2} GB" -f ($totalRead / 1GB)
+        } elseif ($totalRead -ge 1MB) {
+            $downloadedFormatted = "{0:N2} MB" -f ($totalRead / 1MB)
+        } else {
+            $downloadedFormatted = "{0:N2} KB" -f ($totalRead / 1KB)
+        }
+        
+		# Format speed
+		if ($speed -ge 1048576) { # 1024 * 1024 MB = 1 TB
+		    $speedFormatted = "{0:N2} TB/s" -f ($speed / 1048576)
+		} elseif ($speed -ge 1024) {
+		    $speedFormatted = "{0:N2} GB/s" -f ($speed / 1024)
+		} elseif ($speed -ge 1) {
+		    $speedFormatted = "{0:N2} MB/s" -f $speed
+		} else {
+		    $speedFormatted = "{0:N2} KB/s" -f ($speed * 1024)
+		}
 
-        # ETA Calculation
-        $remainingBytes = $totalBytes - $totalRead
-        $etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / ($speed * 1MB), 2) } else { "Calculating..." }
+        # ETA Calculation
+        $remainingBytes = $totalBytes - $totalRead
+        $etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / ($speed * 1MB), 2) } else { "Calculating..." }
 
-        if ($etaSeconds -is [double]) {
-            $etaHours = [math]::Floor($etaSeconds / 3600)
-            $etaMinutes = [math]::Floor(($etaSeconds % 3600) / 60)
-            $etaRemainingSeconds = [math]::Floor($etaSeconds % 60)
+        if ($etaSeconds -is [double]) {
+            $etaHours = [math]::Floor($etaSeconds / 3600)
+            $etaMinutes = [math]::Floor(($etaSeconds % 3600) / 60)
+            $etaRemainingSeconds = [math]::Floor($etaSeconds % 60)
 
-            $etaFormatted = ""
-            if ($etaHours -gt 0) { $etaFormatted += "${etaHours}h " }
-            if ($etaMinutes -gt 0) { $etaFormatted += "${etaMinutes}m " }
-            if ($etaRemainingSeconds -gt 0 -or $etaFormatted -eq "") { $etaFormatted += "${etaRemainingSeconds}s" }
-        } else {
-            $etaFormatted = "Calculating..."
-        }
+            $etaFormatted = ""
+            if ($etaHours -gt 0) { $etaFormatted += "${etaHours}h " }
+            if ($etaMinutes -gt 0) { $etaFormatted += "${etaMinutes}m " }
+            if ($etaRemainingSeconds -gt 0 -or $etaFormatted -eq "") { $etaFormatted += "${etaRemainingSeconds}s" }
+        } else {
+            $etaFormatted = "Calculating..."
+        }
 
-        Write-Host ("`rFile Size: {0} | Downloaded: {1:N2} MB | Speed: {2} | ETA: {3}" -f $isoSizeFormatted, $downloadedMB, $speedFormatted, $etaFormatted) -NoNewline
-    }
+        Write-Host ("`rFile Size: {0} | Downloaded: {1} | Speed: {2} | ETA: {3}" -f $isoSizeFormatted, $downloadedFormatted, $speedFormatted, $etaFormatted) -NoNewline
+    }
 } while ($read -gt 0)
 
 $writeStream.Close()
@@ -91,9 +113,8 @@ Write-Host "`nDownload complete! File saved to: $destination"
 $downloadSuccess = $true
 
 if (-not $downloadSuccess) {
-    Write-Host "❌ ISO download failed." -ForegroundColor Red
+    Write-Host "❌ ISO download failed." -ForegroundColor Red
 }
-
 
 # --- Step 2: Mount ISO ---
 Write-Host "Unmounting existing ISOs..."
