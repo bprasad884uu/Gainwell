@@ -35,7 +35,7 @@ $totalSizeGB = $totalBytes / 1GB
 $totalSizeTB = $totalBytes / 1TB
 
 if ($totalSizeTB -ge 1) {
-    $isoSizeFormatted = "{0:N2} TB" -f $totalSizeTB
+	$isoSizeFormatted = "{0:N2} TB" -f $totalSizeTB
 } elseif ($totalSizeGB -ge 1) {
 	$isoSizeFormatted = "{0:N2} GB" -f $totalSizeGB
 } elseif ($totalSizeMB -ge 1) {
