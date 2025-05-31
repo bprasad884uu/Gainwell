@@ -279,24 +279,13 @@ if ($cpuSupported) {
     Write-Host "CPU Compatibility: ❌ $cleanCpuName is NOT supported" -ForegroundColor Red
 }
 
-# Store failed checks
+# Incompatibility reasons
 $incompatibilityReasons = @()
-
-if (-not $cpu64Bit) {
-    $incompatibilityReasons += "CPU is not 64-bit"
-}
-if (-not $cpuSpeedCompatible) {
-    $incompatibilityReasons += "CPU speed is less than 1 GHz"
-}
-if (-not $secureBootEnabled) {
-    $incompatibilityReasons += "Secure Boot is not enabled"
-}
-if (-not $tpmCompatible) {
-    $incompatibilityReasons += "TPM 2.0 is not supported or not enabled"
-}
-if (-not $cpuSupported) {
-    $incompatibilityReasons += "Unsupported processor: $cleanCpuName"
-}
+if (-not $cpu64Bit) { $incompatibilityReasons += "CPU is not 64-bit" }
+if (-not $cpuSpeedCompatible) { $incompatibilityReasons += "CPU speed is less than 1 GHz" }
+if (-not $secureBootEnabled) { $incompatibilityReasons += "Secure Boot is not enabled" }
+if (-not $tpmCompatible) { $incompatibilityReasons += "TPM 2.0 is not supported or not enabled" }
+if (-not $cpuSupported) { $incompatibilityReasons += "Unsupported processor: $cleanCpuName" }
 
 # Final verdict
 if ($incompatibilityReasons.Count -gt 0) {
