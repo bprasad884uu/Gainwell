@@ -28,46 +28,56 @@ if ($locale -eq "en-GB") {
     exit
 }
 
-# --- Step 1: Try HttpClient (Fastest) ---
+# --- Step 0: Check if file exists and verify integrity ---
 $downloadSuccess = $false
-# Load System.Net.Http.dll for PowerShell 5.1
+
+if (Test-Path $destination) {
+    Write-Host "File already exists: $destination"
+    Write-Host "Checking file integrity by attempting to mount..."
+
+    try {
+        Mount-DiskImage -ImagePath $destination -ErrorAction Stop
+        Write-Host "ISO mounted successfully. File integrity confirmed."
+        Dismount-DiskImage -ImagePath $destination
+        $downloadSuccess = $true
+    } catch {
+        Write-Warning "Failed to mount ISO. File may be corrupted. Re-downloading..."
+        Remove-Item $destination -Force
+    }
+}
+
+# --- Step 1: Try HttpClient (Fastest) ---
 if (-not ("System.Net.Http.HttpClient" -as [type])) {
     Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll"
 }
 
-# Create HttpClient Instance
 $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
 $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
 
+if (-not $downloadSuccess) {
     Write-Host "Starting download using HttpClient..."
 
-    # Send GET Request
     $response = $httpClient.GetAsync($isoUrl, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
 
-    # Validate Response
     if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
         Write-Host "HttpClient request failed: $($response.StatusCode) ($($response.ReasonPhrase))" -ForegroundColor Red
         exit
     }
 
-    # Get Content Stream
     $stream = $response.Content.ReadAsStreamAsync().Result
     if (-not $stream) {
         Write-Host "Failed to retrieve response stream." -ForegroundColor Red
         exit
     }
 
-    # Get File Size
     $totalSize = $response.Content.Headers.ContentLength
     if ($null -eq $totalSize) {
         Write-Host "Warning: File size unknown. Assuming large file to prevent errors." -ForegroundColor Yellow
         $totalSize = 1024 * 1024 * 1024
     }
 
-    # Open Output File
     $fileStream = [System.IO.File]::OpenWrite($destination)
 
-    # Set Large Buffer for Fast Download
     $bufferSize = 10MB
     $buffer = New-Object byte[] ($bufferSize)
     $downloaded = 0
@@ -78,39 +88,35 @@ $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
         $fileStream.Write($buffer, 0, $bytesRead)
         $downloaded += $bytesRead
         $elapsed = (Get-Date) - $startTime
-
-        # Calculate Speed (MB/s)
         $speed = ($downloaded / $elapsed.TotalSeconds) / 1MB
-
-        # Calculate Progress (%)
         $progress = ($downloaded / $totalSize) * 100
 
-        # ETA Calculation
-		$remainingBytes = $totalSize - $downloaded
-		$etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / ($speed * 1MB), 2) } else { "Calculating..." }
+        $remainingBytes = $totalSize - $downloaded
+        $etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / ($speed * 1MB), 2) } else { "Calculating..." }
 
-		if ($etaSeconds -is [double]) {
-			$etaHours = [math]::Floor($etaSeconds / 3600)
-			$etaMinutes = [math]::Floor(($etaSeconds % 3600) / 60)
-			$etaRemainingSeconds = [math]::Floor($etaSeconds % 60)
+        if ($etaSeconds -is [double]) {
+            $etaHours = [math]::Floor($etaSeconds / 3600)
+            $etaMinutes = [math]::Floor(($etaSeconds % 3600) / 60)
+            $etaRemainingSeconds = [math]::Floor($etaSeconds % 60)
 
-			$etaFormatted = ""
-			if ($etaHours -gt 0) { $etaFormatted += "${etaHours}h " }
-			if ($etaMinutes -gt 0) { $etaFormatted += "${etaMinutes}m " }
-			if ($etaRemainingSeconds -gt 0 -or $etaFormatted -eq "") { $etaFormatted += "${etaRemainingSeconds}s" }
-		} else {
-			$etaFormatted = "Calculating..."
-		}
-		Write-Host "`rProgress: $([math]::Round($progress,2))% | Downloaded: $([math]::Round($downloaded / 1MB, 2)) MB | Speed: $([math]::Round($speed,2)) MB/s | ETA: $etaFormatted" -NoNewline
+            $etaFormatted = ""
+            if ($etaHours -gt 0) { $etaFormatted += "${etaHours}h " }
+            if ($etaMinutes -gt 0) { $etaFormatted += "${etaMinutes}m " }
+            if ($etaRemainingSeconds -gt 0 -or $etaFormatted -eq "") { $etaFormatted += "${etaRemainingSeconds}s" }
+        } else {
+            $etaFormatted = "Calculating..."
+        }
+
+        Write-Host "`rProgress: $([math]::Round($progress,2))% | Downloaded: $([math]::Round($downloaded / 1MB, 2)) MB | Speed: $([math]::Round($speed,2)) MB/s | ETA: $etaFormatted" -NoNewline
     }
-	
-	# Close Streams
+
     $fileStream.Close()
-	Write-Host "`nDownload Complete: $destination"
-	$downloadSuccess = $true
-	$httpClient.Dispose()
-	
-	if (-not $downloadSuccess) {
+    Write-Host "`nDownload Complete: $destination"
+    $downloadSuccess = $true
+    $httpClient.Dispose()
+}
+
+if (-not $downloadSuccess) {
     Write-Host "All download methods failed. Please check your internet connection." -ForegroundColor Red
     exit
 }
