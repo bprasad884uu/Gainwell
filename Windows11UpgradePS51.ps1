@@ -51,7 +51,15 @@ do {
         $elapsedSeconds = [Math]::Max($elapsed.TotalSeconds, 1)
         $speed = $totalRead / 1MB / $elapsedSeconds
         $percent = ($totalRead / $totalBytes) * 100
-        $downloadedMB = $totalRead / 1MB
+        if ($totalRead -ge 1TB) {
+			$downloadedFormatted = "{0:N2} TB" -f ($totalRead / 1TB)
+		} elseif ($totalRead -ge 1GB) {
+			$downloadedFormatted = "{0:N2} GB" -f ($totalRead / 1GB)
+		} elseif ($totalRead -ge 1MB) {
+			$downloadedFormatted = "{0:N2} MB" -f ($totalRead / 1MB)
+		} else {
+			$downloadedFormatted = "{0:N2} KB" -f ($totalRead / 1KB)
+		}
 
         # Dynamically adjust speed display
         if ($speed -ge 1024) {
@@ -79,7 +87,7 @@ do {
             $etaFormatted = "Calculating..."
         }
 
-        Write-Host ("`rFile Size: {0} | Downloaded: {1:N2} MB | Speed: {2} | ETA: {3}" -f $isoSizeFormatted, $downloadedMB, $speedFormatted, $etaFormatted) -NoNewline
+        Write-Host ("`rFile Size: {0} | Downloaded: {1} | Speed: {2} | ETA: {3}" -f $isoSizeFormatted, $downloadedFormatted, $speedFormatted, $etaFormatted) -NoNewline
     }
 } while ($read -gt 0)
 
