@@ -7,6 +7,12 @@ $destinationFolder = "$env:Temp"
 $MountDrive = "Y"
 
 # Remove existing drive mapping if exists
+if (Test-Path "$MountDrive`:") {
+    Remove-PSDrive -Name $MountDrive -Force
+    Start-Sleep -Seconds 2  # Wait to ensure removal is completed
+}
+
+# Remove existing drive mapping if exists
 $volumes = Get-Volume | Where-Object { $_.DriveType -eq 'CD-ROM' }
 
 foreach ($volume in $volumes) {
