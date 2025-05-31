@@ -22,7 +22,7 @@ if ($locale -eq "en-GB") {
     $destination = "$env:Temp\Win11_24H2_ENGB.iso"
 } elseif ($locale -eq "en-US") {
     $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=458e6475-663d-49b0-b8ad-3e780082f098&P1=1748679754&P2=601&P3=2&P4=skb9535EwOB%2fjOMSpqClCbZDs5Ac4UJwHrIaDAsJQ3X%2focq55c1jdyIFyrZrZCxMt%2fSBtwBTmdItdiuh47yLgbytwY%2bpJMiq%2fIbQcgV9rWSRMD10XXud%2bWEiCBAIQul9Jmu088NbIG7iAe2wmsu5FaN5GQK%2fjeEUO%2fHQIcNl8vcfOeXmX2gL3CHtVBr63a90KrRed2uI7dCVqeT7Rm5bkFIpS67PDCbGIS7ZflgjGxiMHMSOoeYpSGY2aAxKITvzL5npjsRy0BAax3K9O0LDncmhAI0mVdyWGKJ0X25dgpBbtezI6Q%2fhAWsrtgR9UHxjes5%2fK7X4P%2f3oW2OshOtefQ%3d%3d"
-    Write-Host "Detected Language: English (US) - Downloading ISO..."
+    $destination = "$env:Temp\Win11_24H2_ENUS.iso"
 } else {
     Write-Host "Unsupported Language. No ISO available." -ForegroundColor Red
     exit
