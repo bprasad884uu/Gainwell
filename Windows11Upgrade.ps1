@@ -39,6 +39,8 @@ if (-not ("System.Net.Http.HttpClient" -as [type])) {
 $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
 $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
 
+$downloadSuccess = $false
+
 try {
     Write-Host "🚀 Starting download using HttpClient..."
 
@@ -87,39 +89,41 @@ try {
         $progress = ($downloaded / $totalSize) * 100
 
         # ETA Calculation
-		$remainingBytes = $totalSize - $downloaded
-		$etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / ($speed * 1MB), 2) } else { "Calculating..." }
+        $remainingBytes = $totalSize - $downloaded
+        $etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / ($speed * 1MB), 2) } else { "Calculating..." }
 
-		if ($etaSeconds -is [double]) {
-			$etaHours = [math]::Floor($etaSeconds / 3600)
-			$etaMinutes = [math]::Floor(($etaSeconds % 3600) / 60)
-			$etaRemainingSeconds = [math]::Floor($etaSeconds % 60)
+        if ($etaSeconds -is [double]) {
+            $etaHours = [math]::Floor($etaSeconds / 3600)
+            $etaMinutes = [math]::Floor(($etaSeconds % 3600) / 60)
+            $etaRemainingSeconds = [math]::Floor($etaSeconds % 60)
 
-			$etaFormatted = ""
-			if ($etaHours -gt 0) { $etaFormatted += "${etaHours}h " }
-			if ($etaMinutes -gt 0) { $etaFormatted += "${etaMinutes}m " }
-			if ($etaRemainingSeconds -gt 0 -or $etaFormatted -eq "") { $etaFormatted += "${etaRemainingSeconds}s" }
-		} else {
-			$etaFormatted = "Calculating..."
-		}
-		Write-Host "`r📊 Progress: $([math]::Round($progress,2))% | Downloaded: $([math]::Round($downloaded / 1MB, 2)) MB | ⚡ Speed: $([math]::Round($speed,2)) MB/s | ⏳ ETA: $etaFormatted" -NoNewline
+            $etaFormatted = ""
+            if ($etaHours -gt 0) { $etaFormatted += "${etaHours}h " }
+            if ($etaMinutes -gt 0) { $etaFormatted += "${etaMinutes}m " }
+            if ($etaRemainingSeconds -gt 0 -or $etaFormatted -eq "") { $etaFormatted += "${etaRemainingSeconds}s" }
+        } else {
+            $etaFormatted = "Calculating..."
+        }
+
+        Write-Host "`r📊 Progress: $([math]::Round($progress,2))% | Downloaded: $([math]::Round($downloaded / 1MB, 2)) MB | ⚡ Speed: $([math]::Round($speed,2)) MB/s | ⏳ ETA: $etaFormatted" -NoNewline
     }
-	
-	# Close Streams
+
+    # Close Streams
     $fileStream.Close()
-	Write-Host "`n✅ Download Complete: $destination"
-	$downloadSuccess = $true
-    } catch {
+    Write-Host "`n✅ Download Complete: $destination"
+    $downloadSuccess = $true
+}
+catch {
     Write-Host "❌ HttpClient download failed: $_" -ForegroundColor Red
-	exit
-	}
+    exit
+}
+finally {
+    $httpClient.Dispose()
+}
 
-    finally {
-        $httpClient.Dispose()
-    }
-	
-	if (-not $downloadSuccess) {
-    Write-Host "❌ All download methods failed. Please check your internet connection." -ForegroundColor Red
+# Final check
+if (-not $downloadSuccess) {
+    Write-Host "All download methods failed. Please check your internet connection." -ForegroundColor Red
     exit
 }
 
@@ -132,9 +136,9 @@ $mountedISOs = Get-DiskImage | Where-Object { $_.ImagePath -like "*.iso" -and $_
 foreach ($iso in $mountedISOs) {
     try {
         Dismount-DiskImage -ImagePath $iso.ImagePath
-        Write-Output "✅ Unmounted: $($iso.ImagePath)"
+        Write-Output "Unmounted: $($iso.ImagePath)"
     } catch {
-        Write-Warning "❌ Failed to unmount: $($iso.ImagePath) - $_"
+        Write-Warning "Failed to unmount: $($iso.ImagePath) - $_"
     }
 }
 
@@ -152,9 +156,9 @@ Write-Host "ISO found: $isoPath"
 Write-Host "Mounting ISO..."
 try {
     Mount-DiskImage -ImagePath $destination -ErrorAction Stop
-    Write-Host "✅ ISO Mounted Successfully." -ForegroundColor Green
+    Write-Host "ISO Mounted Successfully." -ForegroundColor Green
 } catch {
-    Write-Host "❌ Failed to mount ISO: $_" -ForegroundColor Red
+    Write-Host "Failed to mount ISO: $_" -ForegroundColor Red
     exit
 }
 
@@ -164,7 +168,7 @@ $driveLetter = (Get-DiskImage -ImagePath $destination | Get-Volume).DriveLetter
 $setupPath = "$driveLetter`:\setup.exe"
 
 if (-not (Test-Path $setupPath)) {
-    Write-Host "❌ Setup file not found. Exiting..." -ForegroundColor Red
+    Write-Host "Setup file not found. Exiting..." -ForegroundColor Red
     exit
 }
 
