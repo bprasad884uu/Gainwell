@@ -148,15 +148,16 @@ try {
 }
 
 # Get Drive Letter of Mounted ISO
+Start-Sleep -Seconds 2 # Allow mounting
 $driveLetter = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
 $setupPath = "$driveLetter`:\setup.exe"
 
 if (-not (Test-Path $setupPath)) {
-    Write-Host "Setup file not found on mounted ISO. Exiting..." -ForegroundColor Red
+    Write-Host "Setup file not found. Exiting..." -ForegroundColor Red
     exit
 }
 
-# --- Step 5: Windows 11 upgrade (Silent Install)
+# --- Step 3: Windows 11 upgrade (Silent Install)
 # Get Manufacturer
 $manufacturer = (Get-WmiObject -Class Win32_ComputerSystem).Manufacturer
 Write-Host "Detected System Manufacturer: $manufacturer"
@@ -192,13 +193,12 @@ if (-not $cleanCpuName) {
     return
 }
 
-# Load System.Net.Http.dll for PowerShell 5.1
+# Load System.Net.Http.dll for PowerShell 5.1 if needed
 if (-not ("System.Net.Http.HttpClient" -as [type])) {
     Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll"
 }
 
 # Use HttpClient instead of Invoke-WebRequest
-Add-Type -AssemblyName "System.Net.Http"
 $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
 $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
 
@@ -297,7 +297,7 @@ if (-not $cpuSupported) { $incompatibilityReasons += "Unsupported processor: $cl
 
 # Final verdict
 if ($incompatibilityReasons.Count -gt 0) {
-    Write-Host "`nYour System is NOT fully compatible with Windows 11 due to:" -ForegroundColor Yellow
+    Write-Host "`nThis system does not meet below Windows 11 requirements:" -ForegroundColor Yellow
     foreach ($reason in $incompatibilityReasons) {
         Write-Host " - $reason" -ForegroundColor Red
     }
@@ -311,7 +311,7 @@ if ($incompatibilityReasons.Count -gt 0) {
     Write-Host "Bypass Applied Successfully. Now Proceed for installation..." -ForegroundColor Green
 	$installArgs = "/product server /auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
 } else {
-    Write-Host "`nYour System is fully compatible with Windows 11! Proceed with normal installation." -ForegroundColor Green
+    Write-Host "`nThis system meets all Windows 11 hardware requirements." -ForegroundColor Green
 	$installArgs = "/auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
 }
 
