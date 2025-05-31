@@ -118,16 +118,22 @@ if (-not $downloadSuccess) {
 
 # --- Step 2: Mount ISO ---
 Write-Host "Unmounting existing ISOs..."
-# Get all mounted ISO disk images
-$mountedISOs = Get-DiskImage | Where-Object { $_.ImagePath -like "*.iso" -and $_.DevicePath }
+# Get all volumes that are mounted from ISO files
+$volumes = Get-Volume | Where-Object { $_.DriveType -eq 'CD-ROM' }
 
-# Unmount each mounted ISO
-foreach ($iso in $mountedISOs) {
+foreach ($volume in $volumes) {
     try {
-        Dismount-DiskImage -ImagePath $iso.ImagePath
-        Write-Output "Unmounted: $($iso.ImagePath)"
+        $devicePath = "\\.\$($volume.DriveLetter):"
+        $image = Get-CimInstance -Namespace root\cimv2 -ClassName Win32_DiskDrive | Where-Object {
+            $_.DeviceID -like "*$($volume.DriveLetter)*"
+        }
+
+        # Try to dismount using the drive letter
+        Write-Host "Attempting to dismount image mounted at: $devicePath"
+        Dismount-DiskImage -DevicePath $devicePath -ErrorAction Stop
+        Write-Host "Successfully dismounted: $devicePath"
     } catch {
-        Write-Warning "Failed to unmount: $($iso.ImagePath) - $_"
+        Write-Warning "Failed to dismount: $devicePath. Error: $_"
     }
 }
 
