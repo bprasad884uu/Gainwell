@@ -33,7 +33,7 @@ foreach ($volume in $volumes) {
 
 # Map network drive temporarily
 try {
-    New-PSDrive -Name $MountDrive -PSProvider FileSystem -Root $sourceFolder -Persist -ErrorAction Stop
+    New-PSDrive -Name $MountDrive.TrimEnd(':') -PSProvider FileSystem -Root $sourceFolder -Persist
 } catch {
     Write-Output "Failed to map network drive. Check connectivity."
     exit 1
