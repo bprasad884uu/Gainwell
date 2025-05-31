@@ -224,7 +224,7 @@ function Check-TPM {
     return $tpm.SpecVersion -match "2.0"
 }
 
-# Check CPU Architecture
+# Check if the processor is 64-bit
 $architecture = $cpu.AddressWidth
 $cpu64Bit = $architecture -eq 64
 
@@ -240,47 +240,63 @@ $secureBootEnabled = $secureBoot -eq $true
 $tpmCompatible = Check-TPM
 
 # Display results
-Write-Host "`nWindows 11 Compatibility Check"
+Write-Host "`nWindows 11 Compatibility Check" -ForegroundColor Cyan
 Write-Host "-----------------------------------"
 Write-Host "Processor: $rawCpuName"
 
+# Architecture Check
 if ($cpu64Bit) {
-    Write-Host "64-bit CPU: Compatible" -ForegroundColor Green
+    Write-Host "64-bit CPU: ✔ Compatible" -ForegroundColor Green
 } else {
-    Write-Host "64-bit CPU: Not Compatible" -ForegroundColor Red
+    Write-Host "64-bit CPU: ❌ Not Compatible" -ForegroundColor Red
 }
 
+# CPU Speed Check
 if ($cpuSpeedCompatible) {
-    Write-Host "CPU Speed: $cpuSpeedGHz GHz (Compatible)" -ForegroundColor Green
+    Write-Host "CPU Speed: $cpuSpeedGHz GHz (✔ Compatible)" -ForegroundColor Green
 } else {
-    Write-Host "CPU Speed: $cpuSpeedGHz GHz (Not Compatible)" -ForegroundColor Red
+    Write-Host "CPU Speed: $cpuSpeedGHz GHz (❌ Not Compatible)" -ForegroundColor Red
 }
 
+# Secure Boot Check
 if ($secureBootEnabled) {
-    Write-Host "Secure Boot Enabled: Yes" -ForegroundColor Green
+    Write-Host "Secure Boot Enabled: ✔ Yes" -ForegroundColor Green
 } else {
-    Write-Host "Secure Boot Enabled: No" -ForegroundColor Red
+    Write-Host "Secure Boot Enabled: ❌ No" -ForegroundColor Red
 }
 
+# TPM 2.0 Check
 if ($tpmCompatible) {
-    Write-Host "TPM 2.0 Support: Yes" -ForegroundColor Green
+    Write-Host "TPM 2.0 Support: ✔ Yes" -ForegroundColor Green
 } else {
-    Write-Host "TPM 2.0 Support: No" -ForegroundColor Red
+    Write-Host "TPM 2.0 Support: ❌ No" -ForegroundColor Red
 }
 
+# CPU Support Check
 if ($cpuSupported) {
-    Write-Host "CPU Compatibility: $cleanCpuName is supported" -ForegroundColor Green
+    Write-Host "CPU Compatibility: ✔ $cleanCpuName is supported" -ForegroundColor Green
 } else {
-    Write-Host "CPU Compatibility: $cleanCpuName is NOT supported" -ForegroundColor Red
+    Write-Host "CPU Compatibility: ❌ $cleanCpuName is NOT supported" -ForegroundColor Red
 }
 
-# Incompatibility reasons
+# Store failed checks
 $incompatibilityReasons = @()
-if (-not $cpu64Bit) { $incompatibilityReasons += "CPU is not 64-bit" }
-if (-not $cpuSpeedCompatible) { $incompatibilityReasons += "CPU speed is less than 1 GHz" }
-if (-not $secureBootEnabled) { $incompatibilityReasons += "Secure Boot is not enabled" }
-if (-not $tpmCompatible) { $incompatibilityReasons += "TPM 2.0 is not supported or not enabled" }
-if (-not $cpuSupported) { $incompatibilityReasons += "Unsupported processor: $cleanCpuName" }
+
+if (-not $cpu64Bit) {
+    $incompatibilityReasons += "CPU is not 64-bit"
+}
+if (-not $cpuSpeedCompatible) {
+    $incompatibilityReasons += "CPU speed is less than 1 GHz"
+}
+if (-not $secureBootEnabled) {
+    $incompatibilityReasons += "Secure Boot is not enabled"
+}
+if (-not $tpmCompatible) {
+    $incompatibilityReasons += "TPM 2.0 is not supported or not enabled"
+}
+if (-not $cpuSupported) {
+    $incompatibilityReasons += "Unsupported processor: $cleanCpuName"
+}
 
 # Final verdict
 if ($incompatibilityReasons.Count -gt 0) {
