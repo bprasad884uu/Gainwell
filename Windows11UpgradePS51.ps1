@@ -29,20 +29,9 @@ $response = $webRequest.GetResponse()
 $totalBytes = $response.ContentLength
 
 # Convert total file size to readable format
-$totalSizeKB = $totalBytes / 1KB
 $totalSizeMB = $totalBytes / 1MB
-$totalSizeGB = $totalBytes / 1GB
-$totalSizeTB = $totalBytes / 1TB
-
-if ($totalSizeTB -ge 1) {
-	$isoSizeFormatted = "{0:N2} TB" -f $totalSizeTB
-} elseif ($totalSizeGB -ge 1) {
-	$isoSizeFormatted = "{0:N2} GB" -f $totalSizeGB
-} elseif ($totalSizeMB -ge 1) {
-	$isoSizeFormatted = "{0:N2} MB" -f $totalSizeMB
-} else {
-	$isoSizeFormatted = "{0:N2} KB" -f $totalSizeKB
-}
+$totalSizeGB = $totalSizeMB / 1024
+$isoSizeFormatted = if ($totalSizeGB -ge 1) { "{0:N2} GB" -f $totalSizeGB } else { "{0:N2} MB" -f $totalSizeMB }
 
 $readStream = $response.GetResponseStream()
 $writeStream = [System.IO.File]::OpenWrite($destination)
@@ -74,14 +63,12 @@ do {
         }
         
 		# Format speed
-		if ($speed -ge 1048576) { # 1024 * 1024 MB = 1 TB
-		    $speedFormatted = "{0:N2} TB/s" -f ($speed / 1048576)
-		} elseif ($speed -ge 1024) {
-		    $speedFormatted = "{0:N2} GB/s" -f ($speed / 1024)
+		if ($speed -ge 1024) {
+			$speedFormatted = "{0:N2} GB/s" -f ($speed / 1024)
 		} elseif ($speed -ge 1) {
-		    $speedFormatted = "{0:N2} MB/s" -f $speed
+			$speedFormatted = "{0:N2} MB/s" -f $speed
 		} else {
-		    $speedFormatted = "{0:N2} KB/s" -f ($speed * 1024)
+			$speedFormatted = "{0:N2} KB/s" -f ($speed * 1024)
 		}
 
         # ETA Calculation
