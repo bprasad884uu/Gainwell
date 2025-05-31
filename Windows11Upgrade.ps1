@@ -112,12 +112,10 @@ try {
     $fileStream.Close()
     Write-Host "`n✅ Download Complete: $destination"
     $downloadSuccess = $true
-}
-catch {
+} catch {
     Write-Host "❌ HttpClient download failed: $_" -ForegroundColor Red
     exit
-}
-finally {
+} finally {
     $httpClient.Dispose()
 }
 
