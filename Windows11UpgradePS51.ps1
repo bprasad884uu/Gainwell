@@ -37,11 +37,11 @@ $totalSizeTB = $totalBytes / 1TB
 if ($totalSizeTB -ge 1) {
     $isoSizeFormatted = "{0:N2} TB" -f $totalSizeTB
 } elseif ($totalSizeGB -ge 1) {
-    $isoSizeFormatted = "{0:N2} GB" -f $totalSizeGB
+	$isoSizeFormatted = "{0:N2} GB" -f $totalSizeGB
 } elseif ($totalSizeMB -ge 1) {
-    $isoSizeFormatted = "{0:N2} MB" -f $totalSizeMB
+	$isoSizeFormatted = "{0:N2} MB" -f $totalSizeMB
 } else {
-    $isoSizeFormatted = "{0:N2} KB" -f $totalSizeKB
+	$isoSizeFormatted = "{0:N2} KB" -f $totalSizeKB
 }
 
 $readStream = $response.GetResponseStream()
