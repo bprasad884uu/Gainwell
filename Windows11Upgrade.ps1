@@ -256,8 +256,46 @@ $cpuSpeedGHz = $cpu.MaxClockSpeed / 1000
 $cpuSpeedCompatible = $cpuSpeedGHz -ge 1
 
 # Get Secure Boot status
-$secureBoot = Confirm-SecureBootUEFI -ErrorAction SilentlyContinue 2>$null
-$secureBootEnabled = $secureBoot -eq $true
+function Get-SecureBootStatus {
+    try {
+        # Confirm-SecureBootUEFI works only in 64-bit PowerShell and UEFI systems
+        if ($env:PROCESSOR_ARCHITECTURE -eq 'AMD64') {
+            $secureBoot = Confirm-SecureBootUEFI -ErrorAction Stop
+            return [bool]$secureBoot
+        } else {
+            #Write-Verbose "Confirm-SecureBootUEFI requires 64-bit PowerShell. Falling back..."
+            throw "Not 64-bit"
+        }
+    } catch {
+        Write-Verbose "Primary method failed: $_. Trying WMI fallback..."
+
+        try {
+            # Fallback 1: MS_SystemInformation
+            $msinfo = Get-CimInstance -Namespace root\WMI -Class MS_SystemInformation -ErrorAction Stop
+            if ($msinfo.SecureBoot -ne $null) {
+                return [bool]$msinfo.SecureBoot
+            }
+        } catch {
+            #Write-Verbose "MS_SystemInformation failed: $_"
+        }
+
+        try {
+            # Fallback 2: Win32_ComputerSystem (less reliable, but sometimes works)
+            $cs = Get-CimInstance -Class Win32_ComputerSystem
+            if ($cs.SecureBootState -ne $null) {
+                return [bool]$cs.SecureBootState
+            }
+        } catch {
+            #Write-Verbose "Win32_ComputerSystem fallback failed: $_"
+        }
+
+        #Write-Warning "Unable to determine Secure Boot status."
+        return $false
+    }
+}
+
+# Get Secure Boot Status
+$secureBootEnabled = Get-SecureBootStatus
 
 # Check TPM 2.0 Support
 $tpmCompatible = Check-TPM
