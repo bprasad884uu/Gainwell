@@ -36,9 +36,9 @@ if (Test-Path $destination) {
     Write-Host "`nChecking file integrity by attempting to mount..."
 
     try {
-        Mount-DiskImage -ImagePath $destination -ErrorAction Stop
+        $null = Mount-DiskImage -ImagePath $destination -ErrorAction Stop
         Write-Host "`nISO mounted successfully. File integrity confirmed."
-        Dismount-DiskImage -ImagePath $destination
+        $null = Dismount-DiskImage -ImagePath $destination
         $downloadSuccess = $true
     } catch {
         Write-Warning "`nFailed to mount ISO. File may be corrupted. Re-downloading..."
@@ -135,7 +135,7 @@ foreach ($volume in $volumes) {
 
         # Try to dismount using the drive letter
         Write-Host "`nAttempting to dismount image mounted at: $devicePath"
-        Dismount-DiskImage -DevicePath $devicePath -ErrorAction Stop
+        $null = Dismount-DiskImage -DevicePath $devicePath -ErrorAction Stop
         Write-Host "`nSuccessfully dismounted: $devicePath"
     } catch {
         Write-Warning "`nFailed to dismount: $devicePath. Error: $_"
@@ -155,7 +155,7 @@ Write-Host "`nISO found: $isoPath"
 # Mount ISO
 Write-Host "`nMounting ISO..."
 try {
-    Mount-DiskImage -ImagePath $destination -ErrorAction Stop
+    $null = Mount-DiskImage -ImagePath $destination -ErrorAction Stop
     Write-Host "`nISO Mounted Successfully." -ForegroundColor Green
 } catch {
     Write-Host "`nFailed to mount ISO: $_" -ForegroundColor Red
@@ -202,11 +202,11 @@ if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
     $cleanCpuName = ""
 }
 
-# Fallback if match fails
+<# Fallback if match fails
 if (-not $cleanCpuName) {
     Write-Host "`nCould not extract a matching CPU model from '$rawCpuName'" -ForegroundColor Yellow
     break
-}
+}#>
 
 # Load System.Net.Http.dll for PowerShell 5.1 if needed
 if (-not ("System.Net.Http.HttpClient" -as [type])) {
