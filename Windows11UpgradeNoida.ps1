@@ -6,93 +6,91 @@ $sourceFolder = "\\10.131.45.121\Basic Softwares"
 $destinationFolder = "$env:Temp"
 $MountDrive = "Y"
 
-# Remove existing drive mapping if exists
-if (Test-Path "$MountDrive`:") {
-    Remove-PSDrive -Name $MountDrive -Force
-    Start-Sleep -Seconds 2  # Wait to ensure removal is completed
-}
-
-# Map network drive temporarily
-try {
-    New-PSDrive -Name $MountDrive -PSProvider FileSystem -Root $sourceFolder -Persist -ErrorAction Stop
-} catch {
-    Write-Output "Failed to map network drive. Check connectivity."
-    exit 1
-}
-
 # Ensure destination folder exists
 if (-not (Test-Path $destinationFolder)) {
     New-Item -Path $destinationFolder -ItemType Directory | Out-Null
-    Write-Output "Created folder: $destinationFolder"
 }
-
-#Check Registry (Original Install Language)
-$locale = (Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Nls\Language').InstallLanguage
 
 # Define source ISO based on system locale
 switch ($systemLocale) {
-    "en-US" { $sourceISO = "$MountDrive`:Win11_24H2_ENUS.iso" }
-    "en-GB" { $sourceISO = "$MountDrive`:Win11_24H2_ENGB.iso" }
-    default { 
+    "en-US" { $sourceISO = Join-Path $sourceFolder "Win11_24H2_ENUS.iso" }
+    "en-GB" { $sourceISO = Join-Path $sourceFolder "Win11_24H2_ENGB.iso" }
+    default {
         Write-Output "No matching ISO found for system locale: $systemLocale"
-        Remove-PSDrive -Name $MountDrive -Force
-        exit 1 
+        exit 1
     }
 }
 
-# Check if source ISO exists
-if (-not (Test-Path $sourceISO)) {
-    Write-Output "Source ISO not found: $sourceISO"
-    Remove-PSDrive -Name $MountDrive -Force
-    exit 1
-}
-
-# Define destination path
 $destinationISO = Join-Path $destinationFolder (Split-Path $sourceISO -Leaf)
 
-# Get file size
-$fileInfo = Get-Item "$sourceISO"
-$totalSize = $fileInfo.Length
-$totalMB = [math]::Round($totalSize / 1MB, 2)
+# --- Step 2: Check if file exists and verify integrity ---
+$downloadSuccess = $false
 
-Write-Output "File Size: $totalMB MB"
+if (Test-Path $destinationISO) {
+    Write-Host "File already exists: $destinationISO"
+    Write-Host "Checking file integrity by attempting to mount..."
 
-# If the file is small, use normal Copy-Item
-if ($totalMB -lt 1) {
-    Copy-Item -Path $sourceISO -Destination $destinationISO -Force
-    Write-Output "File copied successfully (small file, fast copy)."
-    Remove-PSDrive -Name $MountDrive -Force
-    exit 0
+    try {
+        Mount-DiskImage -ImagePath $destinationISO -ErrorAction Stop
+        Write-Host "ISO mounted successfully. File integrity confirmed."
+        Dismount-DiskImage -ImagePath $destinationISO
+        $downloadSuccess = $true
+    } catch {
+        Write-Warning "Failed to mount ISO. File may be corrupted. Re-copying..."
+        Remove-Item $destinationISO -Force
+    }
 }
 
-# Initialize progress
-$blockSize = 10MB  # Adjusted for performance
-$copiedBytes = 0
-$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+# --- Step 3: Copy with progress if needed ---
+if (-not $downloadSuccess) {
+    if (-not (Test-Path $sourceISO)) {
+        Write-Host "Source ISO not found: $sourceISO"
+        exit 1
+    }
 
-# Create file streams
-$sourceStream = [System.IO.File]::OpenRead($sourceISO)
-$destStream = [System.IO.File]::Create($destinationISO)
+    $fileInfo = Get-Item "$sourceISO"
+    $totalSize = $fileInfo.Length
+
+    function Format-Size($bytes) {
+        if ($bytes -ge 1GB) { return ("{0:N2} GB" -f ($bytes / 1GB)) }
+        elseif ($bytes -ge 1MB) { return ("{0:N2} MB" -f ($bytes / 1MB)) }
+        elseif ($bytes -ge 1KB) { return ("{0:N2} KB" -f ($bytes / 1KB)) }
+        else { return ("{0} B" -f $bytes) }
+    }
+
+    Write-Host "Copying ISO (Total Size: $(Format-Size $totalSize)) from network share..."
+
+    $blockSize = 10MB
+    $copiedBytes = 0
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+    $sourceStream = [System.IO.File]::OpenRead($sourceISO)
+    $destStream = [System.IO.File]::Create($destinationISO)
 
     $buffer = New-Object byte[] $blockSize
     while (($readBytes = $sourceStream.Read($buffer, 0, $buffer.Length)) -gt 0) {
         $destStream.Write($buffer, 0, $readBytes)
         $copiedBytes += $readBytes
 
-        # Progress Calculation
         $elapsedTime = $stopwatch.Elapsed.TotalSeconds
-        $speed = if ($elapsedTime -gt 0) { [math]::Round($copiedBytes / $elapsedTime / 1MB, 2) } else { 0 }
+        $speedBytesPerSec = if ($elapsedTime -gt 0) { $copiedBytes / $elapsedTime } else { 0 }
+
+        function Format-Speed($bytesPerSec) {
+            if ($bytesPerSec -ge 1GB) { return ("{0:N2} GB/s" -f ($bytesPerSec / 1GB)) }
+            elseif ($bytesPerSec -ge 1MB) { return ("{0:N2} MB/s" -f ($bytesPerSec / 1MB)) }
+            elseif ($bytesPerSec -ge 1KB) { return ("{0:N2} KB/s" -f ($bytesPerSec / 1KB)) }
+            else { return ("{0} B/s" -f $bytesPerSec) }
+        }
+
         $percentComplete = [math]::Round(($copiedBytes / $totalSize) * 100, 2)
-        
-        # ETA Calculation
         $remainingBytes = $totalSize - $copiedBytes
-        $etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / ( $speed * 1MB ), 2) } else { "Calculating..." }
+        $etaSeconds = if ($speedBytesPerSec -gt 0) { [math]::Round($remainingBytes / $speedBytesPerSec, 2) } else { "Calculating..." }
 
         if ($etaSeconds -is [double]) {
             $etaHours = [math]::Floor($etaSeconds / 3600)
             $etaMinutes = [math]::Floor(($etaSeconds % 3600) / 60)
             $etaRemainingSeconds = [math]::Floor($etaSeconds % 60)
-            
+
             $etaFormatted = ""
             if ($etaHours -gt 0) { $etaFormatted += "${etaHours}h " }
             if ($etaMinutes -gt 0) { $etaFormatted += "${etaMinutes}m " }
@@ -102,16 +100,16 @@ $destStream = [System.IO.File]::Create($destinationISO)
         }
 
         Write-Progress -Activity "Copying File..." -Status "$percentComplete% Complete - ETA: $etaFormatted" -PercentComplete $percentComplete
-        Write-Host "Total: $totalMB MB | Copied: $([math]::Round($copiedBytes / 1MB, 2)) MB | Speed: $speed MB/s | ETA: $etaFormatted" -NoNewline
+        Write-Host "`rTotal: $(Format-Size $totalSize) | Copied: $(Format-Size $copiedBytes) | Speed: $(Format-Speed $speedBytesPerSec) | ETA: $etaFormatted" -NoNewline
     }
-    # Close and dispose of file streams
+
     $sourceStream.Close()
     $destStream.Close()
     $sourceStream.Dispose()
     $destStream.Dispose()
-    Remove-PSDrive -Name $MountDrive -Force
 
-Write-Output "File copy completed successfully!"
+    Write-Host "`nFile copy completed successfully!"
+}
 
 # --- Install Windows 11 ---
 # Find Downloaded ISO File
@@ -135,15 +133,16 @@ try {
 }
 
 # Get Drive Letter of Mounted ISO
+Start-Sleep -Seconds 2 # Allow mounting
 $driveLetter = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
 $setupPath = "$driveLetter`:\setup.exe"
 
 if (-not (Test-Path $setupPath)) {
-    Write-Host "Setup file not found on mounted ISO. Exiting..." -ForegroundColor Red
+    Write-Host "Setup file not found. Exiting..." -ForegroundColor Red
     exit
 }
 
-# --- Step 5: Windows 11 upgrade (Silent Install)
+# --- Step 3: Windows 11 upgrade (Silent Install)
 # Get Manufacturer
 $manufacturer = (Get-WmiObject -Class Win32_ComputerSystem).Manufacturer
 Write-Host "Detected System Manufacturer: $manufacturer"
@@ -179,13 +178,12 @@ if (-not $cleanCpuName) {
     return
 }
 
-# Load System.Net.Http.dll for PowerShell 5.1
+# Load System.Net.Http.dll for PowerShell 5.1 if needed
 if (-not ("System.Net.Http.HttpClient" -as [type])) {
     Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll"
 }
 
 # Use HttpClient instead of Invoke-WebRequest
-Add-Type -AssemblyName "System.Net.Http"
 $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
 $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
 
@@ -228,8 +226,46 @@ $cpuSpeedGHz = $cpu.MaxClockSpeed / 1000
 $cpuSpeedCompatible = $cpuSpeedGHz -ge 1
 
 # Get Secure Boot status
-$secureBoot = Confirm-SecureBootUEFI -ErrorAction SilentlyContinue
-$secureBootEnabled = $secureBoot -eq $true
+function Get-SecureBootStatus {
+    try {
+        # Confirm-SecureBootUEFI works only in 64-bit PowerShell and UEFI systems
+        if ($env:PROCESSOR_ARCHITECTURE -eq 'AMD64') {
+            $secureBoot = Confirm-SecureBootUEFI -ErrorAction Stop
+            return [bool]$secureBoot
+        } else {
+            #Write-Verbose "Confirm-SecureBootUEFI requires 64-bit PowerShell. Falling back..."
+            throw "Not 64-bit"
+        }
+    } catch {
+        Write-Verbose "Primary method failed: $_. Trying WMI fallback..."
+
+        try {
+            # Fallback 1: MS_SystemInformation
+            $msinfo = Get-CimInstance -Namespace root\WMI -Class MS_SystemInformation -ErrorAction Stop
+            if ($msinfo.SecureBoot -ne $null) {
+                return [bool]$msinfo.SecureBoot
+            }
+        } catch {
+            #Write-Verbose "MS_SystemInformation failed: $_"
+        }
+
+        try {
+            # Fallback 2: Win32_ComputerSystem (less reliable, but sometimes works)
+            $cs = Get-CimInstance -Class Win32_ComputerSystem
+            if ($cs.SecureBootState -ne $null) {
+                return [bool]$cs.SecureBootState
+            }
+        } catch {
+            #Write-Verbose "Win32_ComputerSystem fallback failed: $_"
+        }
+
+        #Write-Warning "Unable to determine Secure Boot status."
+        return $false
+    }
+}
+
+# Get Secure Boot Status
+$secureBootEnabled = Get-SecureBootStatus
 
 # Check TPM 2.0 Support
 $tpmCompatible = Check-TPM
@@ -284,7 +320,7 @@ if (-not $cpuSupported) { $incompatibilityReasons += "Unsupported processor: $cl
 
 # Final verdict
 if ($incompatibilityReasons.Count -gt 0) {
-    Write-Host "`nYour System is NOT fully compatible with Windows 11 due to:" -ForegroundColor Yellow
+    Write-Host "`nThis system does not meet below Windows 11 requirements:" -ForegroundColor Yellow
     foreach ($reason in $incompatibilityReasons) {
         Write-Host " - $reason" -ForegroundColor Red
     }
@@ -298,7 +334,7 @@ if ($incompatibilityReasons.Count -gt 0) {
     Write-Host "Bypass Applied Successfully. Now Proceed for installation..." -ForegroundColor Green
 	$installArgs = "/product server /auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
 } else {
-    Write-Host "`nYour System is fully compatible with Windows 11! Proceed with normal installation." -ForegroundColor Green
+    Write-Host "`nThis system meets all Windows 11 hardware requirements." -ForegroundColor Green
 	$installArgs = "/auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
 }
 
