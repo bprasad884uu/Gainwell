@@ -51,6 +51,26 @@ if (-not ("System.Net.Http.HttpClient" -as [type])) {
     Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll"
 }
 
+function Format-Size {
+    param ([long]$bytes)
+    switch ($bytes) {
+        { $_ -ge 1GB } { return "{0:N2} GB" -f ($bytes / 1GB) }
+        { $_ -ge 1MB } { return "{0:N2} MB" -f ($bytes / 1MB) }
+        { $_ -ge 1KB } { return "{0:N2} KB" -f ($bytes / 1KB) }
+        default        { return "$bytes B" }
+    }
+}
+
+function Format-Speed {
+    param ([double]$bytesPerSecond)
+    switch ($bytesPerSecond) {
+        { $_ -ge 1GB } { return "{0:N2} GB/s" -f ($bytesPerSecond / 1GB) }
+        { $_ -ge 1MB } { return "{0:N2} MB/s" -f ($bytesPerSecond / 1MB) }
+        { $_ -ge 1KB } { return "{0:N2} KB/s" -f ($bytesPerSecond / 1KB) }
+        default        { return "{0:N2} B/s" -f $bytesPerSecond }
+    }
+}
+
 $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
 $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
 
@@ -107,7 +127,7 @@ if (-not $downloadSuccess) {
             $etaFormatted = "Calculating..."
         }
 
-        Write-Host "`rProgress: $([math]::Round($progress,2))% | Downloaded: $([math]::Round($downloaded / 1MB, 2)) MB | Speed: $([math]::Round($speed,2)) MB/s | ETA: $etaFormatted" -NoNewline
+        Write-Host "`rTotal: $(Format-Size $totalSize) | Progress: $([math]::Round($progress,2))% | Downloaded: $([math]::Round($downloaded / 1MB, 2)) MB | Speed: $(Format-Speed $speed) | ETA: $etaFormatted" -NoNewline
     }
 
     $fileStream.Close()
