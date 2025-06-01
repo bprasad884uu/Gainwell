@@ -256,7 +256,7 @@ $cpuSpeedGHz = $cpu.MaxClockSpeed / 1000
 $cpuSpeedCompatible = $cpuSpeedGHz -ge 1
 
 # Get Secure Boot status
-$secureBoot = Confirm-SecureBootUEFI -ErrorAction SilentlyContinue
+$secureBoot = Confirm-SecureBootUEFI -ErrorAction SilentlyContinue 2>$null
 $secureBootEnabled = $secureBoot -eq $true
 
 # Check TPM 2.0 Support
