@@ -198,15 +198,17 @@ if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
     $cleanCpuName = $matches[0]
 } elseif ($rawCpuName -match "Qualcomm\s+\S+") {
     $cleanCpuName = $matches[0]
+} elseif ($rawCpuName -match "Xeon\(R\)\s+CPU\s+([A-Za-z0-9\-]+)") {
+    $cleanCpuName = "Xeon " + $matches[1]
 } else {
     $cleanCpuName = ""
 }
 
-<# Fallback if match fails
+# Fallback if match fails
 if (-not $cleanCpuName) {
     Write-Host "`nCould not extract a matching CPU model from '$rawCpuName'" -ForegroundColor Yellow
-    break
-}#>
+    return
+}
 
 # Load System.Net.Http.dll for PowerShell 5.1 if needed
 if (-not ("System.Net.Http.HttpClient" -as [type])) {
