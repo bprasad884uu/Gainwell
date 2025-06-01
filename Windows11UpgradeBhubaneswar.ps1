@@ -21,7 +21,7 @@ switch ($systemLocale) {
     "en-US" { $sourceISO = "$MountDrive`:Win11_24H2_English_x64.iso" }
     "en-GB" { $sourceISO = "$MountDrive`:Win11_24H2_EnglishInternational_x64.iso" }
     default {
-        Write-Output "No matching ISO found for system locale: $systemLocale"
+        Write-Output "`nNo matching ISO found for system locale: $systemLocale"
         exit 1
     }
 }
@@ -32,24 +32,24 @@ $destinationISO = Join-Path $destinationFolder (Split-Path $sourceISO -Leaf)
 $downloadSuccess = $false
 
 if (Test-Path $destinationISO) {
-    Write-Host "File already exists: $destinationISO"
-    Write-Host "Checking file integrity by attempting to mount..."
+    Write-Host "`nFile already exists: $destinationISO"
+    Write-Host "`nChecking file integrity by attempting to mount..."
 
     try {
         Mount-DiskImage -ImagePath $destinationISO -ErrorAction Stop
-        Write-Host "ISO mounted successfully. File integrity confirmed."
+        Write-Host "`nISO mounted successfully. File integrity confirmed."
         Dismount-DiskImage -ImagePath $destinationISO
         $downloadSuccess = $true
     } catch {
-        Write-Warning "Failed to mount ISO. File may be corrupted. Re-copying..."
+        Write-Warning "`nFailed to mount ISO. File may be corrupted. Re-copying..."
         Remove-Item $destinationISO -Force
     }
 }
 
-# --- Step 3: Copy with progress if needed ---
+# --- Step 3: Copy with progress ---
 if (-not $downloadSuccess) {
     if (-not (Test-Path $sourceISO)) {
-        Write-Host "Source ISO not found: $sourceISO"
+        Write-Host "`nSource ISO not found: $sourceISO"
         exit 1
     }
 
@@ -63,7 +63,7 @@ if (-not $downloadSuccess) {
         else { return ("{0} B" -f $bytes) }
     }
 
-    Write-Host "Copying ISO (Total Size: $(Format-Size $totalSize)) from network share..."
+    Write-Host "`nCopying ISO (Total Size: $(Format-Size $totalSize)) from network share...`n"
 
     $blockSize = 10MB
     $copiedBytes = 0
@@ -116,24 +116,25 @@ if (-not $downloadSuccess) {
     Write-Host "`nFile copy completed successfully!"
 }
 
+# --- Step 4: Find Copied ISO File ---
 # --- Install Windows 11 ---
-# Find Downloaded ISO File
+# Find Copied ISO File
 $isoPath = Get-ChildItem -Path "$env:Temp\" -Filter "Win11*.iso" -File | Select-Object -ExpandProperty FullName -First 1
 
 if (-not $isoPath) {
-    Write-Host "No ISO file found in Temp Folder." -ForegroundColor Red
+    Write-Host "`nNo ISO file found in Temp Folder." -ForegroundColor Red
     exit
 }
 
-Write-Host "ISO found: $isoPath"
+Write-Host "`nISO found: $isoPath"
 
 # Mount ISO
-Write-Host "Mounting ISO..."
+Write-Host "`nMounting ISO..."
 try {
     Mount-DiskImage -ImagePath $isoPath -ErrorAction Stop
-    Write-Host "ISO Mounted Successfully." -ForegroundColor Green
+    Write-Host "`nISO Mounted Successfully." -ForegroundColor Green
 } catch {
-    Write-Host "Failed to mount ISO: $_" -ForegroundColor Red
+    Write-Host "`nFailed to mount ISO: $_" -ForegroundColor Red
     exit
 }
 
@@ -143,14 +144,14 @@ $driveLetter = (Get-DiskImage -ImagePath $isoPath | Get-Volume).DriveLetter
 $setupPath = "$driveLetter`:\setup.exe"
 
 if (-not (Test-Path $setupPath)) {
-    Write-Host "Setup file not found. Exiting..." -ForegroundColor Red
+    Write-Host "`nSetup file not found. Exiting..." -ForegroundColor Red
     exit
 }
 
-# --- Step 3: Windows 11 upgrade (Silent Install)
+# --- Step 5: Windows 11 upgrade (Silent Install) ---
 # Get Manufacturer
 $manufacturer = (Get-WmiObject -Class Win32_ComputerSystem).Manufacturer
-Write-Host "Detected System Manufacturer: $manufacturer"
+Write-Host "`nDetected System Manufacturer: $manufacturer"
 
 # Windows 11 CPU Compatibility Check Script with Bypass
 # GitHub CPU lists
@@ -179,7 +180,7 @@ if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
 
 # Fallback if match fails
 if (-not $cleanCpuName) {
-    Write-Host "Could not extract a matching CPU model from '$rawCpuName'" -ForegroundColor Yellow
+    Write-Host "`nCould not extract a matching CPU model from '$rawCpuName'" -ForegroundColor Yellow
     return
 }
 
@@ -198,7 +199,7 @@ try {
     $amdList = $httpClient.GetStringAsync($amdListUrl).Result
     $qualcommList = $httpClient.GetStringAsync($qualcommListUrl).Result
 } catch {
-    Write-Host "Failed to download processor support lists." -ForegroundColor Yellow
+    Write-Host "`nFailed to download processor support lists." -ForegroundColor Yellow
     return
 }
 
@@ -213,7 +214,7 @@ switch -Regex ($cpu.Manufacturer) {
     "Intel"    { $cpuSupported = $intelList -contains $cleanCpuName }
     "AMD"      { $cpuSupported = $amdList -contains $cleanCpuName }
     "Qualcomm" { $cpuSupported = $qualcommList -contains $cleanCpuName }
-    default    { Write-Host "Unknown manufacturer: $($cpu.Manufacturer)" }
+    default    { Write-Host "`nUnknown manufacturer: $($cpu.Manufacturer)" }
 }
 
 # Function to check TPM 2.0
@@ -239,10 +240,10 @@ function Get-SecureBootStatus {
             return [bool]$secureBoot
         } else {
             #Write-Verbose "Confirm-SecureBootUEFI requires 64-bit PowerShell. Falling back..."
-            throw "Not 64-bit"
+            throw "`nNot 64-bit"
         }
     } catch {
-        Write-Verbose "Primary method failed: $_. Trying WMI fallback..."
+        Write-Verbose "`nPrimary method failed: $_. Trying WMI fallback..."
 
         try {
             # Fallback 1: MS_SystemInformation
@@ -278,43 +279,44 @@ $tpmCompatible = Check-TPM
 # Display results
 Write-Host "`nWindows 11 Compatibility Check" -ForegroundColor Cyan
 Write-Host "-----------------------------------"
-Write-Host "Processor: $rawCpuName"
+Write-Host "`nProcessor: $rawCpuName"
 
 # Architecture Check
 if ($cpu64Bit) {
-    Write-Host "64-bit CPU: Compatible" -ForegroundColor Green
+    Write-Host "`n64-bit CPU: Compatible" -ForegroundColor Green
 } else {
-    Write-Host "64-bit CPU: Not Compatible" -ForegroundColor Red
+    Write-Host "`n64-bit CPU: Not Compatible" -ForegroundColor Red
 }
 
 # CPU Speed Check
 if ($cpuSpeedCompatible) {
-    Write-Host "CPU Speed: $cpuSpeedGHz GHz (Compatible)" -ForegroundColor Green
+    Write-Host "`nCPU Speed: $cpuSpeedGHz GHz (Compatible)" -ForegroundColor Green
 } else {
-    Write-Host "CPU Speed: $cpuSpeedGHz GHz (Not Compatible)" -ForegroundColor Red
+    Write-Host "`nCPU Speed: $cpuSpeedGHz GHz (Not Compatible)" -ForegroundColor Red
 }
 
 # Secure Boot Check
 if ($secureBootEnabled) {
-    Write-Host "Secure Boot Enabled: Yes" -ForegroundColor Green
+    Write-Host "`nSecure Boot Enabled: Yes" -ForegroundColor Green
 } else {
-    Write-Host "Secure Boot Enabled: No" -ForegroundColor Red
+    Write-Host "`nSecure Boot Enabled: No" -ForegroundColor Red
 }
 
 # TPM 2.0 Check
 if ($tpmCompatible) {
-    Write-Host "TPM 2.0 Support: Yes" -ForegroundColor Green
+    Write-Host "`nTPM 2.0 Support: Yes" -ForegroundColor Green
 } else {
-    Write-Host "TPM 2.0 Support: No" -ForegroundColor Red
+    Write-Host "`nTPM 2.0 Support: No" -ForegroundColor Red
 }
 
 # CPU Support Check
 if ($cpuSupported) {
-    Write-Host "CPU Compatibility: $cleanCpuName is supported" -ForegroundColor Green
+    Write-Host "`nCPU Compatibility: $cleanCpuName is supported" -ForegroundColor Green
 } else {
-    Write-Host "CPU Compatibility: $cleanCpuName is NOT supported" -ForegroundColor Red
+    Write-Host "`nCPU Compatibility: $cleanCpuName is NOT supported" -ForegroundColor Red
 }
 
+# Store failed checks
 # Incompatibility reasons
 $incompatibilityReasons = @()
 if (-not $cpu64Bit) { $incompatibilityReasons += "CPU is not 64-bit" }
@@ -368,7 +370,7 @@ while ($true) {
 
    if ($logExists -or (-not $folderExists -and -not $setupRunning)) {
     if (-not $folderExists -and -not $setupRunning) {
-        Write-Host "Neither setup folder nor upgrade process found. Exiting..." -ForegroundColor Yellow
+        Write-Host "`nNeither setup folder nor upgrade process found. Exiting..." -ForegroundColor Yellow
 		}
     break
 	}
@@ -376,7 +378,7 @@ while ($true) {
 }
 
 # Start monitoring loop
-Write-Host "Your PC will restart several times. This might take a while." -ForegroundColor Green
+Write-Host "`nYour PC will restart several times. This might take a while." -ForegroundColor Green
 $lastPercent = -1
 
 # Initial output
@@ -414,12 +416,13 @@ while ($true) {
     }
 }
 
+# --- Step 6: Unmount ISO ---
 # Unmount ISO
-Write-Host "Unmounting ISO..."
+Write-Host "`nUnmounting ISO..."
 
 # Unmount the ISO after installation
 Dismount-DiskImage -ImagePath $isoPath
-Write-Host "Windows 11 upgrade process complete."
+Write-Host "`nWindows 11 upgrade process complete."
 
-Write-Host "Rebooting System..."
+Write-Host "`nRebooting System..."
 #Restart-Computer -Force

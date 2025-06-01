@@ -32,16 +32,16 @@ if ($locale -eq "en-GB") {
 $downloadSuccess = $false
 
 if (Test-Path $destination) {
-    Write-Host "File already exists: $destination"
-    Write-Host "Checking file integrity by attempting to mount..."
+    Write-Host "`nFile already exists: $destination"
+    Write-Host "`nChecking file integrity by attempting to mount..."
 
     try {
         Mount-DiskImage -ImagePath $destination -ErrorAction Stop
-        Write-Host "ISO mounted successfully. File integrity confirmed."
+        Write-Host "`nISO mounted successfully. File integrity confirmed."
         Dismount-DiskImage -ImagePath $destination
         $downloadSuccess = $true
     } catch {
-        Write-Warning "Failed to mount ISO. File may be corrupted. Re-downloading..."
+        Write-Warning "`nFailed to mount ISO. File may be corrupted. Re-downloading..."
         Remove-Item $destination -Force
     }
 }
@@ -55,24 +55,24 @@ $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
 $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
 
 if (-not $downloadSuccess) {
-    Write-Host "Starting download using HttpClient..."
+    Write-Host "`nStarting download..."
 
     $response = $httpClient.GetAsync($isoUrl, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
 
     if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
-        Write-Host "HttpClient request failed: $($response.StatusCode) ($($response.ReasonPhrase))" -ForegroundColor Red
+        Write-Host "`nHttpClient request failed: $($response.StatusCode) ($($response.ReasonPhrase))" -ForegroundColor Red
         exit
     }
 
     $stream = $response.Content.ReadAsStreamAsync().Result
     if (-not $stream) {
-        Write-Host "Failed to retrieve response stream." -ForegroundColor Red
+        Write-Host "`nFailed to retrieve response stream." -ForegroundColor Red
         exit
     }
 
     $totalSize = $response.Content.Headers.ContentLength
     if ($null -eq $totalSize) {
-        Write-Host "Warning: File size unknown. Assuming large file to prevent errors." -ForegroundColor Yellow
+        Write-Host "`nWarning: File size unknown. Assuming large file to prevent errors." -ForegroundColor Yellow
         $totalSize = 1024 * 1024 * 1024
     }
 
@@ -83,7 +83,7 @@ if (-not $downloadSuccess) {
     $downloaded = 0
     $startTime = Get-Date
 
-    Write-Host "Downloading Windows 11 ISO ($locale)..."
+    Write-Host "`nDownloading Windows 11 ISO ($locale)..."
     while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
         $fileStream.Write($buffer, 0, $bytesRead)
         $downloaded += $bytesRead
@@ -117,12 +117,12 @@ if (-not $downloadSuccess) {
 }
 
 if (-not $downloadSuccess) {
-    Write-Host "All download methods failed. Please check your internet connection." -ForegroundColor Red
+    Write-Host "`nAll download methods failed. Please check your internet connection." -ForegroundColor Red
     exit
 }
 
 # --- Step 2: Mount ISO ---
-Write-Host "Unmounting existing ISOs..."
+Write-Host "`nUnmounting existing ISOs..."
 # Get all volumes that are mounted from ISO files
 $volumes = Get-Volume | Where-Object { $_.DriveType -eq 'CD-ROM' }
 
@@ -134,11 +134,11 @@ foreach ($volume in $volumes) {
         }
 
         # Try to dismount using the drive letter
-        Write-Host "Attempting to dismount image mounted at: $devicePath"
+        Write-Host "`nAttempting to dismount image mounted at: $devicePath"
         Dismount-DiskImage -DevicePath $devicePath -ErrorAction Stop
-        Write-Host "Successfully dismounted: $devicePath"
+        Write-Host "`nSuccessfully dismounted: $devicePath"
     } catch {
-        Write-Warning "Failed to dismount: $devicePath. Error: $_"
+        Write-Warning "`nFailed to dismount: $devicePath. Error: $_"
     }
 }
 
@@ -146,19 +146,19 @@ foreach ($volume in $volumes) {
 $isoPath = Get-ChildItem -Path "$env:Temp\" -Filter "Win11*.iso" -File | Select-Object -ExpandProperty FullName -First 1
 
 if (-not $isoPath) {
-    Write-Host "No ISO file found in Temp Folder." -ForegroundColor Red
+    Write-Host "`nNo ISO file found in Temp Folder." -ForegroundColor Red
     exit
 }
 
-Write-Host "ISO found: $isoPath"
+Write-Host "`nISO found: $isoPath"
 
 # Mount ISO
-Write-Host "Mounting ISO..."
+Write-Host "`nMounting ISO..."
 try {
     Mount-DiskImage -ImagePath $destination -ErrorAction Stop
-    Write-Host "ISO Mounted Successfully." -ForegroundColor Green
+    Write-Host "`nISO Mounted Successfully." -ForegroundColor Green
 } catch {
-    Write-Host "Failed to mount ISO: $_" -ForegroundColor Red
+    Write-Host "`nFailed to mount ISO: $_" -ForegroundColor Red
     exit
 }
 
@@ -168,14 +168,14 @@ $driveLetter = (Get-DiskImage -ImagePath $destination | Get-Volume).DriveLetter
 $setupPath = "$driveLetter`:\setup.exe"
 
 if (-not (Test-Path $setupPath)) {
-    Write-Host "Setup file not found. Exiting..." -ForegroundColor Red
+    Write-Warning "`nSetup file not found. Exiting..." -ForegroundColor Red
     exit
 }
 
 # --- Step 3: Windows 11 upgrade (Silent Install)
 # Get Manufacturer
 $manufacturer = (Get-WmiObject -Class Win32_ComputerSystem).Manufacturer
-Write-Host "Detected System Manufacturer: $manufacturer"
+Write-Host "`nDetected System Manufacturer: $manufacturer"
 
 # Windows 11 CPU Compatibility Check Script with Bypass
 # GitHub CPU lists
@@ -204,7 +204,7 @@ if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
 
 # Fallback if match fails
 if (-not $cleanCpuName) {
-    Write-Host "Could not extract a matching CPU model from '$rawCpuName'" -ForegroundColor Yellow
+    Write-Host "`nCould not extract a matching CPU model from '$rawCpuName'" -ForegroundColor Yellow
     return
 }
 
@@ -223,7 +223,7 @@ try {
     $amdList = $httpClient.GetStringAsync($amdListUrl).Result
     $qualcommList = $httpClient.GetStringAsync($qualcommListUrl).Result
 } catch {
-    Write-Host "Failed to download processor support lists." -ForegroundColor Yellow
+    Write-Host "`nFailed to download processor support lists." -ForegroundColor Yellow
     return
 }
 
@@ -238,7 +238,7 @@ switch -Regex ($cpu.Manufacturer) {
     "Intel"    { $cpuSupported = $intelList -contains $cleanCpuName }
     "AMD"      { $cpuSupported = $amdList -contains $cleanCpuName }
     "Qualcomm" { $cpuSupported = $qualcommList -contains $cleanCpuName }
-    default    { Write-Host "Unknown manufacturer: $($cpu.Manufacturer)" }
+    default    { Write-Host "`nUnknown manufacturer: $($cpu.Manufacturer)" }
 }
 
 # Function to check TPM 2.0
@@ -264,10 +264,10 @@ function Get-SecureBootStatus {
             return [bool]$secureBoot
         } else {
             #Write-Verbose "Confirm-SecureBootUEFI requires 64-bit PowerShell. Falling back..."
-            throw "Not 64-bit"
+            throw "`nNot 64-bit"
         }
     } catch {
-        Write-Verbose "Primary method failed: $_. Trying WMI fallback..."
+        Write-Verbose "`nPrimary method failed: $_. Trying WMI fallback..."
 
         try {
             # Fallback 1: MS_SystemInformation
@@ -303,41 +303,41 @@ $tpmCompatible = Check-TPM
 # Display results
 Write-Host "`nWindows 11 Compatibility Check" -ForegroundColor Cyan
 Write-Host "-----------------------------------"
-Write-Host "Processor: $rawCpuName"
+Write-Host "`nProcessor: $rawCpuName"
 
 # Architecture Check
 if ($cpu64Bit) {
-    Write-Host "64-bit CPU: Compatible" -ForegroundColor Green
+    Write-Host "`n64-bit CPU: Compatible" -ForegroundColor Green
 } else {
-    Write-Host "64-bit CPU: Not Compatible" -ForegroundColor Red
+    Write-Host "`n64-bit CPU: Not Compatible" -ForegroundColor Red
 }
 
 # CPU Speed Check
 if ($cpuSpeedCompatible) {
-    Write-Host "CPU Speed: $cpuSpeedGHz GHz (Compatible)" -ForegroundColor Green
+    Write-Host "`nCPU Speed: $cpuSpeedGHz GHz (Compatible)" -ForegroundColor Green
 } else {
-    Write-Host "CPU Speed: $cpuSpeedGHz GHz (Not Compatible)" -ForegroundColor Red
+    Write-Host "`nCPU Speed: $cpuSpeedGHz GHz (Not Compatible)" -ForegroundColor Red
 }
 
 # Secure Boot Check
 if ($secureBootEnabled) {
-    Write-Host "Secure Boot Enabled: Yes" -ForegroundColor Green
+    Write-Host "`nSecure Boot Enabled: Yes" -ForegroundColor Green
 } else {
-    Write-Host "Secure Boot Enabled: No" -ForegroundColor Red
+    Write-Host "`nSecure Boot Enabled: No" -ForegroundColor Red
 }
 
 # TPM 2.0 Check
 if ($tpmCompatible) {
-    Write-Host "TPM 2.0 Support: Yes" -ForegroundColor Green
+    Write-Host "`nTPM 2.0 Support: Yes" -ForegroundColor Green
 } else {
-    Write-Host "TPM 2.0 Support: No" -ForegroundColor Red
+    Write-Host "`nTPM 2.0 Support: No" -ForegroundColor Red
 }
 
 # CPU Support Check
 if ($cpuSupported) {
-    Write-Host "CPU Compatibility: $cleanCpuName is supported" -ForegroundColor Green
+    Write-Host "`nCPU Compatibility: $cleanCpuName is supported" -ForegroundColor Green
 } else {
-    Write-Host "CPU Compatibility: $cleanCpuName is NOT supported" -ForegroundColor Red
+    Write-Host "`nCPU Compatibility: $cleanCpuName is NOT supported" -ForegroundColor Red
 }
 
 # Store failed checks
@@ -394,7 +394,7 @@ while ($true) {
 
    if ($logExists -or (-not $folderExists -and -not $setupRunning)) {
     if (-not $folderExists -and -not $setupRunning) {
-        Write-Host "Neither setup folder nor upgrade process found. Exiting..." -ForegroundColor Yellow
+        Write-Host "`nNeither setup folder nor upgrade process found. Exiting..." -ForegroundColor Yellow
 		}
     break
 	}
@@ -402,7 +402,7 @@ while ($true) {
 }
 
 # Start monitoring loop
-Write-Host "Your PC will restart several times. This might take a while." -ForegroundColor Green
+Write-Host "`nYour PC will restart several times. This might take a while." -ForegroundColor Green
 $lastPercent = -1
 
 # Initial output
@@ -441,11 +441,11 @@ while ($true) {
 }
 
 # Unmount ISO
-Write-Host "Unmounting ISO..."
+Write-Host "`nUnmounting ISO..."
 
 # Unmount the ISO after installation
 Dismount-DiskImage -ImagePath $isoPath
-Write-Host "Windows 11 upgrade process complete."
+Write-Host "`nWindows 11 upgrade process complete."
 
-Write-Host "Rebooting System..."
+Write-Host "`nRebooting System..."
 #Restart-Computer -Force
