@@ -188,6 +188,8 @@ if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
     $cleanCpuName = $matches[0]
 } elseif ($rawCpuName -match "Qualcomm\s+\S+") {
     $cleanCpuName = $matches[0]
+} elseif ($rawCpuName -match "Xeon\(R\)\s+CPU\s+([A-Za-z0-9\-]+)") {
+    $cleanCpuName = "Xeon " + $matches[1]
 } else {
     $cleanCpuName = ""
 }
@@ -352,7 +354,7 @@ if ($incompatibilityReasons.Count -gt 0) {
     $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassRAMCheck /t REG_DWORD /d 1 /f
     $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassStorageCheck /t REG_DWORD /d 1 /f
     $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassCPUCheck /t REG_DWORD /d 1 /f
-    Write-Host "Bypass Applied Successfully. Now Proceed for installation..." -ForegroundColor Green
+    Write-Host "`nBypass Applied Successfully. Now Proceed for installation..." -ForegroundColor Green
 	$installArgs = "/product server /auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable"
 } else {
     Write-Host "`nThis system meets all Windows 11 hardware requirements." -ForegroundColor Green
@@ -430,7 +432,6 @@ while ($true) {
     }
 }
 
-# --- Step 6: Unmount ISO ---
 # Unmount ISO
 Write-Host "`nUnmounting ISO..."
 
