@@ -49,9 +49,15 @@ if (-not $downloadSuccess) {
 
     $fileInfo = Get-Item "$sourceISO"
     $totalSize = $fileInfo.Length
-    $totalMB = [math]::Round($totalSize / 1MB, 2)
 
-    Write-Host "Copying ISO ($totalMB MB) from network share..."
+    function Format-Size($bytes) {
+        if ($bytes -ge 1GB) { return ("{0:N2} GB" -f ($bytes / 1GB)) }
+        elseif ($bytes -ge 1MB) { return ("{0:N2} MB" -f ($bytes / 1MB)) }
+        elseif ($bytes -ge 1KB) { return ("{0:N2} KB" -f ($bytes / 1KB)) }
+        else { return ("{0} B" -f $bytes) }
+    }
+
+    Write-Host "Copying ISO (Total Size: $(Format-Size $totalSize)) from network share..."
 
     $blockSize = 10MB
     $copiedBytes = 0
@@ -66,11 +72,18 @@ if (-not $downloadSuccess) {
         $copiedBytes += $readBytes
 
         $elapsedTime = $stopwatch.Elapsed.TotalSeconds
-        $speed = if ($elapsedTime -gt 0) { [math]::Round($copiedBytes / $elapsedTime / 1MB, 2) } else { 0 }
-        $percentComplete = [math]::Round(($copiedBytes / $totalSize) * 100, 2)
+        $speedBytesPerSec = if ($elapsedTime -gt 0) { $copiedBytes / $elapsedTime } else { 0 }
 
+        function Format-Speed($bytesPerSec) {
+            if ($bytesPerSec -ge 1GB) { return ("{0:N2} GB/s" -f ($bytesPerSec / 1GB)) }
+            elseif ($bytesPerSec -ge 1MB) { return ("{0:N2} MB/s" -f ($bytesPerSec / 1MB)) }
+            elseif ($bytesPerSec -ge 1KB) { return ("{0:N2} KB/s" -f ($bytesPerSec / 1KB)) }
+            else { return ("{0} B/s" -f $bytesPerSec) }
+        }
+
+        $percentComplete = [math]::Round(($copiedBytes / $totalSize) * 100, 2)
         $remainingBytes = $totalSize - $copiedBytes
-        $etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / ($speed * 1MB), 2) } else { "Calculating..." }
+        $etaSeconds = if ($speedBytesPerSec -gt 0) { [math]::Round($remainingBytes / $speedBytesPerSec, 2) } else { "Calculating..." }
 
         if ($etaSeconds -is [double]) {
             $etaHours = [math]::Floor($etaSeconds / 3600)
@@ -86,7 +99,7 @@ if (-not $downloadSuccess) {
         }
 
         Write-Progress -Activity "Copying File..." -Status "$percentComplete% Complete - ETA: $etaFormatted" -PercentComplete $percentComplete
-        Write-Host "`rTotal: $totalMB MB | Copied: $([math]::Round($copiedBytes / 1MB, 2)) MB | Speed: $speed MB/s | ETA: $etaFormatted" -NoNewline
+        Write-Host "`rTotal: $(Format-Size $totalSize) | Copied: $(Format-Size $copiedBytes) | Speed: $(Format-Speed $speedBytesPerSec) | ETA: $etaFormatted" -NoNewline
     }
 
     $sourceStream.Close()
