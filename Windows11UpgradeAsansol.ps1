@@ -112,6 +112,26 @@ if (-not $downloadSuccess) {
 
 # --- Step 4: Find Copied ISO File ---
 # --- Install Windows 11 ---
+Write-Host "`nUnmounting existing ISOs..."
+# Get all volumes that are mounted from ISO files
+$volumes = Get-Volume | Where-Object { $_.DriveType -eq 'CD-ROM' }
+
+foreach ($volume in $volumes) {
+    try {
+        $devicePath = "\\.\$($volume.DriveLetter):"
+        $image = Get-CimInstance -Namespace root\cimv2 -ClassName Win32_DiskDrive | Where-Object {
+            $_.DeviceID -like "*$($volume.DriveLetter)*"
+        }
+
+        # Try to dismount using the drive letter
+        Write-Host "`nAttempting to dismount image mounted at: $devicePath"
+        Dismount-DiskImage -DevicePath $devicePath -ErrorAction Stop
+        Write-Host "`nSuccessfully dismounted: $devicePath"
+    } catch {
+        Write-Warning "`nFailed to dismount: $devicePath. Error: $_"
+    }
+}
+
 # Find Copied ISO File
 $isoPath = Get-ChildItem -Path "$env:Temp\" -Filter "Win11*.iso" -File | Select-Object -ExpandProperty FullName -First 1
 
