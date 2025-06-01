@@ -225,8 +225,28 @@ $cpuSpeedGHz = $cpu.MaxClockSpeed / 1000
 $cpuSpeedCompatible = $cpuSpeedGHz -ge 1
 
 # Get Secure Boot status
-$secureBoot = Confirm-SecureBootUEFI -ErrorAction Stop 2>$null
-$secureBootEnabled = $secureBoot -eq $true
+
+$secureBoot = $null
+$secureBootEnabled = $false
+
+try {
+    # Primary method: UEFI cmdlet
+    $secureBoot = Confirm-SecureBootUEFI -ErrorAction Stop
+    $secureBootEnabled = $secureBoot -eq $true
+} catch {
+    # Fallback method: WMI query
+    try {
+        $secureBootState = (Get-CimInstance -ClassName Win32_ComputerSystem).SecureBootState
+        switch ($secureBootState) {
+            0 { $secureBootEnabled = $false }
+            1 { $secureBootEnabled = $true }
+            default { $secureBootEnabled = $false }
+        }
+    } catch {
+        # Optional: log or handle failure to get fallback info
+        $secureBootEnabled = $false
+    }
+}
 
 # Check TPM 2.0 Support
 $tpmCompatible = Check-TPM
