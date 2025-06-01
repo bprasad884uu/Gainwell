@@ -108,11 +108,11 @@ if (-not $downloadSuccess) {
         $fileStream.Write($buffer, 0, $bytesRead)
         $downloaded += $bytesRead
         $elapsed = (Get-Date) - $startTime
-        $speed = ($downloaded / $elapsed.TotalSeconds) / 1MB
+        $speed = $downloaded / $elapsed.TotalSeconds
         $progress = ($downloaded / $totalSize) * 100
 
         $remainingBytes = $totalSize - $downloaded
-        $etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / ($speed * 1MB), 2) } else { "Calculating..." }
+        $etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / $speed, 2) } else { "Calculating..." }
 
         if ($etaSeconds -is [double]) {
             $etaHours = [math]::Floor($etaSeconds / 3600)
