@@ -127,7 +127,7 @@ if (-not $downloadSuccess) {
             $etaFormatted = "Calculating..."
         }
 
-        Write-Host "`rTotal: $(Format-Size $totalSize) | Progress: $([math]::Round($progress,2))% | Downloaded: $([math]::Round($downloaded / 1MB, 2)) MB | Speed: $(Format-Speed $speed) | ETA: $etaFormatted" -NoNewline
+        Write-Host "`rTotal: $(Format-Size $totalSize) | Progress: $([math]::Round($progress,2))% | Downloaded: $(Format-Size $downloaded) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted" -NoNewline
     }
 
     $fileStream.Close()
