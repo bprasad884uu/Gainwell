@@ -203,7 +203,7 @@ if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
 # Fallback if match fails
 if (-not $cleanCpuName) {
     Write-Host "`nCould not extract a matching CPU model from '$rawCpuName'" -ForegroundColor Yellow
-    return
+    $cleanCpuName = $rawCpuName  # Proceed with raw name
 }
 
 # Load System.Net.Http.dll for PowerShell 5.1 if needed
