@@ -110,10 +110,6 @@ if (-not $company -and $isDomainJoined) {
     }
 }
 
-if (-not $company) {
-   goto :end
-}
-
 # ==========================
 # Save Images to Disk
 # ==========================
