@@ -434,7 +434,7 @@ $lastPercent = -1
 $currentPercent = 0
 
 # Initial display
-Write-Host -NoNewline "`r$($spinner[$spinnerIndex]) 0% complete     " -ForegroundColor Cyan
+#Write-Host -NoNewline "`r$($spinner[$spinnerIndex]) 0% complete     " -ForegroundColor Cyan
 
 while ($true) {
     Start-Sleep -Milliseconds 200
