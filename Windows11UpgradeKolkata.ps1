@@ -348,7 +348,7 @@ if ($incompatibilityReasons.Count -gt 0) {
     foreach ($reason in $incompatibilityReasons) {
         Write-Host " - $reason" -ForegroundColor Red
     }
-    Write-Host "`n⚙ Registry Tweaks will be applied to bypass the checks..." -ForegroundColor Yellow
+    Write-Host "`nRegistry Tweaks will be applied to bypass the checks..." -ForegroundColor Yellow
 	$null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\MoSetup" /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1 /f
     $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassTPMCheck /t REG_DWORD /d 1 /f
     $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassSecureBootCheck /t REG_DWORD /d 1 /f
