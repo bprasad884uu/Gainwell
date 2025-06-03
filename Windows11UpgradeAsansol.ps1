@@ -397,34 +397,38 @@ while ($true) {
 Write-Host "`nYour PC will restart several times. This might take a while." -ForegroundColor Green
 $lastPercent = -1
 
-# Initial output
-Write-Host -NoNewline "`r0% complete     " -ForegroundColor Cyan
+# Spinner characters
+$spinner = '\|/--\|/--'.ToCharArray()
+$spinnerIndex = 0
+$lastPercent = -1
+$currentPercent = 0
+
+# Initial display
+#Write-Host -NoNewline "`r$($spinner[$spinnerIndex]) 0% complete     " -ForegroundColor Cyan
 
 while ($true) {
-    Start-Sleep -Seconds 1
+    Start-Sleep -Milliseconds 200
 
     if (Test-Path $logPath) {
-        # Read last 200 lines to find progress updates
         $content = Get-Content $logPath -Tail 200
-
-        # Find latest progress line with Overall progress percentage
         $progressLines = $content | Where-Object { $_ -match "Overall progress: \[(\d+)%\]" }
+
         if ($progressLines) {
             $lastLine = $progressLines[-1]
             if ($lastLine -match "Overall progress: \[(\d+)%\]") {
                 $currentPercent = [int]$matches[1]
-
-                if ($currentPercent -ne $lastPercent) {
-                    Write-Host -NoNewline "`r$currentPercent% complete     " -ForegroundColor Cyan
-                    $lastPercent = $currentPercent
-                }
-
-                if ($currentPercent -ge 100) {
-                    Write-Host "`r" + (' ' * 60) + "`r" -NoNewline
-                    Write-Host "Upgrade completed! Your PC will restart in a few moments" -ForegroundColor Green
-                    break
-                }
             }
+        }
+
+        # Update spinner and progress
+        $spinnerChar = $spinner[$spinnerIndex % $spinner.Length]
+        Write-Host -NoNewline "`r$spinnerChar $currentPercent% complete     " -ForegroundColor Cyan
+        $spinnerIndex++
+
+        if ($currentPercent -ge 100) {
+            Write-Host "`r" + (' ' * 60) + "`r" -NoNewline
+            Write-Host "Upgrade completed! Your PC will restart in a few moments" -ForegroundColor Green
+            break
         }
     } else {
         Write-Host -NoNewline "`rWindows 11 installation failed. Please restart the installation or try again after restarting your PC." -ForegroundColor Red
