@@ -50,7 +50,7 @@ function Format-Speed {
 # Create HttpClient with custom User-Agent
 $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
 $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
-$httpClient.DefaultRequestHeaders.UserAgent.ParseAdd('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36')
+$httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
 $httpClient.DefaultRequestHeaders.Add("Accept", "*/*")
 
 if (-not $downloadSuccess) {
@@ -77,12 +77,11 @@ if (-not $downloadSuccess) {
 
     $fileStream = [System.IO.File]::OpenWrite($installerPath)
 
-    $bufferSize = 10MB
+    $bufferSize = 10 * 1024 * 1024  # 10MB
     $buffer = New-Object byte[] ($bufferSize)
     $downloaded = 0
     $startTime = Get-Date
 
-    Write-Host "`nDownloading Windows 11 ISO ($locale)..."
     while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
         $fileStream.Write($buffer, 0, $bytesRead)
         $downloaded += $bytesRead
@@ -116,7 +115,7 @@ if (-not $downloadSuccess) {
 }
 
 if (-not $downloadSuccess) {
-    Write-Host "`nDoownload failed. Please check your internet connection." -ForegroundColor Red
+    Write-Host "`nDownload failed. Please check your internet connection." -ForegroundColor Red
     exit
 }
 
