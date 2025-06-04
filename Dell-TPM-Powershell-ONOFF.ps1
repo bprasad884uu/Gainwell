@@ -8,18 +8,18 @@ If (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 # Step 1: Check if system is Dell
 $manufacturer = (Get-WmiObject -Class Win32_ComputerSystem).Manufacturer
 if ($manufacturer -notlike "*Dell*") {
-    Write-Output "❌ This system is not a Dell device. Exiting."
+    Write-Output "This system is not a Dell device. Exiting."
     exit
 }
 
-Write-Output "✅ Dell system detected. Proceeding with Dell Command | Configure installation..."
+Write-Output "Dell system detected. Proceeding with Dell Command | Configure installation..."
 
 # Step 2: Set download URL and destination
 $downloadUrl = "https://dl.dell.com/FOLDER12902766M/1/Dell-Command-Configure-Application_MD8CJ_WIN64_5.2.0.9_A00.EXE"
 $installerPath = "$env:TEMP\DellCommandConfigure.exe"
 
 # Step 3: Download Dell Command | Configure
-Write-Output "📥 Downloading Dell Command | Configure..."
+Write-Output "Downloading Dell Command | Configure..."
 
 $downloadSuccess = $false
 
@@ -120,22 +120,22 @@ if (-not $downloadSuccess) {
 }
 
 # Step 4: Install silently
-Write-Output "`n📦 Installing Dell Command | Configure silently..."
+Write-Output "`nInstalling Dell Command | Configure silently..."
 Start-Process -FilePath $installerPath -ArgumentList "/s" -Wait
 
 # Step 5: Define CCTK path
 $cctkPath = "C:\Program Files (x86)\Dell\Command Configure\X86_64\cctk.exe"
 if (-Not (Test-Path $cctkPath)) {
-    Write-Error "❌ CCTK not found at expected path: $cctkPath"
+    Write-Error "CCTK not found at expected path: $cctkPath"
     exit
 }
 
 # Step 6: Check TPM and Secure Boot
-Write-Output "`n🔍 Checking TPM status..."
+Write-Output "`nChecking TPM status..."
 $tpmStatus = & $cctkPath --tpm
 Write-Output $tpmStatus
 
-Write-Output "`n🔍 Checking Secure Boot status..."
+Write-Output "`nChecking Secure Boot status..."
 $secureBootStatus = & $cctkPath --secureboot
 Write-Output $secureBootStatus
 
@@ -150,4 +150,4 @@ if ($secureBootStatus -match "Disabled") {
     & $cctkPath --secureboot=enable
 }
 
-Write-Output "`n✅ Operation complete. A reboot may be required for changes to take effect."
+Write-Output "`nOperation complete. A reboot may be required for changes to take effect."
