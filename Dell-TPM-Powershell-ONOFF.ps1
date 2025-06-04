@@ -19,7 +19,7 @@ $downloadUrl = "https://dl.dell.com/FOLDER12902766M/1/Dell-Command-Configure-App
 $installerPath = "$env:TEMP\DellCommandConfigure.exe"
 
 # Step 3: Download Dell Command | Configure
-Write-Output "Downloading Dell Command | Configure..."
+Write-Host "Downloading Dell Command | Configure..."
 
 $downloadSuccess = $false
 
@@ -50,7 +50,7 @@ function Format-Speed {
 # Create HttpClient with custom User-Agent
 $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
 $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
-$httpClient.DefaultRequestHeaders.UserAgent.ParseAdd('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36')
+$httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("DellDownloader/5.1 (Windows NT 10.0; Win64; x64)")
 $httpClient.DefaultRequestHeaders.Add("Accept", "*/*")
 
 if (-not $downloadSuccess) {
