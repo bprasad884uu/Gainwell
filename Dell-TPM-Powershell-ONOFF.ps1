@@ -5,6 +5,13 @@ If (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
     Exit
 }
 
+# Step 0: Define CCTK path and check if it exists
+$cctkPath = "C:\Program Files (x86)\Dell\Command Configure\X86_64\cctk.exe"
+if (Test-Path $cctkPath) {
+    Write-Output "CCTK already exists at $cctkPath. Skipping download and installation."
+    goto RunCCTK
+}
+
 # Step 1: Check if system is Dell
 $manufacturer = (Get-WmiObject -Class Win32_ComputerSystem).Manufacturer
 if ($manufacturer -notlike "*Dell*") {
@@ -129,6 +136,8 @@ if (-Not (Test-Path $cctkPath)) {
     Write-Error "CCTK not found at expected path: $cctkPath"
     exit
 }
+
+:RunCCTK
 
 # Step 6: Check TPM and Secure Boot
 Write-Output "`nChecking TPM status..."
