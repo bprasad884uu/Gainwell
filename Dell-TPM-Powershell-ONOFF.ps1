@@ -141,12 +141,12 @@ Write-Output $secureBootStatus
 
 # Step 7: Enable TPM and Secure Boot if needed
 if ($tpmStatus -match "Disabled") {
-    Write-Output "🔧 Enabling TPM..."
+    Write-Output "Enabling TPM..."
     & $cctkPath --tpm=on
 }
 
 if ($secureBootStatus -match "Disabled") {
-    Write-Output "🔧 Enabling Secure Boot..."
+    Write-Output "Enabling Secure Boot..."
     & $cctkPath --secureboot=enable
 }
 
