@@ -77,7 +77,7 @@ if (-not $downloadSuccess) {
 
     $fileStream = [System.IO.File]::OpenWrite($installerPath)
 
-    $bufferSize = 10 * 1024 * 1024  # 10MB
+    $bufferSize = 10MB
     $buffer = New-Object byte[] ($bufferSize)
     $downloaded = 0
     $startTime = Get-Date
