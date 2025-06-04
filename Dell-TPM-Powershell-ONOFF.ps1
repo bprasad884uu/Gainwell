@@ -50,7 +50,7 @@ function Format-Speed {
 # Create HttpClient with custom User-Agent
 $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
 $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
-$httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36")
+$httpClient.DefaultRequestHeaders.UserAgent.ParseAdd('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36')
 $httpClient.DefaultRequestHeaders.Add("Accept", "*/*")
 
 if (-not $downloadSuccess) {
