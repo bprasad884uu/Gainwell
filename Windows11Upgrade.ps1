@@ -18,10 +18,10 @@ Write-Host "Detected Language: $languageName - Downloading ISO..."
 
 # Set Download URL & Destination Based on Locale
 if ($locale -eq "en-GB") {
-    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_EnglishInternational_x64.iso?t=2fbe51ee-616c-49ee-8901-b81d4d94b8c2&P1=1749893053&P2=601&P3=2&P4=r3R6hSIWunjjB%2faQtwSSaMV9JzRK71266mkX9nZYYpLsVM3Ob038fK7TmnQPVzTTC5vttsCs1Dix46G%2fMxi8Fz%2bHAbI%2fLs8ntSBNN5VMyjmj9yRiixix2dhD31x2V5GaIeAK1ws5VqhPHQ2aSIy%2fs666SXFmjOpll6poQvXuelif8DQCdYLimb4QuIeywbGkLzweejmawQQlU2tSHOLD7cqAr1JNKUKjpv%2bepfxZUGO4gdphb4Ei7%2fWfrvSU2FVuPQ4XO4ZlnjGdxUup%2fp6QkuKsJhg9Nc6vc95X34uhTtKJH3e5joN6GqOdB0WZnsQF3KkVwecNhygmKK9ZAAF2nw%3d%3d"
+    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_EnglishInternational_x64.iso?t=57feabba-2261-407f-8f8b-2bb9890aa15b&P1=1750080445&P2=601&P3=2&P4=Zi1T6CiwBivPLXeo93F3tAl55rWFxyshryssVm7f%2fn%2fo2rSoKpiNK4V8w9X54mHdAAj8SYgQquFsaNnOtdtVfoj%2fseo2DLnEvRZqJOPnHYInnYFz7Y7gJjSfUDaEuLITWMyp%2bXykhEpyKTADHFHpJryEKRTzsrsKgEjV9nnSinBNumqLxIftgtPcMHifNe3tbYFpCiMEzLN4s71RmodPZSWkPOmrojKHLspvbxQ0csSiFess9gO36rAh4Y00zGnH%2bKrBar3Q1O6z%2ffGpOlGUVnD%2fIugVFiTGtswqnWx7yGSDlZYElftOipEOYk6pCQZbGufvMvZUHoEoVLRpEfw4jA%3d%3d"
     $destination = "$env:Temp\Win11_24H2_ENGB.iso"
 } elseif ($locale -eq "en-US") {
-    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=c35e8099-a85f-4275-a7f8-437e17539751&P1=1749893084&P2=601&P3=2&P4=q%2bf2ePKfIHrxSsRQdk2ijlU11d6236WTadHC3ywuNVA0NgrDdcbClNDBwZ3Px8TAbuZSMvQold2sttrCsfYQS6QJu3T7cWiDVDRj6WyXWXfm68llbcM%2bZh%2f1L22PogIRY1tYiZwRplkFLBJjrbXx8Mvqrugws98tH2M1TZKABtymqjIjinVhAekXoGbvPiQMn4urzZRDqd9TRv8IWAwWucOADtsL3FETEHmEfyC99Q6vLt6LVYKqxfw6MZsujjVdIWb0IW2e3C17m54qxAyQX4Iq%2bU0%2brgd9cR9TQgd4x09ngb4JlmIKdFIExVnGmM3aXNpE%2fz23qTcuJTskTvcMEA%3d%3d"
+    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=70abca0d-5df3-4ff0-b6b2-b14e2e87f4e2&P1=1750080472&P2=601&P3=2&P4=mDI3IIKsMQ%2bu9Ftg9qClB%2bYVZEB1QOh3A8dW0O127qWk01nzOTlS7vYgiG6B39%2bunapafY6%2biW906%2bKOMfcjL24VGiL4FSFJVmzki8LLE51YRsW69z6meaufwpGJdRLgjdclKff9Gl90ZNTuL%2b4NZQFI2Eudghz%2fAzbzUrGcG4iw2wPv5qWUZRb4hBiAhyDf9RbQhlbsHwOgRz1COXwpvDobvdo%2fJBa0bjgckP%2bFqxOjUCJ9Tfv9AhJ9WNv3GcBEPAJwzaZIbRz1jd688nLDVPYawDXtgO6Oen4ELSduI82tpbh68nJgmRM9yt3ISHAjnblwXyZOniIdz8eyVNxBjg%3d%3d"
     $destination = "$env:Temp\Win11_24H2_ENUS.iso"
 } else {
     Write-Host "Unsupported Language. No ISO available." -ForegroundColor Red
