@@ -8,9 +8,9 @@ $client = [System.Net.Http.HttpClient]::new()
 $response = $client.GetAsync($fidoUrl).Result
 if ($response.IsSuccessStatusCode) {
     [System.IO.File]::WriteAllText($fidoPath, $response.Content.ReadAsStringAsync().Result)
-    Write-Host "✅ Fido.ps1 downloaded successfully to $fidoPath"
+    Write-Host "Fido.ps1 downloaded successfully to $fidoPath"
 } else {
-    Write-Host "❌ Failed to download Fido.ps1. Status Code: $($response.StatusCode)" -ForegroundColor Red
+    Write-Host "Failed to download Fido.ps1. Status Code: $($response.StatusCode)" -ForegroundColor Red
     exit 1
 }
 
@@ -28,15 +28,15 @@ $languages = @("English International" , "English")
 
 # Loop through both languages
 foreach ($lang in $languages) {
-    Write-Host "`n🌐 Download Link for language: $lang" -ForegroundColor Cyan
+    Write-Host "`nDownload Link for language: $lang" -ForegroundColor Cyan
     $argsWithLang = $commonArgs + ("-Lang", $lang)
     
     $downloadOutput = powershell.exe -NoProfile -ExecutionPolicy Bypass -File $fidoPath @argsWithLang
 
     if ($downloadOutput) {
-        Write-Host "`n🔗 $lang ISO Info:"
+        Write-Host "`n$lang ISO Info:"
         $downloadOutput | ForEach-Object { Write-Host $_ }
     } else {
-        Write-Host "❌ Failed to retrieve download info for $lang." -ForegroundColor Red
+        Write-Host "Failed to retrieve download info for $lang." -ForegroundColor Red
     }
 }
