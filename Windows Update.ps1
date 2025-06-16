@@ -88,6 +88,7 @@ LogMessage("`n---------------------------------")
 LogMessage("`nDownloading updates...")
 LogMessage("`n---------------------------------")
 
+$index = 1
 for ($i = 0; $i -lt $updatesToDownload.Count; $i++) {
     $update = $updatesToDownload.Item($i)
     $title = $update.Title
@@ -131,6 +132,7 @@ LogMessage("`n---------------------------------")
 $installed = @()
 $failed = @()
 
+$index = 1
 for ($i = 0; $i -lt $updatesToInstall.Count; $i++) {
     $update = $updatesToInstall.Item($i)
     $title = $update.Title
