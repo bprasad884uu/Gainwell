@@ -23,7 +23,7 @@ function Enable-AdvancedUpdateOptions {
     New-ItemProperty -Path $wuPolicyPath -Name "ExcludeWUDriversInQualityUpdate" -Value 0 -PropertyType DWord -Force | Out-Null
     Set-ItemProperty -Path $wuAUKey -Name "UseWUServer" -Value 0 -Force | Out-Null
 
-    LogMessage "Advanced Update options enabled."
+    LogMessage("Advanced Update options enabled.")
 }
 
 # ------------------------ Format Size Function ------------------------
@@ -42,7 +42,7 @@ $ProgressPreference = 'SilentlyContinue'
 $ErrorActionPreference = 'Stop'
 Enable-AdvancedUpdateOptions
 
-LogMessage "Initializing Update Session..."
+LogMessage("Initializing Update Session...")
 $updateSession = New-Object -ComObject Microsoft.Update.Session
 $updateSearcher = $updateSession.CreateUpdateSearcher()
 $updateServiceManager = New-Object -ComObject Microsoft.Update.ServiceManager
@@ -51,35 +51,35 @@ $updateServiceManager.ClientApplicationID = "PowerShell Update Script"
 try {
     $null = $updateServiceManager.AddService2("7971f918-a847-4430-9279-4a52d1efe18d", 7, "") 2>$null
 	LogMessage("")
-    LogMessage "Microsoft Update Service added."
+    LogMessage("Microsoft Update Service added.")
 } catch {
 	LogMessage("")
-    LogMessage "Microsoft Update Service already registered or failed to add."
+    LogMessage("Microsoft Update Service already registered or failed to add.")
 }
 
-LogMessage "Searching for available updates..."
+LogMessage("Searching for available updates...")
 $searchResult = $updateSearcher.Search("IsInstalled=0")
 $updatesToDownload = New-Object -ComObject Microsoft.Update.UpdateColl
 
 if ($searchResult.Updates.Count -eq 0) {
 	LogMessage("")
-    LogMessage "No updates found."
+    LogMessage("No updates found.")
     return
 }else {
 	
 LogMessage("")
-LogMessage "---------------------------------"
+LogMessage("---------------------------------")
 LogMessage("")
-LogMessage "Updates found: $($searchResult.Updates.Count)"
+LogMessage("Updates found: $($searchResult.Updates.Count)")
 LogMessage("")
-LogMessage "---------------------------------"
+LogMessage("---------------------------------")
 
 $index = 1
 foreach ($update in $searchResult.Updates) {
     $type = if ($update.DriverClass) { "Driver" } else { "Software" }
     $sizeFormatted = Format-Size $update.MaxDownloadSize
     $hiddenStatus = if ($update.IsHidden) { "[Hidden]" } else { "" }
-    LogMessage "[$index/$($searchResult.Updates.Count)] [$type] $($update.Title) $hiddenStatus, Size: $sizeFormatted"
+    LogMessage("[$index/$($searchResult.Updates.Count)] [$type] $($update.Title) $hiddenStatus, Size: $sizeFormatted")
 
     if (-not $update.EulaAccepted) {
         $null = $update.AcceptEula()
@@ -91,18 +91,18 @@ foreach ($update in $searchResult.Updates) {
 # ------------------------ Download Updates ------------------------
 $downloader = $updateSession.CreateUpdateDownloader()
 LogMessage("")
-LogMessage "---------------------------------"
+LogMessage("---------------------------------")
 LogMessage("")
-LogMessage "Downloading updates..."
+LogMessage("Downloading updates...")
 LogMessage("")
-LogMessage "---------------------------------"
+LogMessage("---------------------------------")
 
 for ($i = 0; $i -lt $updatesToDownload.Count; $i++) {
     $update = $updatesToDownload.Item($i)
     $title = $update.Title
     $sizeFormatted = Format-Size $update.MaxDownloadSize
 	LogMessage("")
-    LogMessage "Downloading: $title ($sizeFormatted)..."
+    LogMessage("Downloading: $title ($sizeFormatted)...")
 
     $singleDownload = New-Object -ComObject Microsoft.Update.UpdateColl
     $null = $singleDownload.Add($update)
@@ -117,10 +117,10 @@ for ($i = 0; $i -lt $updatesToDownload.Count; $i++) {
     Write-Progress -Activity "Downloading Update" -Completed
 
     if ($result.ResultCode -eq 2) {
-        LogMessage "Downloaded: $title"
+        LogMessage("Downloaded: $title")
 		LogMessage("")
     } else {
-        LogMessage "Failed to download: $title"
+        LogMessage("Failed to download: $title")
     }
 }
 
@@ -134,13 +134,15 @@ foreach ($update in $updatesToDownload) {
 
 if ($updatesToInstall.Count -eq 0) {
 	LogMessage("")
-    LogMessage "No updates downloaded to install."
+    LogMessage("No updates downloaded to install.")
     return
 }
-
-LogMessage "---------------------------------"
-LogMessage "Installing updates..."
-LogMessage "---------------------------------"
+LogMessage("")
+LogMessage("---------------------------------")
+LogMessage("")
+LogMessage("Installing updates...")
+LogMessage("")
+LogMessage("---------------------------------")
 $installed = @()
 $failed = @()
 
@@ -152,7 +154,7 @@ for ($i = 0; $i -lt $updatesToInstall.Count; $i++) {
     $hiddenStatus = if ($update.IsHidden) { "[Hidden]" } else { "" }
 
 	LogMessage("")
-    LogMessage "Installing: [$type] $title $hiddenStatus, Size: $sizeFormatted"
+    LogMessage("Installing: [$type] $title $hiddenStatus, Size: $sizeFormatted")
 
     $singleUpdateColl = New-Object -ComObject Microsoft.Update.UpdateColl
     $null = $singleUpdateColl.Add($update)
@@ -170,30 +172,35 @@ for ($i = 0; $i -lt $updatesToInstall.Count; $i++) {
 
     if ($resultCode -eq 2) {
 		LogMessage("")
-        LogMessage "Installed: $title"
+        LogMessage("Installed: $title")
         $installed += $title
     } else {
 		LogMessage("")
-        LogMessage "Failed to install: $title"
+        LogMessage("Failed to install: $title")
         $failed += $title
     }
 }
 
 # ------------------------ Summary ------------------------
-LogMessage "---------------------------------"
-LogMessage "Summary:"
-LogMessage "---------------------------------"
-LogMessage "Installed Updates: $($installed.Count)"
-$installed | ForEach-Object { LogMessage "- $_" }
+LogMessage("")
+LogMessage("---------------------------------")
+LogMessage("")
+LogMessage("Summary:")
+LogMessage("")
+LogMessage("---------------------------------")
+LogMessage("")
+LogMessage("Installed Updates: $($installed.Count)")
+$installed | ForEach-Object { LogMessage("- $_") }
 
 if ($failed.Count -gt 0) {
 	LogMessage("")
     LogMessage "Failed Updates: $($failed.Count)"
-    $failed | ForEach-Object { LogMessage "- $_" }
+    $failed | ForEach-Object { LogMessage("- $_") }
 } else {
 	LogMessage("")
-	LogMessage "---------------------------------"
-    LogMessage "All updates installed successfully!"
+	LogMessage("---------------------------------")
+	LogMessage("")
+    LogMessage("All updates installed successfully!")
 }
 
 	# Add reboot required check
@@ -245,8 +252,8 @@ Test-PendingReboot
 $endTime = Get-Date
 $duration = $endTime - $startTime
 LogMessage("")
-LogMessage "Start Time : $($startTime.ToString("HH:mm:ss"))"
+LogMessage("Start Time : $($startTime.ToString("HH:mm:ss"))")
 LogMessage("")
-LogMessage "End Time   : $($endTime.ToString("HH:mm:ss"))"
+LogMessage("End Time   : $($endTime.ToString("HH:mm:ss"))")
 LogMessage("")
-LogMessage "Total Time : $($duration.ToString("hh\:mm\:ss"))"
+LogMessage("Total Time : $($duration.ToString("hh\:mm\:ss"))")
