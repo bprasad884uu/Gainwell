@@ -92,7 +92,7 @@ for ($i = 0; $i -lt $updatesToDownload.Count; $i++) {
     $update = $updatesToDownload.Item($i)
     $title = $update.Title
     $sizeFormatted = Format-Size $update.MaxDownloadSize
-    LogMessage("`nDownloading: $title ($sizeFormatted)...")
+    LogMessage("`n[$index/$($searchResult.Updates.Count)]Downloading: $title ($sizeFormatted)...")
 
     $singleDownload = New-Object -ComObject Microsoft.Update.UpdateColl
     $null = $singleDownload.Add($update)
@@ -138,7 +138,7 @@ for ($i = 0; $i -lt $updatesToInstall.Count; $i++) {
     $type = if ($update.DriverClass) { "Driver" } else { "Software" }
     $hiddenStatus = if ($update.IsHidden) { "[Hidden]" } else { "" }
 
-    LogMessage("`nInstalling: [$type] $title $hiddenStatus, Size: $sizeFormatted")
+    LogMessage("`n[$index/$($searchResult.Updates.Count)]Installing: [$type] $title $hiddenStatus, Size: $sizeFormatted")
 
     $singleUpdateColl = New-Object -ComObject Microsoft.Update.UpdateColl
     $null = $singleUpdateColl.Add($update)
