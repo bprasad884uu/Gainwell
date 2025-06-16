@@ -195,6 +195,51 @@ if ($failed.Count -gt 0) {
 	LogMessage "---------------------------------"
     LogMessage "All updates installed successfully!"
 }
+
+	# Add reboot required check
+    function Test-PendingReboot {
+    $rebootRequired = $false
+
+    # Check Component Based Servicing
+    $cbServicing = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending" -ErrorAction SilentlyContinue
+    if ($cbServicing) {
+        LogMessage("Reboot required: Component Based Servicing")
+        $rebootRequired = $true
+    }
+
+    # Check Windows Update Auto Update
+    $wuReboot = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired" -ErrorAction SilentlyContinue
+    if ($wuReboot) {
+        LogMessage("Reboot required: Windows Update")
+        $rebootRequired = $true
+    }
+
+    # Check PendingFileRenameOperations
+    $pendingFileRename = (Get-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -ErrorAction SilentlyContinue).PendingFileRenameOperations
+    if ($pendingFileRename) {
+        LogMessage("Reboot required: Pending File Rename Operations")
+        $rebootRequired = $true
+    }
+
+    # Check WMI for SCCM client (if applicable)
+    $ccmReboot = Get-WmiObject -Namespace "ROOT\CCM\ClientSDK" -Class CCM_ClientUtilities -ErrorAction SilentlyContinue
+    if ($ccmReboot) {
+        $rebootStatus = $ccmReboot.DetermineIfRebootPending()
+        if ($rebootStatus.RebootPending -eq $true) {
+            LogMessage("Reboot required: SCCM Client")
+            $rebootRequired = $true
+        }
+    }
+
+    if (-not $rebootRequired) {
+        LogMessage("No reboot is required.")
+    }
+
+    return $rebootRequired
+}
+# Run the function
+Test-PendingReboot
+}
 }
 
 # ------------------------ Time Elapsed ------------------------
