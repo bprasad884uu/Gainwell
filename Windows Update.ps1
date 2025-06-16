@@ -240,7 +240,6 @@ if ($failed.Count -gt 0) {
 # Run the function
 Test-PendingReboot
 }
-}
 
 # ------------------------ Time Elapsed ------------------------
 $endTime = Get-Date
