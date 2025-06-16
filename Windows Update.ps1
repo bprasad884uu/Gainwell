@@ -111,7 +111,8 @@ for ($i = 0; $i -lt $updatesToDownload.Count; $i++) {
         LogMessage("`nDownloaded: $title")
     } else {
         LogMessage("`nFailed to download: $title")
-    }
+    }	
+    $index++
 }
 
 # ------------------------ Install Updates ------------------------
@@ -163,6 +164,7 @@ for ($i = 0; $i -lt $updatesToInstall.Count; $i++) {
         LogMessage("`nFailed to install: $title")
         $failed += $title
     }
+    $index++
 }
 
 # ------------------------ Summary ------------------------
