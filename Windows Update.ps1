@@ -172,10 +172,12 @@ LogMessage("`n---------------------------------")
 LogMessage("`nSummary:")
 LogMessage("`n---------------------------------")
 LogMessage("`nInstalled Updates: $($installed.Count)")
+LogMessage("`n---------------------------------")
 $installed | ForEach-Object { LogMessage("`n- $_") }
 
 if ($failed.Count -gt 0) {
     LogMessage "Failed Updates: $($failed.Count)"
+	LogMessage("`n---------------------------------")
     $failed | ForEach-Object { LogMessage("`n- $_") }
 } else {
 	LogMessage("`n---------------------------------")
