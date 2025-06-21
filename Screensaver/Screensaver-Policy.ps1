@@ -1,3 +1,46 @@
+# Detect company from hostname or domain
+$hostname = $env:COMPUTERNAME
+$system = Get-CimInstance Win32_ComputerSystem
+$domain = $system.Domain
+$isDomainJoined = $system.PartOfDomain
+
+# Dynamic company config
+$CompanyConfig = @(
+	@{ Name = "GCPL"; Domains = @("gainwellindia.com");			HostnamePatterns = @("GCPL") },
+	@{ Name = "GEPL"; Domains = @("gainwellengineering.com");	HostnamePatterns = @("GEPL") },
+	@{ Name = "RMSPL"; Domains = @();							HostnamePatterns = @("RMSPL") },
+	@{ Name = "ASPL"; Domains = @();							HostnamePatterns = @("ASPL") }
+)
+
+# Company detection logic
+$company = ""
+
+# STEP 1: Prioritize hostname matching
+foreach ($config in $CompanyConfig) {
+    foreach ($pattern in $config.HostnamePatterns) {
+        if ($hostname -match $pattern) {
+            $company = $config.Name
+            break
+        }
+    }
+    if ($company) { break }
+}
+
+# STEP 2: Fallback to domain if hostname didn't match
+if (-not $company -and $isDomainJoined) {
+    foreach ($config in $CompanyConfig) {
+        foreach ($knownDomain in $config.Domains) {
+            if ($knownDomain.ToLower() -eq $domain.ToLower()) {
+                $company = $config.Name
+                break
+            }
+        }
+        if ($company) { break }
+    }
+}
+
+# Proceed only if company is detected
+if ($company) {
 # Check if the type PIDLEncoder is already defined
 if (-not ("PIDLEncoder" -as [type])) {
     $CSharpCode = @"
@@ -60,7 +103,7 @@ if (!(Test-Path -Path $folderPath)) {
 $encryptedPIDL = [PIDLEncoder]::GetEncryptedPIDL($folderPath)
 
 if ($encryptedPIDL -eq $null) {
-    Write-Output "❌ Failed to encode the path."
+    Write-Output "Failed to encode the path."
 } else {
     # Convert the byte array to a Base64 string
     $base64EncodedPIDL = [Convert]::ToBase64String($encryptedPIDL)
@@ -79,7 +122,7 @@ if ($encryptedPIDL -eq $null) {
     }
 
     $formattedEncodedPIDL = Format-EncodedPIDL -encodedPIDL $base64EncodedPIDL
-    #Write-Output "✅ Formatted Encoded PIDL:`n$formattedEncodedPIDL"
+    #Write-Output "Formatted Encoded PIDL:`n$formattedEncodedPIDL"
 }
 
 # Specify the registry path
@@ -92,7 +135,7 @@ $keys = Get-ChildItem -Path $registryPath
 $filteredKeys = $keys | Where-Object { $_.PSChildName -notlike "*_Classes" }
 
 # Get user profiles to map SID to Username
-$UserProfiles = Get-WmiObject Win32_UserProfile | Select-Object LocalPath, SID
+$UserProfiles = Get-CimInstance Win32_UserProfile | Select-Object LocalPath, SID
 
 # Check screensaver path (ensure correct architecture)
 $screensaverPath = "C:\Windows\System32\PhotoScreensaver.scr"
@@ -106,7 +149,7 @@ foreach ($key in $filteredKeys) {
     $UserName = if ($UserProfile) {
     ($UserProfile.LocalPath -split "\\")[-1] 
 		} else { 
-			"Unknown" 
+			"Unknown"
 		}
 
     # Check if registry path exists
@@ -125,7 +168,7 @@ foreach ($key in $filteredKeys) {
                 }
             }
 			
-			 # Set the EncryptedPIDL value (Ensure $formattedEncodedPIDL is defined)
+		# Set the EncryptedPIDL value (Ensure $formattedEncodedPIDL is defined)
             if ($formattedEncodedPIDL) {
                 Set-ItemProperty -Path $photoViewerPath -Name "EncryptedPIDL" -Value $formattedEncodedPIDL
             }
@@ -150,9 +193,9 @@ foreach ($key in $filteredKeys) {
             # Prevent users from changing screensaver settings (this disables the "Settings" button)
             Set-ItemProperty -Path $policyPath -Name "ScreenSaverSettingsPage" -Value 1 -Type DWord
 
-            Write-Output "✅ Screensaver settings applied successfully for user: $UserName"
+            Write-Output "Screensaver settings applied successfully for user: $UserName"
         } catch {
-            Write-Output "❌ Failed to apply settings for user: $UserName - Error: $_"
+            Write-Output "Failed to apply settings for user: $UserName - Error: $_"
         }
     }
 }
@@ -168,9 +211,15 @@ powercfg /change monitor-timeout-ac 20		# 20 minutes when plugged in
 powercfg /change standby-timeout-dc 60		# 1 hour on battery
 powercfg /change standby-timeout-ac 0		# Never when plugged in
 
-Write-Output "✅ Power settings updated successfully!"
+Write-Output "Power settings updated successfully!"
 
 # Apply Group Policy
-gpupdate /force
+gpupdate /force | Out-Null
 
-Write-Output "✅ Screensaver settings applied successfully for all users!"
+Write-Output "Screensaver settings applied successfully for all users!"
+
+}
+else {
+    Write-Warning "Unable to detect company from domain or hostname. Please check the Hostname or Domain. Exiting..."
+    exit 1
+}
