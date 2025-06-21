@@ -139,7 +139,19 @@ $base64Image = @"
 # STEP 4: Set your Base64 image strings for each company
 #=======================================================
 
-if ($company) {
+if ($hostname -eq "GTPL") {
+    # GTPL special case
+    $source = "C:\Windows\Web\Wallpaper\Windows\img19.jpg"
+    $destination = "C:\Windows\Web\Wallpaper\Windows\wallpaper.jpg"
+
+    if (Test-Path $source) {
+        Copy-Item -Path $source -Destination $destination -Force
+        Write-Host "GTPL detected: Image Applied"
+    } else {
+        #Write-Warning "GTPL detected but source image not found: $source"
+    }
+}
+elseif ($company) {
 	Save-Base64Image -Base64String $base64Image -OutputFolder $outputFolder -BaseName "Wallpaper"
 } else {
     Write-Warning "Not GCPL Skipping image generation."
