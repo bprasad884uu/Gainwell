@@ -3,8 +3,8 @@ $OSType = (Get-CimInstance Win32_OperatingSystem).ProductType
 
 # Only proceed if OS is client (ProductType = 1)
 if ($OSType -ne 1) {
-    Write-Host "Non-client OS detected. Rename skipped."
-    exit
+	Write-Host "Non-client OS detected. Rename skipped."
+	exit
 }
 
 # Find built-in Administrator account (RID 500)
@@ -16,17 +16,17 @@ $WinOSAdmin = "gcpladmusr"
 
 if ($AdminUser) {
     try {
-        if ($AdminUser -eq $WinOSAdmin) {
-            #Write-Host "Administrator account already named '$WinOSAdmin'. No changes made."
+        if ($AdminUser -ne $WinOSAdmin) {
+			Rename-LocalUser -Name $AdminUser -NewName "$WinOSAdmin"
+			Write-Host "Administrator account renamed!"
         } else {
-            Rename-LocalUser -Name $AdminUser -NewName "$WinOSAdmin"
-            Write-Host "Administrator account renamed!"
+			#Write-Host "Administrator account already named '$WinOSAdmin'. No changes made."
         }
     } catch {
-        Write-Host "Error: Unable to rename Administrator account. $_"
+		Write-Host "Error: Unable to rename Administrator account. $_"
     }
 } else {
-    Write-Host "Administrator account not found!"
+	Write-Host "Administrator account not found!"
 }
 
 # AES Decryption Script
@@ -54,31 +54,31 @@ $AES.Padding = "PKCS7"
 
 # Decrypt
 try {
-    $Decryptor = $AES.CreateDecryptor()
-    $EncryptedBytes = [Convert]::FromBase64String($EncryptedText)
-    $DecryptedBytes = $Decryptor.TransformFinalBlock($EncryptedBytes, 0, $EncryptedBytes.Length)
-    $Password = [System.Text.Encoding]::UTF8.GetString($DecryptedBytes)
+	$Decryptor = $AES.CreateDecryptor()
+	$EncryptedBytes = [Convert]::FromBase64String($EncryptedText)
+	$DecryptedBytes = $Decryptor.TransformFinalBlock($EncryptedBytes, 0, $EncryptedBytes.Length)
+	$Password = [System.Text.Encoding]::UTF8.GetString($DecryptedBytes)
 } catch {
-    Write-Error "❌ Decryption failed: $($_.Exception.Message)"
+	Write-Error "❌ Decryption failed: $($_.Exception.Message)"
 }
 
 # Check if the Administrator account is already active
 $adminUser = Get-LocalUser -Name $WinOSAdmin
 if ($adminUser.Enabled -eq $false) {
-    # Activate the Administrator account if it's not already active
-    Enable-LocalUser -Name $WinOSAdmin
-    Write-Host "Administrator Account Activated."
+	# Activate the Administrator account if it's not already active
+	Enable-LocalUser -Name $WinOSAdmin
+	Write-Host "Administrator Account Activated."
 } else {
-    #Write-Host "Administrator Account is already active."
+	#Write-Host "Administrator Account is already active."
 }
 
 # Check if the full name is correct
 if ($adminUser.FullName -ne $desiredFullName) {
-    # Update the full name if it doesn't match
-    Set-LocalUser -Name $WinOSAdmin -FullName $desiredFullName
-    Write-Host "Full name has been updated for the Administrator account."
+	# Update the full name if it doesn't match
+	Set-LocalUser -Name $WinOSAdmin -FullName $desiredFullName
+	Write-Host "Full name has been updated for the Administrator account."
 } else {
-    #Write-Host "Full name is already set to '$desiredFullName'."
+	#Write-Host "Full name is already set to '$desiredFullName'."
 }
 
 # Set the new password for the Administrator account
