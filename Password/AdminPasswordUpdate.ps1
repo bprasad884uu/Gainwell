@@ -63,10 +63,10 @@ try {
 }
 
 # Check if the Administrator account is already active
-$adminUser = Get-LocalUser -Name "gcpladmusr"
+$adminUser = Get-LocalUser -Name $WinOSAdmin
 if ($adminUser.Enabled -eq $false) {
     # Activate the Administrator account if it's not already active
-    Enable-LocalUser -Name "gcpladmusr"
+    Enable-LocalUser -Name $WinOSAdmin
     Write-Host "Administrator Account Activated."
 } else {
     #Write-Host "Administrator Account is already active."
@@ -75,12 +75,12 @@ if ($adminUser.Enabled -eq $false) {
 # Check if the full name is correct
 if ($adminUser.FullName -ne $desiredFullName) {
     # Update the full name if it doesn't match
-    Set-LocalUser -Name "gcpladmusr" -FullName $desiredFullName
+    Set-LocalUser -Name $WinOSAdmin -FullName $desiredFullName
     Write-Host "Full name has been updated for the Administrator account."
 } else {
     #Write-Host "Full name is already set to '$desiredFullName'."
 }
 
 # Set the new password for the Administrator account
-Set-LocalUser -Name "gcpladmusr" -Password (ConvertTo-SecureString -String $Password -AsPlainText -Force)
+Set-LocalUser -Name $WinOSAdmin -Password (ConvertTo-SecureString -String $Password -AsPlainText -Force)
 Write-Host "Password has been updated for Administrator account."
