@@ -59,7 +59,7 @@ try {
 	$DecryptedBytes = $Decryptor.TransformFinalBlock($EncryptedBytes, 0, $EncryptedBytes.Length)
 	$Password = [System.Text.Encoding]::UTF8.GetString($DecryptedBytes)
 } catch {
-	Write-Error "❌ Decryption failed: $($_.Exception.Message)"
+	Write-Error "Decryption failed: $($_.Exception.Message)"
 }
 
 # Check if the Administrator account is already active
