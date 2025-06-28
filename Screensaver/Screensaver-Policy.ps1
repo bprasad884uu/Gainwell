@@ -9,7 +9,8 @@ $CompanyConfig = @(
 	@{ Name = "GCPL"; Domains = @("gainwellindia.com");			HostnamePatterns = @("GCPL") },
 	@{ Name = "GEPL"; Domains = @("gainwellengineering.com");	HostnamePatterns = @("GEPL") },
 	@{ Name = "RMSPL"; Domains = @();							HostnamePatterns = @("RMSPL") },
-	@{ Name = "ASPL"; Domains = @();							HostnamePatterns = @("ASPL") }
+	@{ Name = "ASPL"; Domains = @();							HostnamePatterns = @("ASPL") },
+	@{ Name = "GTPL"; Domains = @();							HostnamePatterns = @("GTPL") }
 )
 
 # Company detection logic
