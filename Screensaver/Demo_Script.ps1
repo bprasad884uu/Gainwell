@@ -40,7 +40,8 @@ $CompanyConfig = @(
 	@{ Name = "GEPL"; Domains = @("gainwellengineering.com");	HostnamePatterns = @("GEPL") },
 	@{ Name = "RMSPL"; Domains = @();							HostnamePatterns = @("RMSPL") },
 	@{ Name = "ASPL"; Domains = @();							HostnamePatterns = @("ASPL") },
-	@{ Name = "Gainwell"; Domains = @();						HostnamePatterns = @("Gainwell") }
+	@{ Name = "Gainwell"; Domains = @();						HostnamePatterns = @("Gainwell") },
+	@{ Name = "GTPL"; Domains = @();						HostnamePatterns = @("GTPL") }
 )
 
 # Company detection logic
@@ -72,7 +73,7 @@ if (-not $company -and $isDomainJoined) {
 
 if (-not $company) {
     Write-Error "Unable to detect company from domain or hostname. Please check the Hostname or Domain. Exiting..."
-    exit 1
+    return
 }
 
 #========================================
@@ -117,6 +118,10 @@ $base64LogoASPL = @'
 '@ -replace "`r`n", ""
 
 $base64LogoGainwell = @'
+<PASTE BASE64 Gainwell LOGO>
+'@ -replace "`r`n", ""
+
+$base64LogoGTPL = @'
 <PASTE BASE64 Gainwell LOGO>
 '@ -replace "`r`n", ""
 
@@ -176,6 +181,7 @@ $LogoMap = @{
 	"RMSPL" = $base64LogoRMSPL
 	"ASPL" = $base64LogoASPL
 	"Gainwell" = $base64LogoGainwell
+	"GTPL" = $base64LogoGTPL
 }
 
 # Backgrounds for each language
