@@ -66,7 +66,7 @@ function Save-Base64Image {
 # ==========================
 
 $hostname = $env:COMPUTERNAME
-$system = Get-WmiObject Win32_ComputerSystem
+$system = Get-CimInstance Win32_ComputerSystem
 $domain = $system.Domain
 $isDomainJoined = $system.PartOfDomain
 
