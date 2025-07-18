@@ -76,7 +76,8 @@ $isDomainJoined = $system.PartOfDomain
 
 # Dynamic company config
 $CompanyConfig = @(
-    @{ Name = "GCPL"; Domains = @("gainwellindia.com");       HostnamePatterns = @("GCPL", "ASPL") }
+    @{ Name = "GCPL"; Domains = @("gainwellindia.com");			HostnamePatterns = @("GCPL", "ASPL") },
+	@{ Name = "GTPL"; Domains = @("");       					HostnamePatterns = @("GTPL") }
 )
 
 # ==========================
@@ -134,7 +135,7 @@ $base64Image = @"
 # STEP 4: Set your Base64 image strings for each company
 #=======================================================
 
-if ($hostname -eq "GTPL") {
+if ($company -eq "GTPL") {
     # GTPL special case
     $source = "C:\Windows\Web\Wallpaper\Windows\img19.jpg"
     $destination = "C:\Windows\Web\Wallpaper\Windows\wallpaper.jpg"
