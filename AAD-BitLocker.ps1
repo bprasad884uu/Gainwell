@@ -36,7 +36,7 @@ if (-not ($tpmStatus.Present -and $tpmStatus.Enabled -and $tpmStatus.Activated))
     gpupdate /target:computer /force | Out-Null
 }
 
-# Encrypt all drives
+# Encrypt all drives (OS + Data)
 $drives = Get-BitLockerVolume | Where-Object { $_.VolumeType -in @('OperatingSystem','Data') }
 
 foreach ($drive in $drives) {
@@ -76,12 +76,34 @@ foreach ($drive in $drives) {
 
     Write-Host "$($drive.MountPoint) encryption completed!" -ForegroundColor Green
 
-    # Backup to Azure AD after full encryption
-    try {
-        BackupToAAD-BitLockerKeyProtector -MountPoint $drive.MountPoint -ErrorAction Stop
-        Write-Host "Recovery key backed up to Azure AD." -ForegroundColor Cyan
-    } catch {
-        Write-Host "Failed to back up to Azure AD: $_" -ForegroundColor Red
+    # Backup to Azure AD if possible
+    if (Get-Command BackupToAAD-BitLockerKeyProtector -ErrorAction SilentlyContinue) {
+        try {
+            # Get RecoveryPassword protector ID
+            $kpId = (Get-BitLockerVolume -MountPoint $drive.MountPoint).KeyProtector |
+                    Where-Object { $_.KeyProtectorType -eq "RecoveryPassword" } |
+                    Select-Object -First 1 -ExpandProperty KeyProtectorId
+
+            if ($kpId) {
+                BackupToAAD-BitLockerKeyProtector -MountPoint $drive.MountPoint -KeyProtectorId $kpId -ErrorAction Stop
+                Write-Host "Recovery key backed up to Azure AD." -ForegroundColor Cyan
+            }
+            else {
+                Write-Warning "No RecoveryPassword protector found for $($drive.MountPoint). Skipping AAD backup."
+            }
+        } catch {
+            Write-Warning "Backup to Azure AD failed: $_"
+        }
+    }
+    else {
+        Write-Warning "BackupToAAD-BitLockerKeyProtector not available. Using manage-bde to trigger AAD sync..."
+        try {
+            cmd /c "manage-bde -protectors -adbackup $($drive.MountPoint) -id *"
+            Write-Host "Recovery key backup attempted via manage-bde." -ForegroundColor Cyan
+        }
+        catch {
+            Write-Warning "Fallback AAD backup via manage-bde failed: $_"
+        }
     }
 }
 
