@@ -1,49 +1,88 @@
-# Run as Administrator
-# Encrypt all fixed drives and backup recovery keys to Azure AD
-
-# Check if TPM is available
-$TPM = Get-WmiObject -Namespace "Root\CIMv2\Security\MicrosoftTpm" -Class Win32_Tpm
-if (-not $TPM -or -not $TPM.IsActivated().IsActivated -or -not $TPM.IsEnabled().IsEnabled) {
-    Write-Host "TPM is not enabled or not present. BitLocker cannot be enabled." -ForegroundColor Red
-    exit 1
+# Run as admin check
+If (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+    [Security.Principal.WindowsBuiltInRole] "Administrator")) {
+    Write-Host "Run as Administrator!" -ForegroundColor Red
+    Exit
 }
 
-# Get all fixed drives
-$fixedDrives = Get-BitLockerVolume | Where-Object { $_.VolumeType -eq "Fixed Data" -or $_.VolumeType -eq "Operating System" }
+function Get-TPMStatus {
+    try {
+        $tpm = Get-WmiObject -Namespace "Root\CIMV2\Security\MicrosoftTpm" -Class Win32_Tpm -ErrorAction Stop
+        return @{
+            Present = $true
+            Enabled = $tpm.IsEnabled_InitialValue
+            Activated = $tpm.IsActivated_InitialValue
+        }
+    }
+    catch {
+        return @{
+            Present = $false
+            Enabled = $false
+            Activated = $false
+        }
+    }
+}
 
-foreach ($drive in $fixedDrives) {
-    $mountPoint = $drive.MountPoint
-    $status = $drive.ProtectionStatus
+$tpmStatus = Get-TPMStatus
+Write-Host "TPM Present: $($tpmStatus.Present) | Enabled: $($tpmStatus.Enabled) | Activated: $($tpmStatus.Activated)"
 
-    if ($status -eq 1) {
-        Write-Host "BitLocker already enabled on $mountPoint." -ForegroundColor Green
+# If no TPM → enable policy to bypass requirement
+if (-not ($tpmStatus.Present -and $tpmStatus.Enabled -and $tpmStatus.Activated)) {
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v UseTPM /t REG_DWORD /d 0 /f >$null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v UseTPMKey /t REG_DWORD /d 0 /f >$null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v UseTPMKeyPIN /t REG_DWORD /d 0 /f >$null
+    reg add "HKLM\SOFTWARE\Policies\Microsoft\FVE" /v EnableBDEWithNoTPM /t REG_DWORD /d 1 /f >$null
+    Write-Host "Applied No-TPM policy. Refreshing group policy..."
+    gpupdate /target:computer /force | Out-Null
+}
+
+# Encrypt all drives
+$drives = Get-BitLockerVolume | Where-Object { $_.VolumeType -in @('OperatingSystem','Data') }
+
+foreach ($drive in $drives) {
+    if ($drive.ProtectionStatus -eq 'On') {
+        Write-Host "$($drive.MountPoint) already encrypted."
         continue
     }
 
-    Write-Host "`nEnabling BitLocker on $mountPoint..." -ForegroundColor Cyan
-
-    # Choose protector based on volume type
-    if ($drive.VolumeType -eq "Operating System") {
-        Enable-BitLocker -MountPoint $mountPoint -EncryptionMethod XtsAes256 -TpmProtector
+    # Add correct protector
+    if ($drive.VolumeType -eq 'OperatingSystem') {
+        if ($tpmStatus.Present -and $tpmStatus.Enabled -and $tpmStatus.Activated) {
+            Write-Host "Enabling BitLocker with TPM on OS drive $($drive.MountPoint)..."
+            Enable-BitLocker -MountPoint $drive.MountPoint -EncryptionMethod XtsAes256 -UsedSpaceOnly:$false -TpmProtector
+        }
+        else {
+            Write-Host "Enabling BitLocker without TPM (Recovery Password) on OS drive $($drive.MountPoint)..."
+            $RecoveryPass = Add-BitLockerKeyProtector -MountPoint $drive.MountPoint -RecoveryPasswordProtector
+            Write-Host "Recovery Password: $($RecoveryPass.RecoveryPassword)"
+            Enable-BitLocker -MountPoint $drive.MountPoint -EncryptionMethod XtsAes256 -UsedSpaceOnly:$false -RecoveryPasswordProtector
+        }
     }
     else {
-        Enable-BitLocker -MountPoint $mountPoint -EncryptionMethod XtsAes256 -TpmProtector -UsedSpaceOnly
+        Write-Host "Enabling BitLocker with Recovery Password on data drive $($drive.MountPoint)..."
+        $RecoveryPass = Add-BitLockerKeyProtector -MountPoint $drive.MountPoint -RecoveryPasswordProtector
+        Write-Host "Recovery Password: $($RecoveryPass.RecoveryPassword)"
+        Enable-BitLocker -MountPoint $drive.MountPoint -EncryptionMethod XtsAes256 -UsedSpaceOnly:$false -RecoveryPasswordProtector
     }
 
-    # Backup recovery key to Azure AD
+    # Show progress until fully encrypted
+    Write-Host "Encrypting $($drive.MountPoint)..."
+    do {
+        Start-Sleep -Seconds 10
+        $status = Get-BitLockerVolume -MountPoint $drive.MountPoint
+        $percent = [math]::Round($status.EncryptionPercentage,2)
+        Write-Host ("  Status: {0}% ({1})" -f $percent, $status.VolumeStatus)
+    } until ($status.VolumeStatus -eq 'FullyEncrypted')
+
+    Write-Host "$($drive.MountPoint) encryption completed!" -ForegroundColor Green
+
+    # Backup to Azure AD after full encryption
     try {
-        BackupToAAD-BitLockerKeyProtector -MountPoint $mountPoint -ErrorAction Stop
-        Write-Host "Recovery key backed up to Azure AD for $mountPoint." -ForegroundColor Yellow
+        BackupToAAD-BitLockerKeyProtector -MountPoint $drive.MountPoint -ErrorAction Stop
+        Write-Host "Recovery key backed up to Azure AD." -ForegroundColor Cyan
+    } catch {
+        Write-Host "Failed to back up to Azure AD: $_" -ForegroundColor Red
     }
-    catch {
-        Write-Warning "Failed to back up recovery key for $mountPoint. Error: $_"
-    }
-
-    # Start encryption
-    Resume-BitLocker -MountPoint $mountPoint
-    Start-Sleep -Seconds 2
 }
 
-# Summary
-Write-Host "`nEncryption status summary:" -ForegroundColor Magenta
-Get-BitLockerVolume | Select-Object MountPoint, VolumeType, ProtectionStatus, EncryptionPercentage | Format-Table -AutoSize
+Write-Host "BitLocker encryption process completed for all drives." -ForegroundColor Green
