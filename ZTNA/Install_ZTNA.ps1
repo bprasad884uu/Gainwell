@@ -2,21 +2,15 @@
 # Install ZTNA
 # Author: Bishnu's Helper
 
-$DidUninstall = $false
 $DidInstall   = $false
+$downloadSuccess = $false
 
 Write-Host "`n=== Checking and Installing ZTNA (Zscaler) ==="
 
 $destination = "$env:TEMP\Zscaler-windows-installer-x64.msi"
-
 $ZTNA_setup = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/ZTNA/Zscaler-windows-4.7.0.61-installer-x64.msi"
 
-$downloadSuccess = $false
-# --- Try HttpClient (Fastest) ---
-if (-not ("System.Net.Http.HttpClient" -as [type])) {
-    Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll"
-}
-
+# --- Functions ---
 function Format-Size {
     param ([long]$bytes)
     switch ($bytes) {
@@ -35,6 +29,11 @@ function Format-Speed {
         { $_ -ge 1KB } { return "{0:N2} KB/s" -f ($bytesPerSecond / 1KB) }
         default        { return "{0:N2} B/s" -f $bytesPerSecond }
     }
+}
+
+# --- Download File ---
+if (-not ("System.Net.Http.HttpClient" -as [type])) {
+    Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll"
 }
 
 $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
@@ -58,12 +57,10 @@ if (-not $downloadSuccess) {
 
     $totalSize = $response.Content.Headers.ContentLength
     if ($null -eq $totalSize) {
-        Write-Host "`nWarning: File size unknown. Assuming large file to prevent errors." -ForegroundColor Yellow
-        $totalSize = 1024 * 1024 * 1024
+        Write-Host "`nWarning: Server did not return file size." -ForegroundColor Yellow
     }
 
     $fileStream = [System.IO.File]::OpenWrite($destination)
-
     $bufferSize = 10MB
     $buffer = New-Object byte[] ($bufferSize)
     $downloaded = 0
@@ -107,12 +104,11 @@ if (-not $downloadSuccess) {
     exit
 }
 
-# Check if ZTNA already installed
-$ZTNAInstalled = Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* 2>$null |
-    Where-Object { $_.DisplayName -like "*Zscaler*" }
-
-$ZTNAInstalled += Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* 2>$null |
-    Where-Object { $_.DisplayName -like "*Zscaler*" }
+# --- Check Existing Installation ---
+$ZTNAInstalled = @()
+$ZTNAInstalled += Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* 2>$null | Where-Object { $_.DisplayName -like "*Zscaler*" }
+$ZTNAInstalled += Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* 2>$null | Where-Object { $_.DisplayName -like "*Zscaler*" }
+$ZTNAInstalled += Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* 2>$null | Where-Object { $_.DisplayName -like "*Zscaler*" }
 
 if ($ZTNAInstalled.Count -gt 0) {
     Write-Host "`nZTNA (Zscaler) is already installed. Skipping installation."
@@ -125,6 +121,7 @@ if ($ZTNAInstalled.Count -gt 0) {
     Write-Host "ERROR: Installer not found at $destination"
 }
 
+# --- Post Install Actions ---
 if ($DidInstall) {
     Write-Host "`n✔ ZTNA (Zscaler) was installed."
 	Write-Host "`nStopping ZTNA processes..."
@@ -133,10 +130,14 @@ if ($DidInstall) {
         Get-Process -Name $proc -ErrorAction SilentlyContinue | Stop-Process -Force
     }
     Write-Host "`nZTNA processes stopped. They will start on next system boot or user login."
-	# Clean up installer
-    Remove-Item $destination -Force -ErrorAction SilentlyContinue
-} else {
+	} else {
     Write-Host "`nℹ No ZTNA installation performed."
+}
+
+# --- Always Cleanup ---
+if (Test-Path $destination) {
+    Remove-Item $destination -Force -ErrorAction SilentlyContinue
+    Write-Host "`nInstaller removed: $destination"
 }
 
 Write-Host "`n=== Script Finished ==="
