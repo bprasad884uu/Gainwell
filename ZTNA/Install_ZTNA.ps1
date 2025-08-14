@@ -123,7 +123,7 @@ if ($ZTNAInstalled.Count -gt 0) {
 
 # --- Post Install Actions ---
 if ($DidInstall) {
-    Write-Host "`n✔ ZTNA (Zscaler) was installed."
+    Write-Host "`nZTNA (Zscaler) was installed."
 	Write-Host "`nStopping ZTNA processes..."
     $ProcessesToKill = @("ZSAService", "ZSATray", "ZSATrayManager")
     foreach ($proc in $ProcessesToKill) {
@@ -131,7 +131,7 @@ if ($DidInstall) {
     }
     Write-Host "`nZTNA processes stopped. They will start on next system boot or user login."
 	} else {
-    Write-Host "`nℹ No ZTNA installation performed."
+    Write-Host "`nNo ZTNA installation performed."
 }
 
 # --- Always Cleanup ---
