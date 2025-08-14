@@ -115,28 +115,28 @@ $ZTNAInstalled += Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\
     Where-Object { $_.DisplayName -like "*Zscaler*" }
 
 if ($ZTNAInstalled.Count -gt 0) {
-    Write-Host "ZTNA (Zscaler) is already installed. Skipping installation."
+    Write-Host "`nZTNA (Zscaler) is already installed. Skipping installation."
 } elseif (Test-Path $destination) {
-    Write-Host "Installing ZTNA from: $destination"
+    Write-Host "`nInstalling ZTNA from: $destination"
     Start-Process "msiexec.exe" -ArgumentList "/i `"$destination`" /qn /norestart" -Wait
-    Write-Host "ZTNA installation completed."
+    Write-Host "`nZTNA installation completed."
     $DidInstall = $true
 } else {
     Write-Host "ERROR: Installer not found at $destination"
 }
 
 if ($DidInstall) {
-    Write-Host "✔ ZTNA (Zscaler) was installed."
-	Write-Host "Stopping ZTNA processes..."
+    Write-Host "`n✔ ZTNA (Zscaler) was installed."
+	Write-Host "`nStopping ZTNA processes..."
     $ProcessesToKill = @("ZSAService", "ZSATray", "ZSATrayManager")
     foreach ($proc in $ProcessesToKill) {
         Get-Process -Name $proc -ErrorAction SilentlyContinue | Stop-Process -Force
     }
-    Write-Host "ZTNA processes stopped. They will start on next system boot or user login."
+    Write-Host "`nZTNA processes stopped. They will start on next system boot or user login."
 	# Clean up installer
     Remove-Item $destination -Force -ErrorAction SilentlyContinue
 } else {
-    Write-Host "ℹ No ZTNA installation performed."
+    Write-Host "`nℹ No ZTNA installation performed."
 }
 
 Write-Host "`n=== Script Finished ==="
