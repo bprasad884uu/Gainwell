@@ -306,6 +306,7 @@ foreach ($path in $systemPaths) {
         try {
             takeown /F $path /A /R /D Y | Out-Null
             icacls $path /grant Administrators:F /T | Out-Null
+			Remove-Item -Path "C:\Windows.old" -Recurse -Force -ErrorAction SilentlyContinue
         } catch {
             Write-Host "Failed to reset permissions for $path ($($_.Exception.Message))" -ForegroundColor Red
         }
