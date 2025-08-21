@@ -349,7 +349,7 @@ function Clear-RecycleBin {
                 } else {
                     foreach ($item in $itemsToDelete) {
                         try {
-                            Remove-Item -Path $item.FullName -Recurse -Force -ErrorAction Stop
+                            Remove-Item -Path $item.FullName -Recurse -Force -ErrorAction SilentlyContinue
                             if ($item.PSIsContainer) {
                                 # Folders have no length
                                 $freed += 0
