@@ -265,10 +265,8 @@ foreach ($user in $userDirs) {
     # Combine paths
     $allPathsToClean = $userPaths + $knownAppCaches
 
-    foreach ($path in $allPathsToClean) {
-        Show-ProgressBar -Current $currentUserDir -Total $totalUserDirs -Message "Cleaning: $path"
-        $totalCleaned += Remove-JunkFiles -Paths @($path) -SectionName "User/App Cache: $path"
-    }
+    Show-ProgressBar -Current $currentUserDir -Total $totalUserDirs -Message "Cleaning User: $userProfile"
+    $totalCleaned += Remove-JunkFiles -Paths $allPathsToClean -SectionName "User and App Caches"
 }
 $systemPaths = @(
     "C:\Windows\Temp",
@@ -299,7 +297,7 @@ $currentSystemPath = 0
 
 foreach ($path in $systemPaths) {
     $currentSystemPath++
-    Show-ProgressBar -Current $currentSystemPath -Total $totalSystemPaths -Message "Cleaning System Paths:  $path"
+    Show-ProgressBar -Current $currentSystemPath -Total $totalSystemPaths -Message "Cleaning System Paths"
 
     # Special handling for Windows.old
     if ($path -eq "C:\Windows.old" -and (Test-Path $path) -and -not $DryRun) {
@@ -312,7 +310,7 @@ foreach ($path in $systemPaths) {
         }
     }
 
-    $totalCleaned += Remove-JunkFiles -Paths @($path) -SectionName "System Cleanup: $path"
+    $totalCleaned += Remove-JunkFiles -Paths @($path) -SectionName "System Cleanup"
 }
 
 function Clear-RecycleBin {
