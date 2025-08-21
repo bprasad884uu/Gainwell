@@ -24,7 +24,7 @@ function Show-Banner {
 (  _ \(  )/ ___)/ )( \(  ( \/ )( \
  ) _ ( )( \___ \) __ (/    /) \/ (
 (____/(__)(____/\_)(_/\_)__)\____/
-     BISHNU STYLE - DEEP CLEAN POWER MODE
+BISHNU STYLE - DEEP CLEAN POWER MODE
 "@ | Write-Host -ForegroundColor Cyan
 }
 
