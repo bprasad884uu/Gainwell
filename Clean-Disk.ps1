@@ -1,4 +1,4 @@
-<#
+<# 
 .SYNOPSIS
     Deep Disk Cleanup Script (ASCII Only, No GUI)
 .DESCRIPTION
@@ -14,8 +14,8 @@
 #>
 
 param(
-    [switch]$DryRun = $false,        # Set to $true to Enable DryRun by default
-    [switch]$TrimSSDs = $true        # New: Perform TRIM on SSDs after cleanup
+    [switch]$DryRun = $false,		# Set to $true to Enable DryRun by default
+	[switch]$TrimSSDs = $true		# New: Perform TRIM on SSDs after cleanup
 )
 
 function Show-Banner {
@@ -35,7 +35,10 @@ function Show-ProgressBar {
         [string]$Message = "Cleaning"
     )
 
-    if ($Total -eq 0) { return }
+    if ($Total -eq 0) {
+        #Write-Host "`r[>] No tasks to process. Skipping progress bar..." -ForegroundColor DarkGray
+        return
+    }
 
     $percent = [math]::Round(($Current / $Total) * 100)
     $barLength = 50
@@ -56,7 +59,7 @@ function Drive-Space {
     @{Name='TotalSize';Expression={[math]::Round($_.Size / 1GB, 2)}},
     @{Name='FreeSpace';Expression={[math]::Round($_.FreeSpace / 1GB, 2)}},
     @{Name='UsedSpace';Expression={[math]::Round(($_.Size - $_.FreeSpace) / 1GB, 2)}},
-    @{Name='Used%';Expression={[math]::Round((($_.Size - $_.FreeSpace) / $_.Size) * 100, 1)}}
+	@{Name='Used%';Expression={[math]::Round((($_.Size - $_.FreeSpace) / $_.Size) * 100, 1)}}
 }
 
 function Format-Size {
@@ -75,28 +78,37 @@ function Format-Size {
 function Report-Drive-Space {
     Get-CimInstance -Class Win32_LogicalDisk -Filter "DriveType=3" | ForEach-Object {
         $drive = $_
+
+        # Calculate percentage used and free
         $usedPercent = [math]::Round((($drive.Size - $drive.FreeSpace) / $drive.Size) * 100, 1)
         $freePercent = [math]::Round(($drive.FreeSpace / $drive.Size) * 100, 1)
 
+        # Assign status tags based on used space percentage
         if ($usedPercent -lt 80) {
-            $statusTag = "[OK]"; $statusColor = "Green"
+            $statusTag = "[OK]"
+            $statusColor = "Green"
         } elseif ($usedPercent -lt 90) {
-            $statusTag = "[WARNING]"; $statusColor = "Yellow"
+            $statusTag = "[WARNING]"
+            $statusColor = "Yellow"
         } else {
-            $statusTag = "[CRITICAL]"; $statusColor = "Red"
+            $statusTag = "[CRITICAL]"
+            $statusColor = "Red"
         }
 
+        # Output with formatted sizes and status
         Write-Host "`nDeviceID  : $($drive.DeviceID)" -ForegroundColor Cyan
         Write-Host "TotalSize : $(Format-Size $drive.Size)" -ForegroundColor White
         Write-Host "FreeSpace : $(Format-Size $drive.FreeSpace)" -ForegroundColor Green
         Write-Host "UsedSpace : $(Format-Size ($drive.Size - $drive.FreeSpace))" -ForegroundColor Yellow
 
+        # Used and Free percentages with appropriate coloring
         Write-Host "Used%     : " -NoNewline
         Write-Host "$usedPercent %" -ForegroundColor $statusColor
 
         Write-Host "Free%     : " -NoNewline
         Write-Host "$freePercent %" -ForegroundColor Green
 				
+		# Status with color
         Write-Host "`n[Status]   : " -NoNewline
         Write-Host "$statusTag" -ForegroundColor $statusColor
     }
@@ -145,6 +157,7 @@ function SSD-Optimize {
 }
 
 $beforeCleanUp = Report-Drives
+
 $global:startTime = Get-Date
 Show-Banner
 
@@ -376,27 +389,24 @@ if ($TrimSSDs) {
     SSD-Optimize
 }
 
-# --- After cleanup summary (fixed section) ---
 $totalMB = [math]::Round($totalCleaned / 1MB, 2)
 Write-Host "`n==============================" -ForegroundColor White
-
 if ($DryRun) {
-    Write-Host " DRY RUN COMPLETE — No files were deleted" -ForegroundColor Yellow
+    Write-Host " DRY RUN COMPLETE - No files were deleted" -ForegroundColor Yellow
     Write-Host " Potential space to free: $totalMB MB" -ForegroundColor Yellow
 } else {
     Write-Host " CLEANUP COMPLETE" -ForegroundColor Cyan
     Write-Host " Total disk space freed: $totalMB MB" -ForegroundColor Cyan
 }
-
 Write-Host "==============================" -ForegroundColor White
 
 if ($totalMB -eq 0 -and -not $DryRun) {
     Write-Host "`nNothing significant found to clean." -ForegroundColor DarkYellow
 }
 
-# --- Final report section ---
 $afterCleanup = Drive-Space
 
+# Show the Before and After available space
 foreach ($before in $beforeCleanup) {
     $after = $afterCleanup | Where-Object { $_.DeviceID -eq $before.DeviceID }
     if ($after) {
@@ -404,12 +414,15 @@ foreach ($before in $beforeCleanup) {
         $afterFree  = [decimal]$after.FreeSpace
         $diff       = $afterFree - $beforeFree
         $absDiff    = [math]::Abs($diff)
+
         $label = if ($diff -lt 0) { "Used" } else { "Freed" }
 
         if ($absDiff -lt 1) {
-            $diffValue = [math]::Round($absDiff * 1024, 1); $unit = "MB"
+            $diffValue = [math]::Round($absDiff * 1024, 1)
+            $unit = "MB"
         } else {
-            $diffValue = [math]::Round($absDiff, 3); $unit = "GB"
+            $diffValue = [math]::Round($absDiff, 3)
+            $unit = "GB"
         }
 
         Write-Host "`nDrive $($before.DeviceID):"
@@ -418,7 +431,7 @@ foreach ($before in $beforeCleanup) {
         Write-Host " Difference     - ${label}: $diffValue $unit`n"
     }
 }
-
+# Optional: Summarize drive-reported differences
 $sumOfDifferences = 0
 foreach ($before in $beforeCleanup) {
     $after = $afterCleanup | Where-Object { $_.DeviceID -eq $before.DeviceID }
@@ -429,25 +442,32 @@ foreach ($before in $beforeCleanup) {
 }
 
 Write-Host "`n------------------------------" -ForegroundColor DarkGray
+
 $sumOfDifferences = [math]::Round($sumOfDifferences, 2)
 $avgUsedPercent = ($afterCleanup | Measure-Object -Property 'Used%' -Average).Average
-
 Write-Host "`n[Summary Comparison]" -ForegroundColor White
 Write-Host " Reported per-drive freed space : $sumOfDifferences MB" -ForegroundColor Yellow
 Write-Host " Total deleted file size        : $totalMB MB" -ForegroundColor Cyan
 Write-Host " Difference (if any)            : $([math]::Round($totalMB - $sumOfDifferences, 2)) MB" -ForegroundColor Gray
 Write-Host " Avg. Drive Utilization After Cleanup : $([math]::Round($avgUsedPercent, 1))%" -ForegroundColor DarkCyan
-Write-Host "`n------------------------------" -ForegroundColor DarkGray
 
+Write-Host "`n------------------------------" -ForegroundColor DarkGray
 Report-Drive-Space
 
 $global:endTime = Get-Date
 $elapsedTime = $global:endTime - $global:startTime
 
+# Format elapsed time string based on non-zero values
 $timeParts = @()
-if ($elapsedTime.Hours -gt 0) { $timeParts += "$($elapsedTime.Hours) hour$((if ($elapsedTime.Hours -ne 1) { "s" }))" }
-if ($elapsedTime.Minutes -gt 0) { $timeParts += "$($elapsedTime.Minutes) minute$((if ($elapsedTime.Minutes -ne 1) { "s" }))" }
-if ($elapsedTime.Seconds -gt 0 -or $timeParts.Count -eq 0) { $timeParts += "$($elapsedTime.Seconds) second$((if ($elapsedTime.Seconds -ne 1) { "s" }))" }
+if ($elapsedTime.Hours -gt 0) {
+    $timeParts += "$($elapsedTime.Hours) hour" + ($(if ($elapsedTime.Hours -ne 1) { "s" }))
+}
+if ($elapsedTime.Minutes -gt 0) {
+    $timeParts += "$($elapsedTime.Minutes) minute" + ($(if ($elapsedTime.Minutes -ne 1) { "s" }))
+}
+if ($elapsedTime.Seconds -gt 0 -or $timeParts.Count -eq 0) {
+    $timeParts += "$($elapsedTime.Seconds) second" + ($(if ($elapsedTime.Seconds -ne 1) { "s" }))
+}
 $elapsedStr = $timeParts -join ", "
 
 Write-Host "`n==============================" -ForegroundColor White
