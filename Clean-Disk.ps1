@@ -268,7 +268,6 @@ foreach ($user in $userDirs) {
     Show-ProgressBar -Current $currentUserDir -Total $totalUserDirs -Message "Cleaning User: $userProfile"
     $totalCleaned += Remove-JunkFiles -Paths $allPathsToClean -SectionName "User and App Caches"
 }
-
 $systemPaths = @(
     "C:\Windows\Temp",
     "C:\Windows\Logs",
@@ -292,11 +291,24 @@ $systemPaths = @(
     "C:\Windows\Downloaded Program Files",
     "C:\ProgramData\Microsoft\Search\Data\Applications\Windows\Projects"
 )
+
 $totalSystemPaths = $systemPaths.Count
 $currentSystemPath = 0
+
 foreach ($path in $systemPaths) {
     $currentSystemPath++
     Show-ProgressBar -Current $currentSystemPath -Total $totalSystemPaths -Message "Cleaning System Paths"
+
+    # Special handling for Windows.old
+    if ($path -eq "C:\Windows.old" -and (Test-Path $path) -and -not $DryRun) {
+        try {
+            takeown /F $path /A /R /D Y | Out-Null
+            icacls $path /grant Administrators:F /T | Out-Null
+        } catch {
+            Write-Host "Failed to reset permissions for $path ($($_.Exception.Message))" -ForegroundColor Red
+        }
+    }
+
     $totalCleaned += Remove-JunkFiles -Paths @($path) -SectionName "System Cleanup"
 }
 
