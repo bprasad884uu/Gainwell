@@ -153,7 +153,7 @@ function SSD-Optimize {
         }
     }
 
-    Write-Host "`n[✔] SSD optimization completed." -ForegroundColor Cyan
+    Write-Host "`nSSD optimization completed." -ForegroundColor Cyan
 }
 
 $beforeCleanUp = Report-Drives
@@ -197,7 +197,7 @@ function Remove-JunkFiles {
                 $size = $item.Length
             }
             if ($DryRun) {
-                Write-Host "`r📝 (DryRun) Would delete: $($item.FullName)           " -ForegroundColor Gray -NoNewline
+                Write-Host "`r(DryRun) Would delete: $($item.FullName)           " -ForegroundColor Gray -NoNewline
                 $totalFreed += $size
             } else {
                 #Write-Host "`rFile Deleted: $($item.FullName)           " -ForegroundColor DarkGray -NoNewline
@@ -223,6 +223,7 @@ function Remove-JunkFiles {
 if (-not $DryRun) {
     Write-Host "`n==> Stopping Windows Update service..." -ForegroundColor Yellow
     Stop-Service wuauserv -Force -ErrorAction SilentlyContinue
+	Stop-Service usosvc -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
 }
 
@@ -316,7 +317,7 @@ function Clear-RecycleBin {
                 $items = Get-ChildItem -Path $recyclePath -Recurse -Force -ErrorAction SilentlyContinue
                 $totalItems += $items.Count
             } catch {
-                Write-Host "⚠️ Failed to count items in: $recyclePath ($($_.Exception.Message))" -ForegroundColor Yellow
+                Write-Host "Failed to count items in: $recyclePath ($($_.Exception.Message))" -ForegroundColor Yellow
             }
         }
     }
@@ -330,7 +331,7 @@ function Clear-RecycleBin {
                 $beforeSize = ($itemsToDelete | Measure-Object -Property Length -Sum).Sum
 
                 if ($DryRun) {
-                    Write-Host "📝 (DryRun) Would delete: $recyclePath" -ForegroundColor Gray
+                    Write-Host "(DryRun) Would delete: $recyclePath" -ForegroundColor Gray
                     $freed += $beforeSize
                 } else {
                     foreach ($item in $itemsToDelete) {
@@ -344,17 +345,17 @@ function Clear-RecycleBin {
                             }
                         } catch {
 								if (-not $_.Exception.Message.Contains("because it does not exist")) {
-									Write-Host "⚠️ Failed to delete item: $($item.FullName) ($($_.Exception.Message))" -ForegroundColor Yellow
+									Write-Host "Failed to delete item: $($item.FullName) ($($_.Exception.Message))" -ForegroundColor Yellow
 									}
 								}
                         $currentItem++
                         $percentComplete = if ($totalItems -gt 0) { ($currentItem / $totalItems) * 100 } else { 100 }
                         Write-Progress -PercentComplete $percentComplete -Activity "Cleaning Recycle Bin" -Status "Deleting items..." -CurrentOperation "$currentItem of $totalItems"
                     }
-                    Write-Host "🧹 Deleted: $recyclePath" -ForegroundColor DarkGray
+                    Write-Host "`nDeleted: $recyclePath" -ForegroundColor DarkGray
                 }
             } catch {
-                Write-Host "⚠️ Failed to delete from: $recyclePath ($($_.Exception.Message))" -ForegroundColor Yellow
+                Write-Host "`nFailed to delete from: $recyclePath ($($_.Exception.Message))" -ForegroundColor Yellow
             }
         }
     }
@@ -365,7 +366,7 @@ function Clear-RecycleBin {
             $shell = New-Object -ComObject Shell.Application
             $shell.NameSpace(0x0a).Self.InvokeVerb("R&efresh")
         } catch {
-            Write-Host "⚠️ Could not refresh Recycle Bin UI" -ForegroundColor Yellow
+            Write-Host "`nCould not refresh Recycle Bin UI" -ForegroundColor Yellow
         }
 
         $time = (Get-Date) - $start
@@ -381,6 +382,7 @@ $totalCleaned += Clear-RecycleBin
 if (-not $DryRun) {
     Write-Host "`n==> Restarting Windows Update service..." -ForegroundColor Yellow
     Start-Service wuauserv -ErrorAction SilentlyContinue
+	Start-Service usosvc -ErrorAction SilentlyContinue	
 }
 
 if ($TrimSSDs) {
@@ -399,7 +401,7 @@ if ($DryRun) {
 Write-Host "==============================" -ForegroundColor White
 
 if ($totalMB -eq 0 -and -not $DryRun) {
-    Write-Host "🧽 Nothing significant found to clean." -ForegroundColor DarkYellow
+    Write-Host "`nNothing significant found to clean." -ForegroundColor DarkYellow
 }
 
 $afterCleanup = Drive-Space
@@ -471,5 +473,5 @@ $elapsedStr = $timeParts -join ", "
 Write-Host "`n==============================" -ForegroundColor White
 Write-Host " Start Time : $($startTime.ToString('dd/MM/yyyy HH:mm:ss'))" -ForegroundColor Gray
 Write-Host " End Time   : $($endTime.ToString('dd/MM/yyyy HH:mm:ss'))" -ForegroundColor Gray
-Write-Host "`n🚀 System cleaned in: $elapsedStr" -ForegroundColor DarkYellow
+Write-Host "`nSystem cleaned in: $elapsedStr" -ForegroundColor DarkYellow
 Write-Host "==============================" -ForegroundColor White
