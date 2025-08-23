@@ -474,7 +474,7 @@ foreach ($path in $cleanupPaths) {
             Remove-Item "$path\*" -Recurse -Force -ErrorAction SilentlyContinue
             Write-OK "Cleaned: $path"
         } catch {
-            Write-Warning "Failed to clean $path: $($_.Exception.Message)"
+            Write-Warning ("Failed to clean {0}: {1}" -f $path, $_.Exception.Message)
         }
     } else {
         Write-Info "Path not found: $path"
