@@ -404,22 +404,61 @@ Set-RegValue "HKLM:\SYSTEM\Maps" "AutoUpdateEnabled" 0
 Write-OK "Location tracking disabled."
 
 # -------------------------
-# Disk Cleanup (all drives, no popups)
+# Disk Cleanup (all drives)
 # -------------------------
 Write-Info "Running Disk Cleanup and component store cleanup on all drives..."
+
+# Disable low disk space notifications
+Set-RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" "NoLowDiskSpaceChecks" 1 "DWord"
+Write-Info "Disabled Windows low disk space notifications."
 
 # Get all filesystem drives
 $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { Test-Path $_.Root }
 
+# Define all Disk Cleanup options by registry VolumeCaches
+$volumeCaches = @(
+    "Active Setup Temp Folders",
+    "Downloaded Program Files",
+    "Temporary Internet Files",
+    "Temporary Files",
+    "Thumbnails",
+    "Recycle Bin",
+    "System error memory dump files",
+    "System error minidump files",
+    "Temporary Windows installation files",
+    "Windows Update Cleanup",
+    "Delivery Optimization Files",
+    "Device Driver Packages",
+    "Previous Windows Installations",
+    "Language Resource Files",
+    "Windows upgrade log files"
+)
+
 foreach ($drive in $drives) {
+    Write-Info "`n[*] Cleaning drive $($drive.Root)"
+
     try {
-        Write-Host "`n[*] Cleaning drive $($drive.Root)" -ForegroundColor Cyan
+        # Enable all cleanup options
+        foreach ($cache in $volumeCaches) {
+            $regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\$cache"
+            if (Test-Path $regPath) {
+                Set-RegValue $regPath "StateFlags0001" 2 "DWord"
+                Write-Info "Enabled cleanup for $cache"
+            } else {
+                Write-Warning "Registry key not found for $cache"
+            }
+        }
+
         # Run cleanmgr silently
-        Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/d $($drive.Root.TrimEnd('\')) /VERYLOWDISK" -Wait -NoNewWindow
+        Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/d $($drive.Root.TrimEnd('\')) /sagerun:1 /VERYLOWDISK" -Wait -NoNewWindow
+        Write-OK "Disk Cleanup completed for $($drive.Root)"
+        
     } catch {
         Write-Warning "Failed Disk Cleanup on $($drive.Root): $($_.Exception.Message)"
     }
 }
+
+Write-OK "`n[*] Full Silent Disk Cleanup finished on all drives."
 
 # Component Store cleanup (system drive only)
 try {
