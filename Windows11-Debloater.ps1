@@ -417,67 +417,18 @@ Write-Info "Disabled Windows low disk space notifications."
 # -------------------------------
 $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { Test-Path $_.Root }
 
-$legacyVolumeCaches = @(
-    "Active Setup Temp Folders",
-    "Downloaded Program Files",
-    "Temporary Internet Files",
-    "Temporary Files",
-    "Thumbnails",
-    "Recycle Bin",
-    "System error memory dump files",
-    "System error minidump files",
-    "Temporary Windows installation files",
-    "Windows Update Cleanup",
-    "Delivery Optimization Files",
-    "Device Driver Packages",
-    "Previous Windows Installations",
-    "Language Resource Files",
-    "Windows upgrade log files"
-)
-
 foreach ($drive in $drives) {
-    Write-Info "`n[*] Cleaning drive $($drive.Root) with legacy Disk Cleanup..."
-    foreach ($cache in $legacyVolumeCaches) {
-        $regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\$cache"
-        if (Test-Path $regPath) {
-            Set-RegValue $regPath "StateFlags0001" 2 "DWord"
-            Write-Info "Enabled cleanup for $cache"
-        } else {
-            Write-Info "Registry key not found for $cache (skipping)"
-        }
-    }
-
     try {
-        Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/d $($drive.Root.TrimEnd('\')) /sagerun:1 /VERYLOWDISK" -Wait -NoNewWindow
-        Write-OK "Legacy Disk Cleanup completed for $($drive.Root)"
+        Write-Host "`n[*] Cleaning drive $($drive.Root)" -ForegroundColor Cyan
+
+        # Configure a temporary registry key to store cleanup settings for this drive
+        $sageName = "SilentClean_$($drive.Name.TrimEnd(':'))"
+        $regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches"
+
+        # Run cleanmgr silently using /VERYLOWDISK
+        Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/d $($drive.Root.TrimEnd('\')) /VERYLOWDISK /sagerun:$sageName" -Wait -NoNewWindow
     } catch {
-        Write-Warning "Legacy Disk Cleanup failed on $($drive.Root): $($_.Exception.Message)"
-    }
-}
-
-# -------------------------------
-# Modern: Direct folder cleanup
-# -------------------------------
-$cleanupPaths = @(
-    "$env:SystemRoot\Temp",
-    "$env:LOCALAPPDATA\Temp",
-    "$env:SystemRoot\Prefetch",
-    "$env:SystemRoot\SoftwareDistribution\Download",
-    "$env:SystemRoot\Logs",
-    "$env:SystemRoot\Panther",
-    "$env:SystemDrive\$Recycle.Bin"
-)
-
-foreach ($path in $cleanupPaths) {
-    if (Test-Path $path) {
-        try {
-            Remove-Item "$path\*" -Recurse -Force -ErrorAction SilentlyContinue
-            Write-OK "Cleaned: $path"
-        } catch {
-            Write-Warning ("Failed to clean {0}: {1}" -f $path, $_.Exception.Message)
-        }
-    } else {
-        Write-Info "Path not found: $path"
+        Write-Warning "Failed Disk Cleanup on $($drive.Root): $($_.Exception.Message)"
     }
 }
 
