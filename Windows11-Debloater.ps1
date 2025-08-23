@@ -902,4 +902,4 @@ $edgeTweaks = @(
 foreach($t in $edgeTweaks){ Set-RegValue $t.Path $t.Name $t.Value }
 Write-OK "Edge debloat applied."
 
-Write-Host "`n=== All steps completed. A restart is recommended. ===" -ForegroundColor Green
+Write-Host "`nAll steps completed. A restart is recommended." -ForegroundColor Green
