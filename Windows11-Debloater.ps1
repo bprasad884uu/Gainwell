@@ -318,14 +318,14 @@ $afterCleanup = Drive-Space
 Report-Drive-Space -Before $beforeCleanup -After $afterCleanup
 
 # -------------------------
-# Disable Consumer Features & Activity History
+# Disable Consumer Features and Activity History
 # -------------------------
 Write-Info "Disabling consumer features and activity history..."
 Set-RegValue "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" "DisableConsumerFeatures" 1
 Set-RegValue "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" "EnableActivityFeed" 0
 Set-RegValue "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" "PublishUserActivities" 0
 Set-RegValue "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" "UploadUserActivities" 0
-Write-OK "Consumer features & activity history disabled."
+Write-OK "Consumer features and activity history disabled."
 
 # -------------------------
 # Disable Telemetry (incl. tasks)
@@ -419,14 +419,14 @@ Write-OK "Location tracking disabled."
 # Disk Cleanup (optional)
 # -------------------------
 #if ($RunDiskCleanup){
-  Write-Info "Running Disk Cleanup & component store cleanup..."
+  Write-Info "Running Disk Cleanup and component store cleanup..."
   try { Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/d C: /VERYLOWDISK" -Wait } catch {}
   try { Start-Process -FilePath "Dism.exe" -ArgumentList "/online /Cleanup-Image /StartComponentCleanup /ResetBase" -Wait } catch {}
   Write-OK "Disk cleanup completed."
 #}
 
 # -------------------------
-# PowerShell 7 Setup & Integration
+# PowerShell 7 Setup and Integration
 # -------------------------
 Write-Info "Checking PowerShell 7 installation..."
 $pwshPath = "C:\Program Files\PowerShell\7\pwsh.exe"
