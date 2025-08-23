@@ -416,14 +416,31 @@ Set-RegValue "HKLM:\SYSTEM\Maps" "AutoUpdateEnabled" 0
 Write-OK "Location tracking disabled."
 
 # -------------------------
-# Disk Cleanup (optional)
+# Disk Cleanup (all drives, no popups)
 # -------------------------
-#if ($RunDiskCleanup){
-  Write-Info "Running Disk Cleanup and component store cleanup..."
-  try { Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/d C: /VERYLOWDISK" -Wait } catch {}
-  try { Start-Process -FilePath "Dism.exe" -ArgumentList "/online /Cleanup-Image /StartComponentCleanup /ResetBase" -Wait } catch {}
-  Write-OK "Disk cleanup completed."
-#}
+Write-Info "Running Disk Cleanup and component store cleanup on all drives..."
+
+# Get all filesystem drives
+$drives = Get-PSDrive -PSProvider FileSystem | Where-Object { Test-Path $_.Root }
+
+foreach ($drive in $drives) {
+    try {
+        Write-Host "`n[*] Cleaning drive $($drive.Root)" -ForegroundColor Cyan
+        # Run cleanmgr silently
+        Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/d $($drive.Root.TrimEnd('\')) /VERYLOWDISK" -Wait -NoNewWindow
+    } catch {
+        Write-Warning "Failed Disk Cleanup on $($drive.Root): $($_.Exception.Message)"
+    }
+}
+
+# Component Store cleanup (system drive only)
+try {
+    Start-Process -FilePath "Dism.exe" -ArgumentList "/online /Cleanup-Image /StartComponentCleanup /ResetBase" -Wait -NoNewWindow
+} catch {
+    Write-Warning "Failed component store cleanup: $($_.Exception.Message)"
+}
+
+Write-OK "Disk cleanup completed on all drives."
 
 # -------------------------
 # PowerShell 7 Setup and Integration
