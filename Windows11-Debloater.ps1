@@ -409,7 +409,7 @@ Write-OK "Location tracking disabled."
 Write-Info "Running Disk Cleanup and component store cleanup on all drives..."
 
 # Disable low disk space notifications
-Set-RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" "NoLowDiskSpaceChecks" 1 "DWord"
+Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoLowDiskSpaceChecks" -Value 1 -Type DWord
 Write-Info "Disabled Windows low disk space notifications."
 
 # -------------------------------
@@ -440,7 +440,7 @@ foreach ($drive in $drives) {
     foreach ($cache in $legacyVolumeCaches) {
         $regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\$cache"
         if (Test-Path $regPath) {
-            Set-RegValue $regPath "StateFlags0001" 2 "DWord"
+            Set-ItemProperty -Path $regPath -Name "StateFlags0001" -Value 2 -Type DWord
             Write-Info "Enabled cleanup for $cache"
         } else {
             Write-Info "Registry key not found for $cache (skipping)"
