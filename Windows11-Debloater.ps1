@@ -412,11 +412,12 @@ Write-Info "Running Disk Cleanup and component store cleanup on all drives..."
 Set-RegValue "HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer" "NoLowDiskSpaceChecks" 1 "DWord"
 Write-Info "Disabled Windows low disk space notifications."
 
-# Get all filesystem drives
+# -------------------------------
+# Legacy: cleanmgr.exe
+# -------------------------------
 $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { Test-Path $_.Root }
 
-# Define all Disk Cleanup options by registry VolumeCaches
-$volumeCaches = @(
+$legacyVolumeCaches = @(
     "Active Setup Temp Folders",
     "Downloaded Program Files",
     "Temporary Internet Files",
@@ -435,39 +436,63 @@ $volumeCaches = @(
 )
 
 foreach ($drive in $drives) {
-    Write-Info "`n[*] Cleaning drive $($drive.Root)"
+    Write-Info "`n[*] Cleaning drive $($drive.Root) with legacy Disk Cleanup..."
+    foreach ($cache in $legacyVolumeCaches) {
+        $regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\$cache"
+        if (Test-Path $regPath) {
+            Set-RegValue $regPath "StateFlags0001" 2 "DWord"
+            Write-Info "Enabled cleanup for $cache"
+        } else {
+            Write-Info "Registry key not found for $cache (skipping)"
+        }
+    }
 
     try {
-        # Enable all cleanup options
-        foreach ($cache in $volumeCaches) {
-            $regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\$cache"
-            if (Test-Path $regPath) {
-                Set-RegValue $regPath "StateFlags0001" 2 "DWord"
-                Write-Info "Enabled cleanup for $cache"
-            } else {
-                Write-Warning "Registry key not found for $cache"
-            }
-        }
-
-        # Run cleanmgr silently
         Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/d $($drive.Root.TrimEnd('\')) /sagerun:1 /VERYLOWDISK" -Wait -NoNewWindow
-        Write-OK "Disk Cleanup completed for $($drive.Root)"
-        
+        Write-OK "Legacy Disk Cleanup completed for $($drive.Root)"
     } catch {
-        Write-Warning "Failed Disk Cleanup on $($drive.Root): $($_.Exception.Message)"
+        Write-Warning "Legacy Disk Cleanup failed on $($drive.Root): $($_.Exception.Message)"
     }
 }
 
-Write-OK "`n[*] Full Silent Disk Cleanup finished on all drives."
+# -------------------------------
+# Modern: Direct folder cleanup
+# -------------------------------
+$cleanupPaths = @(
+    "$env:SystemRoot\Temp",
+    "$env:LOCALAPPDATA\Temp",
+    "$env:SystemRoot\Prefetch",
+    "$env:SystemRoot\SoftwareDistribution\Download",
+    "$env:SystemRoot\Logs",
+    "$env:SystemRoot\Panther",
+    "$env:SystemDrive\$Recycle.Bin"
+)
 
-# Component Store cleanup (system drive only)
-try {
-    Start-Process -FilePath "Dism.exe" -ArgumentList "/online /Cleanup-Image /StartComponentCleanup /ResetBase" -Wait -NoNewWindow
-} catch {
-    Write-Warning "Failed component store cleanup: $($_.Exception.Message)"
+foreach ($path in $cleanupPaths) {
+    if (Test-Path $path) {
+        try {
+            Remove-Item "$path\*" -Recurse -Force -ErrorAction SilentlyContinue
+            Write-OK "Cleaned: $path"
+        } catch {
+            Write-Warning "Failed to clean $path: $($_.Exception.Message)"
+        }
+    } else {
+        Write-Info "Path not found: $path"
+    }
 }
 
-Write-OK "Disk cleanup completed on all drives."
+# -------------------------------
+# Modern: DISM Component Cleanup
+# -------------------------------
+try {
+    Write-Info "Running DISM Component Cleanup..."
+    Start-Process -FilePath "Dism.exe" -ArgumentList "/Online /Cleanup-Image /StartComponentCleanup /ResetBase /Quiet /NoRestart" -Wait -NoNewWindow
+    Write-OK "DISM cleanup completed."
+} catch {
+    Write-Warning "DISM cleanup failed: $($_.Exception.Message)"
+}
+
+Write-OK "`n[*] Full Silent Disk Cleanup finished on all drives."
 
 # -------------------------
 # PowerShell 7 Setup and Integration
