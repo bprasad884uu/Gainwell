@@ -467,7 +467,7 @@ if (-not (Test-Path $pwshPath)){
     } catch { Write-Err "Failed to install PowerShell 7 from MSI." }
   }
 } else {
-  Write-Info "PowerShell 7 detected – attempting upgrade via winget..."
+  Write-Info "PowerShell 7 detected - attempting upgrade via winget..."
   try { winget upgrade --id Microsoft.Powershell --source winget -e --accept-package-agreements --accept-source-agreements } catch {}
 }
 
@@ -486,7 +486,7 @@ if (Test-Path $terminalSettings){
       Write-OK "Windows Terminal default set to PowerShell 7."
     } else { Write-Warn "PowerShell 7 profile not found in Terminal settings.json" }
   } catch { Write-Warn "Failed to update Windows Terminal settings: $_" }
-} else { Write-Warn "Windows Terminal settings.json not found – skipping." }
+} else { Write-Warn "Windows Terminal settings.json not found - skipping." }
 
 # Replace Win+X menu PowerShell links
 Write-Info "Updating Win+X menu to use PowerShell 7..."
@@ -617,7 +617,7 @@ Configure-BackgroundApps -Undo:$UndoBackgroundApps
 # -------------------------
 Write-Info "Configuring service startup types (Aggressive=$($Aggressive.IsPresent))..."
 
-# Define your full list (deduped) – defaults balanced for stability
+# Define your full list (deduped) - defaults balanced for stability
 $services = @(
   [PSCustomObject]@{ Name = "AJRouter"; StartupType = if($Aggressive){"Disabled"} else {"Manual"} },
   [PSCustomObject]@{ Name = "ALG"; StartupType = "Manual" },
