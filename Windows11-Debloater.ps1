@@ -126,35 +126,6 @@ function Set-ServiceStartupType {
 Ensure-Admin
 
 # -------------------------
-# Create Restore Point
-# -------------------------
-<#Write-Info "Enabling System Restore and creating a restore point (if none today)..."
-try {
-  Enable-ComputerRestore -Drive "$env:SystemDrive" -ErrorAction SilentlyContinue
-} catch { Write-Warn "Enable-ComputerRestore: $_" }
-
-try {
-  $exists = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" -Name "SystemRestorePointCreationFrequency" -ErrorAction SilentlyContinue
-  if ($null -eq $exists){
-    Write-Info 'Allowing multiple restore points per day...'
-    Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore" -Name "SystemRestorePointCreationFrequency" -Value 0 -Type DWord -Force | Out-Null
-  }
-} catch {}
-
-try { Import-Module Microsoft.PowerShell.Management -ErrorAction Stop } catch { Write-Err "Failed to load Microsoft.PowerShell.Management: $_"; exit 1 }
-
-try {
-  $existingRestorePoints = Get-ComputerRestorePoint | Where-Object { $_.CreationTime.Date -eq (Get-Date).Date }
-  if ($existingRestorePoints.Count -eq 0){
-    $description = "System Restore Point created by Winutil"
-    Checkpoint-Computer -Description $description -RestorePointType "MODIFY_SETTINGS"
-    Write-OK "System Restore Point Created Successfully"
-  } else {
-    Write-Info "A restore point already exists for today – skipping."
-  }
-} catch { Write-Warn "Failed to create or read restore points: $_" }
-#>
-# -------------------------
 # Delete Temporary Files
 # -------------------------
 Write-Info "Clearing temp folders..."
