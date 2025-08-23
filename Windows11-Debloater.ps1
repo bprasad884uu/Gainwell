@@ -127,10 +127,205 @@ Ensure-Admin
 # -------------------------
 # Delete Temporary Files
 # -------------------------
-Write-Info "Clearing temp folders..."
-try { Get-ChildItem -Path "C:\Windows\Temp" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue } catch {}
-try { Get-ChildItem -Path $env:TEMP -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue } catch {}
-Write-OK "Temp cleanup done."
+<# 
+.SYNOPSIS
+    GenAI-Optimized Deep Disk Cleanup
+.DESCRIPTION
+    Cleans system/user temp files, caches, logs, Delivery Optimization, Windows.old, Recycle Bin.
+    Optimizes SSDs with TRIM.
+#>
+
+# -------------------------
+# Parameters
+# -------------------------
+param(
+    [switch]$TrimSSDs = $true
+)
+
+# -------------------------
+# Functions
+# -------------------------
+function Show-Banner {
+    @"
+ ____  __  ____  _  _  __ _  _  _ 
+(  _ \(  )/ ___)/ )( \(  ( \/ )( \
+ ) _ ( )( \___ \) __ (/    /) \/ (
+(____/(__)(____/\_)(_/\_)__)\____/
+BISHNU STYLE - DEEP CLEAN POWER MODE
+"@ | Write-Host -ForegroundColor Cyan
+}
+
+function Show-Progress {
+    param([int]$Current, [int]$Total, [string]$Message)
+    $percent = if ($Total -gt 0) { [math]::Round(($Current / $Total) * 100, 0) } else { 100 }
+    Write-Progress -Activity "Deep Disk Cleanup" -Status $Message -PercentComplete $percent
+}
+
+function Drive-Space {
+    Get-CimInstance -Class Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID, 
+        @{Name='TotalSize';Expression={[math]::Round($_.Size / 1GB, 2)}},
+        @{Name='FreeSpace';Expression={[math]::Round($_.FreeSpace / 1GB, 2)}},
+        @{Name='UsedSpace';Expression={[math]::Round(($_.Size - $_.FreeSpace) / 1GB, 2)}},
+        @{Name='Used%';Expression={[math]::Round((($_.Size - $_.FreeSpace) / $_.Size) * 100, 1)}}
+}
+
+function Format-Size {
+    param([long]$size)
+    if ($size -ge 1TB) { return "{0:N2} TB" -f ($size / 1TB) }
+    if ($size -ge 1GB) { return "{0:N2} GB" -f ($size / 1GB) }
+    if ($size -ge 1MB) { return "{0:N2} MB" -f ($size / 1MB) }
+    if ($size -ge 1KB) { return "{0:N2} KB" -f ($size / 1KB) }
+    return "$size bytes"
+}
+
+function Remove-JunkFiles {
+    param([string[]]$Paths, [string]$SectionName)
+    $totalFreed = 0
+    $items = @()
+    foreach ($path in $Paths) { if (Test-Path $path) { $items += Get-ChildItem -Path $path -Recurse -Force -ErrorAction SilentlyContinue } }
+    $totalItems = $items.Count
+    $currentItem = 0
+
+    foreach ($item in $items) {
+        $currentItem++
+        Show-Progress -Current $currentItem -Total $totalItems -Message "Removing: $SectionName"
+        try {
+            if (-not $item.PSIsContainer) { $size = $item.Length } else { $size = 0 }
+            Remove-Item $item.FullName -Force -Recurse -ErrorAction SilentlyContinue
+            $totalFreed += $size
+        } catch {}
+    }
+    return $totalFreed
+}
+
+function Clear-RecycleBin {
+    $freed = 0
+    $drives = Get-PSDrive -PSProvider FileSystem
+    foreach ($drive in $drives) {
+        $recyclePath = Join-Path $drive.Root '$Recycle.Bin'
+        if (Test-Path $recyclePath) {
+            $items = Get-ChildItem -Path $recyclePath -Recurse -Force -ErrorAction SilentlyContinue
+            foreach ($item in $items) {
+                try { Remove-Item $item.FullName -Recurse -Force -ErrorAction SilentlyContinue; if (-not $item.PSIsContainer) { $freed += $item.Length } } catch {}
+            }
+        }
+    }
+    return $freed
+}
+
+function SSD-Optimize {
+    $ssds = Get-PhysicalDisk | Where-Object { $_.MediaType -eq 'SSD' }
+    foreach ($disk in $ssds) {
+        $diskNumber = (Get-Disk | Where-Object { $_.FriendlyName -eq $disk.FriendlyName }).Number
+        $partitions = Get-Partition -DiskNumber $diskNumber
+        foreach ($partition in $partitions) {
+            if ($partition.DriveLetter) { Optimize-Volume -DriveLetter $partition.DriveLetter -ReTrim }
+        }
+    }
+}
+
+function Report-Drive-Space {
+    param([array]$Before, [array]$After)
+    foreach ($before in $Before) {
+        $after = $After | Where-Object { $_.DeviceID -eq $before.DeviceID }
+        if ($after) {
+            $diff = [decimal]$after.FreeSpace - [decimal]$before.FreeSpace
+            $label = if ($diff -lt 0) { "Used" } else { "Freed" }
+            $diffValue = if ([math]::Abs($diff) -lt 1) { [math]::Round([math]::Abs($diff) * 1024, 1); "MB" } else { [math]::Round([math]::Abs($diff),3); "GB" }
+            Write-Host "Drive $($before.DeviceID): $label $diffValue"
+        }
+    }
+}
+
+# -------------------------
+# Main Script
+# -------------------------
+$beforeCleanup = Drive-Space
+$totalCleaned = 0
+Show-Banner
+
+# -------------------------
+# User Directories Cleanup
+# -------------------------
+$userDirs = Get-ChildItem "C:\Users" -Directory
+$currentUserDir = 0
+$totalUserDirs = $userDirs.Count
+
+foreach ($user in $userDirs) {
+    $currentUserDir++
+    $userProfile = $user.FullName
+    $userPaths = @(
+        "$userProfile\AppData\Local\Temp",
+        "$userProfile\AppData\Roaming\Microsoft\Windows\Recent",
+        "$userProfile\AppData\Local\Microsoft\Windows\Explorer",
+        "$userProfile\AppData\Local\Microsoft\Windows\INetCache",
+        "$userProfile\AppData\Local\Microsoft\Edge\User Data\Default\Cache",
+        "$userProfile\AppData\Local\Google\Chrome\User Data\Default\Cache",
+        "$userProfile\AppData\Local\Mozilla\Firefox\Profiles",
+        "$userProfile\AppData\Local\D3DSCache"
+    )
+    $knownAppCaches = @(
+        "$userProfile\AppData\Roaming\Microsoft\Teams\Cache",
+        "$userProfile\AppData\Roaming\Microsoft\Teams\GPUCache",
+        "$userProfile\AppData\Roaming\Microsoft\Teams\Service Worker\CacheStorage",
+        "$userProfile\AppData\Local\Microsoft\OneDrive\logs",
+        "$userProfile\AppData\Local\Adobe\CameraRaw\Cache",
+        "$userProfile\AppData\Roaming\Adobe\Common\Media Cache Files",
+        "$userProfile\AppData\Roaming\Adobe\Common\Media Cache"
+    )
+    $totalCleaned += Remove-JunkFiles -Paths ($userPaths + $knownAppCaches) -SectionName "User and App Caches"
+}
+
+# -------------------------
+# System Paths Cleanup
+# -------------------------
+$systemPaths = @(
+    "C:\Windows\Temp",
+    "C:\Windows\Logs",
+    "C:\Windows\Prefetch",
+    "C:\Windows\SoftwareDistribution\Download",
+    "C:\Windows\SoftwareDistribution\DataStore",
+    "C:\Windows\System32\LogFiles",
+    "C:\ProgramData\Microsoft\Windows Defender\Scans\History",
+    "C:\ProgramData\Microsoft\Windows Defender\Scans\mpcache",
+    "C:\Windows\Panther",
+    "C:\$WINDOWS.~BT",
+    "C:\$Windows.~WS",
+    "C:\Windows.old",
+    "C:\ProgramData\USOPrivate\UpdateStore",
+    "C:\ProgramData\Microsoft\Windows\WER",
+    "C:\ProgramData\Microsoft\Diagnosis",
+    "C:\Program Files\rempl",
+    "C:\Windows\ServiceProfiles\NetworkService\AppData\Local\Temp",
+    "C:\Windows\ServiceProfiles\LocalService\AppData\Local\Temp",
+    "C:\Windows\DeliveryOptimization",
+    "C:\Windows\Downloaded Program Files",
+    "C:\ProgramData\Microsoft\Search\Data\Applications\Windows\Projects"
+)
+
+foreach ($path in $systemPaths) { $totalCleaned += Remove-JunkFiles -Paths @($path) -SectionName "System Cleanup" }
+
+# -------------------------
+# Recycle Bin Cleanup
+# -------------------------
+$totalCleaned += Clear-RecycleBin
+
+# -------------------------
+# SSD TRIM
+# -------------------------
+if ($TrimSSDs) { SSD-Optimize }
+
+# -------------------------
+# Cleanup Summary
+# -------------------------
+$totalMB = [math]::Round($totalCleaned / 1MB, 2)
+Write-Host "`n=============================="
+Write-Host " CLEANUP COMPLETE" -ForegroundColor Cyan
+Write-Host " Total disk space freed: $totalMB MB"
+Write-Host "=============================="
+
+$afterCleanup = Drive-Space
+Report-Drive-Space -Before $beforeCleanup -After $afterCleanup
 
 # -------------------------
 # Disable Consumer Features & Activity History
