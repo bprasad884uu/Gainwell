@@ -54,7 +54,7 @@ param(
 
 # If no parameters provided, set default ones
 if ($PSBoundParameters.Count -eq 0) {
-    Write-Host "[i] No parameters specified — running with defaults: Aggressive, RunDiskCleanup, LaptopMode, DisableRecall" -ForegroundColor Yellow
+    Write-Host "[i] No parameters specified - running with defaults: Aggressive, RunDiskCleanup, LaptopMode, DisableRecall" -ForegroundColor Yellow
     $Aggressive     = $true
     $RunDiskCleanup = $true
     $LaptopMode     = $true
