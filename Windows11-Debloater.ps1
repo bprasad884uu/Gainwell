@@ -145,15 +145,6 @@ param(
 # -------------------------
 # Functions
 # -------------------------
-function Show-Banner {
-    @"
- ____  __  ____  _  _  __ _  _  _ 
-(  _ \(  )/ ___)/ )( \(  ( \/ )( \
- ) _ ( )( \___ \) __ (/    /) \/ (
-(____/(__)(____/\_)(_/\_)__)\____/
-BISHNU STYLE - DEEP CLEAN POWER MODE
-"@ | Write-Host -ForegroundColor Cyan
-}
 
 function Show-Progress {
     param([int]$Current, [int]$Total, [string]$Message)
@@ -242,7 +233,6 @@ function Report-Drive-Space {
 # -------------------------
 $beforeCleanup = Drive-Space
 $totalCleaned = 0
-Show-Banner
 
 # -------------------------
 # User Directories Cleanup
