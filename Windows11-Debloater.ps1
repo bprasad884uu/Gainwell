@@ -49,7 +49,8 @@ param(
   [switch]$DisableRecall,
   [switch]$EnableRecall,
   [switch]$UndoTeredo,
-  [switch]$UndoBackgroundApps
+  [switch]$UndoBackgroundApps,
+  [switch]$TrimSSDs
 )
 
 # If no parameters provided, set default ones
@@ -59,6 +60,7 @@ if ($PSBoundParameters.Count -eq 0) {
     $RunDiskCleanup = $true
     $LaptopMode     = $true
     $DisableRecall  = $true
+	$TrimSSDs		= $true
 }
 
 # -------------------------
@@ -127,20 +129,6 @@ Ensure-Admin
 # -------------------------
 # Delete Temporary Files
 # -------------------------
-<# 
-.SYNOPSIS
-    GenAI-Optimized Deep Disk Cleanup
-.DESCRIPTION
-    Cleans system/user temp files, caches, logs, Delivery Optimization, Windows.old, Recycle Bin.
-    Optimizes SSDs with TRIM.
-#>
-
-# -------------------------
-# Parameters
-# -------------------------
-param(
-    [switch]$TrimSSDs = $true
-)
 
 # -------------------------
 # Functions
