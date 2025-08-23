@@ -3,7 +3,6 @@
   Windows 11 All-in-One Debloat / Hardening Script (with Aggressive option)
 
 .DESCRIPTION
-  - Creates a restore point
   - Cleans temp folders
   - Disables consumer features, activity history, telemetry (incl. tasks)
   - Optional "Aggressive" mode for service trimming
