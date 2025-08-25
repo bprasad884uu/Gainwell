@@ -464,12 +464,12 @@ Write-OK "GameDVR disabled."
 # -------------------------
 # Location Tracking
 # -------------------------
-Write-Info "Disabling Location Tracking..."
+<#Write-Info "Disabling Location Tracking..."
 Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location" "Value" "Deny" "String"
 Set-RegValue "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Sensor\Overrides\{BFA794E4-F964-4FDB-90F6-51056BFE4B44}" "SensorPermissionState" 0
 Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Services\lfsvc\Service\Configuration" "Status" 0
 Set-RegValue "HKLM:\SYSTEM\Maps" "AutoUpdateEnabled" 0
-Write-OK "Location tracking disabled."
+Write-OK "Location tracking disabled."#>
 
 # -------------------------
 # Disk Cleanup (all drives)
