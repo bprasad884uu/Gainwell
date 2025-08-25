@@ -234,11 +234,10 @@ function SSD-Optimize {
 }
 
 $beforeCleanUp = Report-Drives
-$global:startTime = Get-Date
 
 function Remove-JunkFiles {
     param([string[]]$Paths, [string]$SectionName)
-    $totalFreed = 0; $startTime = Get-Date; $items = @()
+    $totalFreed = 0; $items = @()
 
     Write-Host "`n=== [$SectionName] ===" -ForegroundColor Cyan
 
@@ -261,9 +260,8 @@ function Remove-JunkFiles {
         } catch { Write-Warning "`nCould not delete: $($item.FullName)" }
     }
 
-    $duration = (Get-Date) - $startTime
     $freedMB = [math]::Round($totalFreed / 1MB, 2)
-    Write-Host "`n-- Freed $freedMB MB in section '$SectionName' (Time taken: $("{0:N2}" -f $duration.TotalSeconds) sec)" -ForegroundColor Green
+    Write-Host "`n-- Freed $freedMB MB in section '$SectionName'" -ForegroundColor Green
 
     return $totalFreed
 }
@@ -383,10 +381,6 @@ Write-Host "==============================" -ForegroundColor White
 
 $afterCleanup = Drive-Space
 Report-Drive-Space
-
-$global:endTime = Get-Date
-$elapsedTime = $global:endTime - $global:startTime
-Write-Host "`nSystem cleaned in: $([math]::Round($elapsedTime.TotalMinutes, 2)) minutes" -ForegroundColor DarkYellow
 
 # -------------------------
 # Disable Consumer Features and Activity History
