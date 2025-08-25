@@ -976,7 +976,7 @@ Write-OK "Edge debloat applied."
 #======================
 #Final Result
 #======================
-
+$totalMB = [math]::Round($totalCleaned / 1MB, 2)
 Write-Host "`n==============================" -ForegroundColor White
     Write-Host " CLEANUP COMPLETE" -ForegroundColor Cyan
     Write-Host " Total disk space freed: $totalMB MB" -ForegroundColor Cyan
