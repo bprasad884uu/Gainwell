@@ -130,26 +130,43 @@ Ensure-Admin
 # Delete Temporary Files
 # -------------------------
 
-# -------------------------
-# Functions
-# -------------------------
+function Show-ProgressBar {
+    param (
+        [int]$Current,
+        [int]$Total,
+        [string]$Message = "Cleaning"
+    )
 
-function Show-Progress {
-    param([int]$Current, [int]$Total, [string]$Message)
-    $percent = if ($Total -gt 0) { [math]::Round(($Current / $Total) * 100, 0) } else { 100 }
-    Write-Progress -Activity "Deep Disk Cleanup" -Status $Message -PercentComplete $percent
+    if ($Total -eq 0) { return }
+
+    $percent = [math]::Round(($Current / $Total) * 100)
+    $barLength = 50
+    $filledLength = [math]::Floor(($percent / 100) * $barLength)
+    $bar = '=' * $filledLength + '>' + ' ' * ($barLength - $filledLength)
+    Write-Host -NoNewline "`r[$bar] $percent% - $Message" -ForegroundColor Magenta
+}
+
+function Report-Drives {
+    Get-CimInstance -Class Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID, 
+    @{Name='TotalSize';Expression={[math]::Round($_.Size / 1GB, 2)}},
+    @{Name='FreeSpace';Expression={[math]::Round($_.FreeSpace / 1GB, 2)}},
+    @{Name='UsedSpace';Expression={[math]::Round(($_.Size - $_.FreeSpace) / 1GB, 2)}}
 }
 
 function Drive-Space {
     Get-CimInstance -Class Win32_LogicalDisk -Filter "DriveType=3" | Select-Object DeviceID, 
-        @{Name='TotalSize';Expression={[math]::Round($_.Size / 1GB, 2)}},
-        @{Name='FreeSpace';Expression={[math]::Round($_.FreeSpace / 1GB, 2)}},
-        @{Name='UsedSpace';Expression={[math]::Round(($_.Size - $_.FreeSpace) / 1GB, 2)}},
-        @{Name='Used%';Expression={[math]::Round((($_.Size - $_.FreeSpace) / $_.Size) * 100, 1)}}
+    @{Name='TotalSize';Expression={[math]::Round($_.Size / 1GB, 2)}},
+    @{Name='FreeSpace';Expression={[math]::Round($_.FreeSpace / 1GB, 2)}},
+    @{Name='UsedSpace';Expression={[math]::Round(($_.Size - $_.FreeSpace) / 1GB, 2)}},
+    @{Name='Used%';Expression={[math]::Round((($_.Size - $_.FreeSpace) / $_.Size) * 100, 1)}}
 }
 
 function Format-Size {
-    param([long]$size)
+    param (
+        [Parameter(Mandatory=$true)]
+        [long]$size
+    )
+    
     if ($size -ge 1TB) { return "{0:N2} TB" -f ($size / 1TB) }
     if ($size -ge 1GB) { return "{0:N2} GB" -f ($size / 1GB) }
     if ($size -ge 1MB) { return "{0:N2} MB" -f ($size / 1MB) }
@@ -157,81 +174,112 @@ function Format-Size {
     return "$size bytes"
 }
 
-function Remove-JunkFiles {
-    param([string[]]$Paths, [string]$SectionName)
-    $totalFreed = 0
-    $items = @()
-    foreach ($path in $Paths) { if (Test-Path $path) { $items += Get-ChildItem -Path $path -Recurse -Force -ErrorAction SilentlyContinue } }
-    $totalItems = $items.Count
-    $currentItem = 0
+function Report-Drive-Space {
+    Get-CimInstance -Class Win32_LogicalDisk -Filter "DriveType=3" | ForEach-Object {
+        $drive = $_
+        $usedPercent = [math]::Round((($drive.Size - $drive.FreeSpace) / $drive.Size) * 100, 1)
+        $freePercent = [math]::Round(($drive.FreeSpace / $drive.Size) * 100, 1)
 
-    foreach ($item in $items) {
-        $currentItem++
-        Show-Progress -Current $currentItem -Total $totalItems -Message "Removing: $SectionName"
-        try {
-            if (-not $item.PSIsContainer) { $size = $item.Length } else { $size = 0 }
-            Remove-Item $item.FullName -Force -Recurse -ErrorAction SilentlyContinue
-            $totalFreed += $size
-        } catch {}
-    }
-    return $totalFreed
-}
+        if ($usedPercent -lt 80) { $statusTag = "[OK]"; $statusColor = "Green" }
+        elseif ($usedPercent -lt 90) { $statusTag = "[WARNING]"; $statusColor = "Yellow" }
+        else { $statusTag = "[CRITICAL]"; $statusColor = "Red" }
 
-function Clear-RecycleBin {
-    $freed = 0
-    $drives = Get-PSDrive -PSProvider FileSystem
-    foreach ($drive in $drives) {
-        $recyclePath = Join-Path $drive.Root '$Recycle.Bin'
-        if (Test-Path $recyclePath) {
-            $items = Get-ChildItem -Path $recyclePath -Recurse -Force -ErrorAction SilentlyContinue
-            foreach ($item in $items) {
-                try { Remove-Item $item.FullName -Recurse -Force -ErrorAction SilentlyContinue; if (-not $item.PSIsContainer) { $freed += $item.Length } } catch {}
-            }
-        }
+        Write-Host "`nDeviceID  : $($drive.DeviceID)" -ForegroundColor Cyan
+        Write-Host "TotalSize : $(Format-Size $drive.Size)" -ForegroundColor White
+        Write-Host "FreeSpace : $(Format-Size $drive.FreeSpace)" -ForegroundColor Green
+        Write-Host "UsedSpace : $(Format-Size ($drive.Size - $drive.FreeSpace))" -ForegroundColor Yellow
+        Write-Host "Used%     : " -NoNewline; Write-Host "$usedPercent %" -ForegroundColor $statusColor
+        Write-Host "Free%     : " -NoNewline; Write-Host "$freePercent %" -ForegroundColor Green
+        Write-Host "`n[Status]   : " -NoNewline; Write-Host "$statusTag" -ForegroundColor $statusColor
     }
-    return $freed
 }
 
 function SSD-Optimize {
     $ssds = Get-PhysicalDisk | Where-Object { $_.MediaType -eq 'SSD' }
+
+    if ($ssds.Count -eq 0) {
+        Write-Host "`n[!] No SSD found." -ForegroundColor Red
+        return
+    }
+
+    Write-Host "`n[+] SSD TRIM Optimization..." -ForegroundColor Cyan
+
+    $totalDisks = $ssds.Count; $index = 0
+
     foreach ($disk in $ssds) {
+        $index++
+        Show-ProgressBar -Current $index -Total $totalDisks -Message "Optimizing Disk"
+        Write-Host "`nSSD found: $($disk.FriendlyName)" -ForegroundColor Yellow
+
+        $trimStatus = fsutil behavior query DisableDeleteNotify
+        if ($trimStatus -notmatch 'DisableDeleteNotify = 0') {
+            Write-Host "Enabling TRIM..." -ForegroundColor Cyan
+            fsutil behavior set DisableDeleteNotify 0 | Out-Null
+            Write-Host "TRIM has been enabled." -ForegroundColor Green
+        } else {
+            Write-Host "TRIM is already enabled." -ForegroundColor Green
+        }
+
         $diskNumber = (Get-Disk | Where-Object { $_.FriendlyName -eq $disk.FriendlyName }).Number
-        $partitions = Get-Partition -DiskNumber $diskNumber
-        foreach ($partition in $partitions) {
-            if ($partition.DriveLetter) { Optimize-Volume -DriveLetter $partition.DriveLetter -ReTrim }
+        foreach ($partition in Get-Partition -DiskNumber $diskNumber) {
+            if ($partition.DriveLetter) {
+                Write-Host "Performing manual TRIM on drive $($partition.DriveLetter)..." -ForegroundColor Cyan
+                Optimize-Volume -DriveLetter $partition.DriveLetter -ReTrim
+                Write-Host "`nManual TRIM completed on drive $($partition.DriveLetter)." -ForegroundColor Green
+            }
         }
     }
+
+    Write-Host "`nSSD optimization completed." -ForegroundColor Cyan
 }
 
-function Report-Drive-Space {
-    param([array]$Before, [array]$After)
-    foreach ($before in $Before) {
-        $after = $After | Where-Object { $_.DeviceID -eq $before.DeviceID }
-        if ($after) {
-            $diff = [decimal]$after.FreeSpace - [decimal]$before.FreeSpace
-            $label = if ($diff -lt 0) { "Used" } else { "Freed" }
-            $diffValue = if ([math]::Abs($diff) -lt 1) { [math]::Round([math]::Abs($diff) * 1024, 1); "MB" } else { [math]::Round([math]::Abs($diff),3); "GB" }
-            Write-Host "Drive $($before.DeviceID): $label $diffValue"
+$beforeCleanUp = Report-Drives
+$global:startTime = Get-Date
+Show-Banner
+
+function Remove-JunkFiles {
+    param([string[]]$Paths, [string]$SectionName)
+    $totalFreed = 0; $startTime = Get-Date; $items = @()
+
+    Write-Host "`n=== [$SectionName] ===" -ForegroundColor Cyan
+
+    foreach ($path in $Paths) {
+        if (Test-Path $path) {
+            try { $items += Get-ChildItem -Path $path -Recurse -Force -ErrorAction SilentlyContinue } 
+            catch { Write-Warning "Access denied: $path" }
         }
     }
+
+    $totalItems = $items.Count; $currentItem = 0
+
+    foreach ($item in $items) {
+        $currentItem++
+        Show-ProgressBar -Current $currentItem -Total $totalItems -Message "Removing: $SectionName"
+        try {
+            $size = if (-not $item.PSIsContainer) { $item.Length } else { 0 }
+            Remove-Item $item.FullName -Force -Recurse -ErrorAction SilentlyContinue
+            $totalFreed += $size
+        } catch { Write-Warning "`nCould not delete: $($item.FullName)" }
+    }
+
+    $duration = (Get-Date) - $startTime
+    $freedMB = [math]::Round($totalFreed / 1MB, 2)
+    Write-Host "`n-- Freed $freedMB MB in section '$SectionName' (Time taken: $("{0:N2}" -f $duration.TotalSeconds) sec)" -ForegroundColor Green
+
+    return $totalFreed
 }
 
-# -------------------------
-# Main Script
-# -------------------------
-$beforeCleanup = Drive-Space
+Write-Host "`n==> Stopping Windows Update service..." -ForegroundColor Yellow
+Stop-Service wuauserv -Force -ErrorAction SilentlyContinue
+Stop-Service usosvc -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+
 $totalCleaned = 0
-
-# -------------------------
-# User Directories Cleanup
-# -------------------------
 $userDirs = Get-ChildItem "C:\Users" -Directory
-$currentUserDir = 0
-$totalUserDirs = $userDirs.Count
+$totalUserDirs = $userDirs.Count; $currentUserDir = 0
 
 foreach ($user in $userDirs) {
-    $currentUserDir++
-    $userProfile = $user.FullName
+    $currentUserDir++; $userProfile = $user.FullName
     $userPaths = @(
         "$userProfile\AppData\Local\Temp",
         "$userProfile\AppData\Roaming\Microsoft\Windows\Recent",
@@ -251,12 +299,12 @@ foreach ($user in $userDirs) {
         "$userProfile\AppData\Roaming\Adobe\Common\Media Cache Files",
         "$userProfile\AppData\Roaming\Adobe\Common\Media Cache"
     )
-    $totalCleaned += Remove-JunkFiles -Paths ($userPaths + $knownAppCaches) -SectionName "User and App Caches"
+    $allPathsToClean = $userPaths + $knownAppCaches
+
+    Show-ProgressBar -Current $currentUserDir -Total $totalUserDirs -Message "Cleaning User: $userProfile"
+    $totalCleaned += Remove-JunkFiles -Paths $allPathsToClean -SectionName "User and App Caches"
 }
 
-# -------------------------
-# System Paths Cleanup
-# -------------------------
 $systemPaths = @(
     "C:\Windows\Temp",
     "C:\Windows\Logs",
@@ -281,29 +329,65 @@ $systemPaths = @(
     "C:\ProgramData\Microsoft\Search\Data\Applications\Windows\Projects"
 )
 
-foreach ($path in $systemPaths) { $totalCleaned += Remove-JunkFiles -Paths @($path) -SectionName "System Cleanup" }
+$currentSystemPath = 0
+foreach ($path in $systemPaths) {
+    $currentSystemPath++
+    Show-ProgressBar -Current $currentSystemPath -Total $systemPaths.Count -Message "Cleaning System Paths"
+    if ($path -eq "C:\Windows.old" -and (Test-Path $path)) {
+        try {
+            takeown /F $path /A /R /D Y | Out-Null
+            icacls $path /grant Administrators:F /T | Out-Null
+            Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+        } catch { Write-Host "Failed to reset permissions for $path ($($_.Exception.Message))" -ForegroundColor Red }
+    }
+    $totalCleaned += Remove-JunkFiles -Paths @($path) -SectionName "System Cleanup"
+}
 
-# -------------------------
-# Recycle Bin Cleanup
-# -------------------------
+function Clear-RecycleBin {
+    $freed = 0; $totalItems = 0; $currentItem = 0
+    $drives = Get-PSDrive -PSProvider FileSystem
+
+    foreach ($drive in $drives) {
+        $recyclePath = Join-Path $drive.Root '$Recycle.Bin'
+        if (Test-Path $recyclePath) { $totalItems += (Get-ChildItem -Path $recyclePath -Recurse -Force -ErrorAction SilentlyContinue).Count }
+    }
+
+    foreach ($drive in $drives) {
+        $recyclePath = Join-Path $drive.Root '$Recycle.Bin'
+        if (Test-Path $recyclePath) {
+            foreach ($item in Get-ChildItem -Path $recyclePath -Recurse -Force -ErrorAction SilentlyContinue) {
+                try { Remove-Item -Path $item.FullName -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+                $currentItem++
+                $percentComplete = if ($totalItems -gt 0) { ($currentItem / $totalItems) * 100 } else { 100 }
+                Write-Progress -PercentComplete $percentComplete -Activity "Cleaning Recycle Bin" -Status "Deleting items..." -CurrentOperation "$currentItem of $totalItems"
+            }
+        }
+    }
+
+    try { $shell = New-Object -ComObject Shell.Application; $shell.NameSpace(0x0a).Self.InvokeVerb("R&efresh") } catch {}
+    return $freed
+}
+
 $totalCleaned += Clear-RecycleBin
 
-# -------------------------
-# SSD TRIM
-# -------------------------
+Write-Host "`n==> Restarting Windows Update service..." -ForegroundColor Yellow
+Start-Service wuauserv -ErrorAction SilentlyContinue
+Start-Service usosvc -ErrorAction SilentlyContinue
+
 if ($TrimSSDs) { SSD-Optimize }
 
-# -------------------------
-# Cleanup Summary
-# -------------------------
 $totalMB = [math]::Round($totalCleaned / 1MB, 2)
-Write-Host "`n=============================="
+Write-Host "`n==============================" -ForegroundColor White
 Write-Host " CLEANUP COMPLETE" -ForegroundColor Cyan
-Write-Host " Total disk space freed: $totalMB MB"
-Write-Host "=============================="
+Write-Host " Total disk space freed: $totalMB MB" -ForegroundColor Cyan
+Write-Host "==============================" -ForegroundColor White
 
 $afterCleanup = Drive-Space
-Report-Drive-Space -Before $beforeCleanup -After $afterCleanup
+Report-Drive-Space
+
+$global:endTime = Get-Date
+$elapsedTime = $global:endTime - $global:startTime
+Write-Host "`nSystem cleaned in: $([math]::Round($elapsedTime.TotalMinutes, 2)) minutes" -ForegroundColor DarkYellow
 
 # -------------------------
 # Disable Consumer Features and Activity History
