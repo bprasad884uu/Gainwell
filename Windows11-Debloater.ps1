@@ -973,6 +973,42 @@ $edgeTweaks = @(
 foreach($t in $edgeTweaks){ Set-RegValue $t.Path $t.Name $t.Value }
 Write-OK "Edge debloat applied."
 
+# -------------------------
+# Clear Run dialog MRU history
+# -------------------------
+$runMRURelativePath = "Software\Microsoft\Windows\CurrentVersion\Explorer\RunMRU"
+$hku = "Registry::HKEY_USERS"
+
+# Get ALL subkeys (including system accounts and classes)
+$sids = Get-ChildItem $hku
+
+foreach ($sid in $sids) {
+    $runMRUPath = Join-Path $sid.PSPath $runMRURelativePath
+
+    if (Test-Path $runMRUPath) {
+        try {
+            # Remove all values except MRUList
+            $values = Get-ItemProperty -Path $runMRUPath | Select-Object -Property * -ExcludeProperty MRUList
+            foreach ($property in $values.PSObject.Properties.Name) {
+                if ($property -notmatch "^(PSPath|PSParentPath|PSChildName|PSDrive|PSProvider)$") {
+                    Remove-ItemProperty -Path $runMRUPath -Name $property -ErrorAction SilentlyContinue
+                }
+            }
+
+            # Clear MRUList value
+            Set-ItemProperty -Path $runMRUPath -Name "MRUList" -Value ""
+
+            Write-Output "Cleared Run MRU history for hive: $($sid.PSChildName)"
+        }
+        catch {
+            Write-Warning "Failed to clear Run MRU for hive: $($sid.PSChildName) - $_"
+        }
+    }
+    else {
+        Write-Output "No RunMRU key found for hive: $($sid.PSChildName)"
+    }
+}
+
 #======================
 #Final Result
 #======================
