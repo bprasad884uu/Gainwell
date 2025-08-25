@@ -373,15 +373,6 @@ Start-Service usosvc -ErrorAction SilentlyContinue
 
 if ($TrimSSDs) { SSD-Optimize }
 
-$totalMB = [math]::Round($totalCleaned / 1MB, 2)
-Write-Host "`n==============================" -ForegroundColor White
-Write-Host " CLEANUP COMPLETE" -ForegroundColor Cyan
-Write-Host " Total disk space freed: $totalMB MB" -ForegroundColor Cyan
-Write-Host "==============================" -ForegroundColor White
-
-$afterCleanup = Drive-Space
-Report-Drive-Space
-
 # -------------------------
 # Disable Consumer Features and Activity History
 # -------------------------
@@ -981,5 +972,72 @@ $edgeTweaks = @(
 )
 foreach($t in $edgeTweaks){ Set-RegValue $t.Path $t.Name $t.Value }
 Write-OK "Edge debloat applied."
+
+#======================
+#Final Result
+#======================
+
+Write-Host "`n==============================" -ForegroundColor White
+    Write-Host " CLEANUP COMPLETE" -ForegroundColor Cyan
+    Write-Host " Total disk space freed: $totalMB MB" -ForegroundColor Cyan
+Write-Host "==============================" -ForegroundColor White
+
+if ($totalMB -eq 0) {
+    Write-Host "`nNothing significant found to clean." -ForegroundColor DarkYellow
+}
+
+$afterCleanup = Drive-Space
+
+# Show the Before and After available space
+foreach ($before in $beforeCleanup) {
+    $after = $afterCleanup | Where-Object { $_.DeviceID -eq $before.DeviceID }
+    if ($after) {
+        $beforeFree = [decimal]$before.FreeSpace
+        $afterFree  = [decimal]$after.FreeSpace
+        $diff       = $afterFree - $beforeFree
+        $absDiff    = [math]::Abs($diff)
+
+        $label = if ($diff -lt 0) { "Used" } else { "Freed" }
+
+        if ($absDiff -lt 1) {
+            $diffValue = [math]::Round($absDiff * 1024, 1)
+            $unit = "MB"
+        } else {
+            $diffValue = [math]::Round($absDiff, 3)
+            $unit = "GB"
+        }
+
+        Write-Host "`nDrive $($before.DeviceID):"
+        Write-Host " Before Cleanup - Free Space: $beforeFree GB"
+        Write-Host " After Cleanup  - Free Space: $afterFree GB"
+        Write-Host " Difference     - ${label}: $diffValue $unit`n"
+    }
+}
+# Optional: Summarize drive-reported differences
+$sumOfDifferences = 0
+foreach ($before in $beforeCleanup) {
+    $after = $afterCleanup | Where-Object { $_.DeviceID -eq $before.DeviceID }
+    if ($after) {
+        $diff = [decimal]$after.FreeSpace - [decimal]$before.FreeSpace
+        $sumOfDifferences += $diff * 1024  # Convert GB diff to MB
+    }
+}
+
+Write-Host "`n------------------------------" -ForegroundColor DarkGray
+
+$sumOfDifferences = [math]::Round($sumOfDifferences, 2)
+$avgUsedPercent = ($afterCleanup | Measure-Object -Property 'Used%' -Average).Average
+Write-Host "`n[Summary Comparison]" -ForegroundColor White
+Write-Host " Reported per-drive freed space : $sumOfDifferences MB" -ForegroundColor Yellow
+Write-Host " Total deleted file size        : $totalMB MB" -ForegroundColor Cyan
+Write-Host " Difference (if any)            : $([math]::Round($totalMB - $sumOfDifferences, 2)) MB" -ForegroundColor Gray
+Write-Host " Avg. Drive Utilization After Cleanup : $([math]::Round($avgUsedPercent, 1))%" -ForegroundColor DarkCyan
+
+Write-Host "`n------------------------------" -ForegroundColor DarkGray
+Report-Drive-Space
+
+Write-Host "`n==============================" -ForegroundColor White
+Write-Host "`nSystem cleaned" -ForegroundColor DarkYellow
+Write-Host "==============================" -ForegroundColor White
 
 Write-OK "All steps completed. A restart is recommended."
