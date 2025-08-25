@@ -235,7 +235,6 @@ function SSD-Optimize {
 
 $beforeCleanUp = Report-Drives
 $global:startTime = Get-Date
-Show-Banner
 
 function Remove-JunkFiles {
     param([string[]]$Paths, [string]$SectionName)
