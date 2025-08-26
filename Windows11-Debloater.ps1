@@ -618,10 +618,10 @@ if ($LaptopMode){
   Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\238C9FA8-0AAD-41ED-83F4-97BE242C8F20\7bc4a2f9-d8fc-4469-b07b-33eb785aaca0" "Attributes" 2
   Set-RegValue "HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerSettings\abfc2519-3608-4c2a-94ea-171b0ed546ab\94ac6d29-73ce-41a6-809f-6363ba21b47e" "Attributes" 2
   try {
-    Start-Process -FilePath powercfg -ArgumentList "/change standby-timeout-ac 60" -NoNewWindow -Wait
+    Start-Process -FilePath powercfg -ArgumentList "/change standby-timeout-ac 0" -NoNewWindow -Wait
     Start-Process -FilePath powercfg -ArgumentList "/change standby-timeout-dc 60" -NoNewWindow -Wait
-    Start-Process -FilePath powercfg -ArgumentList "/change monitor-timeout-ac 10" -NoNewWindow -Wait
-    Start-Process -FilePath powercfg -ArgumentList "/change monitor-timeout-dc 1" -NoNewWindow -Wait
+    Start-Process -FilePath powercfg -ArgumentList "/change monitor-timeout-ac 20" -NoNewWindow -Wait
+    Start-Process -FilePath powercfg -ArgumentList "/change monitor-timeout-dc 10" -NoNewWindow -Wait
   } catch {}
   Write-OK "Hibernation set as default (LaptopMode)."
 } else {
@@ -634,7 +634,7 @@ if ($LaptopMode){
 # -------------------------
 # Disable / Undo Teredo
 # -------------------------
-function Configure-Teredo {
+<#function Configure-Teredo {
   param([switch]$Undo)
   $regPath = "HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip6\Parameters"
   $regName = "DisabledComponents"
@@ -656,7 +656,7 @@ function Configure-Teredo {
     }
   } catch { Write-Warn "Teredo configuration failed: $_" }
 }
-Configure-Teredo -Undo:$UndoTeredo
+Configure-Teredo -Undo:$UndoTeredo#>
 
 # -------------------------
 # Background Apps Disable / Undo
@@ -826,7 +826,7 @@ $services = @(
   [PSCustomObject]@{ Name = "SstpSvc"; StartupType = "Manual" },
   [PSCustomObject]@{ Name = "StateRepository"; StartupType = "Manual" },
   [PSCustomObject]@{ Name = "StorSvc"; StartupType = "Automatic" },
-  [PSCustomObject]@{ Name = "SysMain"; StartupType = if($Aggressive){"Manual"} else {"Automatic"} },
+  [PSCustomObject]@{ Name = "SysMain"; StartupType = "Automatic" },
   [PSCustomObject]@{ Name = "SystemEventsBroker"; StartupType = "Automatic" },
   [PSCustomObject]@{ Name = "TabletInputService"; StartupType = "Manual" },
   [PSCustomObject]@{ Name = "TapiSrv"; StartupType = "Manual" },
@@ -850,7 +850,7 @@ $services = @(
   [PSCustomObject]@{ Name = "WMPNetworkSvc"; StartupType = "Manual" },
   [PSCustomObject]@{ Name = "WPDBusEnum"; StartupType = "Manual" },
   [PSCustomObject]@{ Name = "WSService"; StartupType = "Manual" },
-  [PSCustomObject]@{ Name = "WSearch"; StartupType = if($Aggressive){"Manual"} else {"AutomaticDelayedStart"} },
+  [PSCustomObject]@{ Name = "WSearch"; StartupType = "Automatic" },
   [PSCustomObject]@{ Name = "Wcmsvc"; StartupType = "Automatic" },
   [PSCustomObject]@{ Name = "WdNisSvc"; StartupType = "Manual" },
   [PSCustomObject]@{ Name = "WebClient"; StartupType = "Disabled" },
@@ -931,7 +931,7 @@ foreach($pkg in $appxList){
   try { Get-AppxPackage -Name $pkg -AllUsers | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue } catch {}
 }
 
-# Clean Teams uninstallers if present
+<# Clean Teams uninstallers if present
 Write-Info "Cleaning Teams uninstall entries..."
 try {
   $us = (Get-ChildItem -Path HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall, HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall |
@@ -943,7 +943,7 @@ try {
     $proc = Start-Process -FilePath $FilePath -ArgumentList $ProcessArgs -PassThru
     $proc.WaitForExit()
   }
-} catch {}
+} catch {}#>
 Write-OK "Debloat (Store apps) completed."
 
 # -------------------------
@@ -976,7 +976,7 @@ Write-OK "Edge debloat applied."
 # -------------------------
 # Clear Run dialog MRU history
 # -------------------------
-$runMRURelativePath = "Software\Microsoft\Windows\CurrentVersion\Explorer\RunMRU"
+<#$runMRURelativePath = "Software\Microsoft\Windows\CurrentVersion\Explorer\RunMRU"
 $hku = "Registry::HKEY_USERS"
 
 # Get ALL subkeys (including system accounts and classes)
@@ -1008,7 +1008,7 @@ foreach ($sid in $sids) {
         Write-Output "No RunMRU key found for hive: $($sid.PSChildName)"
     }
 }
-
+#>
 #======================
 #Final Result
 #======================
