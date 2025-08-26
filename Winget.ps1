@@ -1,3 +1,21 @@
+# Check if any process starting with "Forti" is running
+$fcProcesses = Get-Process -Name "Forti*" -ErrorAction SilentlyContinue
+
+if ($fcProcesses) {
+    Write-Host "FortiClient is running. Closing it..."
+    foreach ($proc in $fcProcesses) {
+        try {
+            Stop-Process -Id $proc.Id -Force
+        } catch {
+            Write-Warning "Failed to stop process $($proc.Name) (PID: $($proc.Id))"
+        }
+    }
+    Start-Sleep -Seconds 3  # Give it a moment to close completely
+    Write-Host "FortiClient closed."
+} else {
+    Write-Host "FortiClient is not running."
+}
+
 # Function to check if Winget is installed and perform actions
 function Check-WingetAndUpgrade {
     Write-Output "Checking if Winget is installed..."
