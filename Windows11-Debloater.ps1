@@ -355,8 +355,7 @@ function Clear-RecycleBin {
             foreach ($item in Get-ChildItem -Path $recyclePath -Recurse -Force -ErrorAction SilentlyContinue) {
                 try { Remove-Item -Path $item.FullName -Recurse -Force -ErrorAction SilentlyContinue } catch {}
                 $currentItem++
-                $percentComplete = if ($totalItems -gt 0) { ($currentItem / $totalItems) * 100 } else { 100 }
-                Write-Progress -PercentComplete $percentComplete -Activity "Cleaning Recycle Bin" -Status "Deleting items..." -CurrentOperation "$currentItem of $totalItems"
+                Show-ProgressBar -Current $currentItem -Total $totalItems -Message "Cleaning Recycle Bin ($currentItem of $totalItems)"
             }
         }
     }
