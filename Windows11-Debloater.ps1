@@ -505,7 +505,7 @@ foreach ($drive in $drives) {
 # -------------------------------
 try {
     Write-Info "Running DISM Component Cleanup..."
-    Start-Process -FilePath "Dism.exe" -ArgumentList "/Online /Cleanup-Image /StartComponentCleanup /ResetBase /Quiet /NoRestart" -Wait -NoNewWindow
+    Start-Process -FilePath "Dism.exe" -ArgumentList "/Online /Cleanup-Image /StartComponentCleanup /ResetBase /NoRestart" -Wait -NoNewWindow
     Write-OK "DISM cleanup completed."
 } catch {
     Write-Warning "DISM cleanup failed: $($_.Exception.Message)"
