@@ -1,5 +1,5 @@
 # Download and Update Microsoft Edge Silently
-# Author: Bishnu's Helper
+# Author: Bishnu
 
 # MSI download URL and output path
 $url = "https://github.com/bprasad884uu/Gainwell/releases/download/Edge/MicrosoftEdgeEnterpriseX64.msi"
