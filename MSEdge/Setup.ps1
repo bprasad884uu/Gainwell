@@ -57,7 +57,7 @@ if (-not $downloadSuccess) {
         Write-Host "`nWarning: Server did not return file size." -ForegroundColor Yellow
     }
 
-    $fileStream = [System.IO.File]::OpenWrite($destination)
+    $fileStream = [System.IO.File]::OpenWrite($output)
     $bufferSize = 10MB
     $buffer = New-Object byte[] ($bufferSize)
     $downloaded = 0
