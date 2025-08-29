@@ -522,7 +522,7 @@ $msiFile  = "$env:TEMP\PowerShell-7.5.2-win-x64.msi"
 
 if (-not (Test-Path $pwshPath)){
   Write-Info "Installing PowerShell 7..."
-	  try {
+  try {
     Write-Host "Downloading PowerShell 7..." -ForegroundColor Cyan
     # --- Functions ---
 function Format-Size {
@@ -617,14 +617,20 @@ if (-not $downloadSuccess) {
     Write-Host "`nAll download methods failed. Please check your internet connection." -ForegroundColor Red
     exit
 }
-      Start-Process "msiexec.exe" -ArgumentList "/i `"$msiFile`" /quiet /norestart" -Wait
-      Remove-Item $msiFile -Force -ErrorAction SilentlyContinue
+  Start-Process "msiexec.exe" -ArgumentList "/i `"$msiFile`" /quiet /norestart" -Wait
+  Remove-Item $msiFile -Force -ErrorAction SilentlyContinue
 } else {
-  Write-Info "PowerShell 7 detected - attempting upgrade via winget..."
-  try { winget upgrade --id Microsoft.Powershell --source winget -e --accept-package-agreements --accept-source-agreements } catch {}
+  Write-Info "PowerShell 7 detected - upgrading with MSI..."
+  Invoke-WebRequest -Uri $msiUrl -OutFile $msiFile -UseBasicParsing
+  Start-Process "msiexec.exe" -ArgumentList "/i `"$msiFile`" /quiet /norestart" -Wait
+  Remove-Item $msiFile -Force -ErrorAction SilentlyContinue
 }
 
-if (Test-Path $pwshPath){ Write-OK "PowerShell 7 present: $pwshPath" } else { Write-Warn "PowerShell 7 not found after install attempt." }
+if (Test-Path $pwshPath){ 
+  Write-OK "PowerShell 7 present: $pwshPath" 
+} else { 
+  Write-Warn "PowerShell 7 not found after install attempt." 
+}
 
 # Set default profile in Windows Terminal
 $terminalSettings = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
