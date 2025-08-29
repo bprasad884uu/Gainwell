@@ -516,160 +516,169 @@ Write-OK "`n[*] Full Silent Disk Cleanup finished on all drives."
 # PowerShell 7 Setup and Integration
 # -------------------------
 Write-Info "Checking PowerShell 7 installation..."
-$pwshPath = "C:\Program Files\PowerShell\7\pwsh.exe"
-$msiUrl   = "https://github.com/PowerShell/PowerShell/releases/download/v7.5.2/PowerShell-7.5.2-win-x64.msi"
-$msiFile  = "$env:TEMP\PowerShell-7.5.2-win-x64.msi"
+$pwshPath   = "C:\Program Files\PowerShell\7\pwsh.exe"
 
-if (-not (Test-Path $pwshPath)){
-  Write-Info "Installing PowerShell 7..."
-  try {
-    Write-Host "Downloading PowerShell 7..." -ForegroundColor Cyan
-    # --- Functions ---
-function Format-Size {
-    param ([long]$bytes)
-    switch ($bytes) {
-        { $_ -ge 1GB } { return "{0:N2} GB" -f ($bytes / 1GB) }
-        { $_ -ge 1MB } { return "{0:N2} MB" -f ($bytes / 1MB) }
-        { $_ -ge 1KB } { return "{0:N2} KB" -f ($bytes / 1KB) }
-        default        { return "$bytes B" }
-    }
+# --- Get latest release info from GitHub ---
+try {
+    $releasesJson = Invoke-RestMethod -Uri "https://api.github.com/repos/PowerShell/PowerShell/releases/latest" -UseBasicParsing
+    $tag          = $releasesJson.tag_name.TrimStart("v")  # e.g. "7.5.2"
+    $targetVer    = [Version]$tag
+    $asset        = $releasesJson.assets | Where-Object { $_.name -like "*win-x64.msi" }
+    $msiUrl       = $asset.browser_download_url
+    $msiFile      = "$env:TEMP\$($asset.name)"
+    Write-Info "Latest PowerShell release detected: $targetVer"
+} catch {
+    Write-Warn "Failed to fetch latest release info from GitHub. Defaulting to 7.5.2."
+    $targetVer  = [Version]"7.5.2"
+    $msiUrl     = "https://github.com/PowerShell/PowerShell/releases/download/v7.5.2/PowerShell-7.5.2-win-x64.msi"
+    $msiFile    = "$env:TEMP\PowerShell-7.5.2-win-x64.msi"
 }
 
-function Format-Speed {
-    param ([double]$bytesPerSecond)
-    switch ($bytesPerSecond) {
-        { $_ -ge 1GB } { return "{0:N2} GB/s" -f ($bytesPerSecond / 1GB) }
-        { $_ -ge 1MB } { return "{0:N2} MB/s" -f ($bytesPerSecond / 1MB) }
-        { $_ -ge 1KB } { return "{0:N2} KB/s" -f ($bytesPerSecond / 1KB) }
-        default        { return "{0:N2} B/s" -f $bytesPerSecond }
-    }
+function Get-InstalledPwshVersion {
+    param([string]$exePath)
+    if (-not (Test-Path $exePath)) { return $null }
+    try {
+        $out = & $exePath -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+        return [Version]$out.Trim()
+    } catch { return $null }
 }
 
-# --- Download File ---
-if (-not ("System.Net.Http.HttpClient" -as [type])) {
-    Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll"
+$installedVer = Get-InstalledPwshVersion -exePath $pwshPath
+if ($installedVer) {
+    Write-Info "Detected PowerShell version: $installedVer"
+} else {
+    Write-Info "PowerShell 7 not detected."
 }
 
-$httpClientHandler = New-Object System.Net.Http.HttpClientHandler
-$httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
+if (-not $installedVer -or $installedVer -lt $targetVer) {
+    Write-Info "Installing/upgrading PowerShell to version $targetVer..."
 
-if (-not $downloadSuccess) {
-    Write-Host "`nStarting download..."
-
-    $response = $httpClient.GetAsync($msiUrl, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
-
-    if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
-        Write-Host "`nHttpClient request failed: $($response.StatusCode) ($($response.ReasonPhrase))" -ForegroundColor Red
-        exit
-    }
-
-    $stream = $response.Content.ReadAsStreamAsync().Result
-    if (-not $stream) {
-        Write-Host "`nFailed to retrieve response stream." -ForegroundColor Red
-        exit
-    }
-
-    $totalSize = $response.Content.Headers.ContentLength
-    if ($null -eq $totalSize) {
-        Write-Host "`nWarning: Server did not return file size." -ForegroundColor Yellow
-    }
-
-    $fileStream = [System.IO.File]::OpenWrite($msiFile)
-    $bufferSize = 10MB
-    $buffer = New-Object byte[] ($bufferSize)
-    $downloaded = 0
-    $startTime = Get-Date
-
-    Write-Host "`nDownloading Edge Setup..."
-    while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
-        $fileStream.Write($buffer, 0, $bytesRead)
-        $downloaded += $bytesRead
-        $elapsed = (Get-Date) - $startTime
-        $speed = $downloaded / $elapsed.TotalSeconds
-        $progress = ($downloaded / $totalSize) * 100
-
-        $remainingBytes = $totalSize - $downloaded
-        $etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / $speed, 2) } else { "Calculating..." }
-
-        if ($etaSeconds -is [double]) {
-            $etaHours = [math]::Floor($etaSeconds / 3600)
-            $etaMinutes = [math]::Floor(($etaSeconds % 3600) / 60)
-            $etaRemainingSeconds = [math]::Floor($etaSeconds % 60)
-
-            $etaFormatted = ""
-            if ($etaHours -gt 0) { $etaFormatted += "${etaHours}h " }
-            if ($etaMinutes -gt 0) { $etaFormatted += "${etaMinutes}m " }
-            if ($etaRemainingSeconds -gt 0 -or $etaFormatted -eq "") { $etaFormatted += "${etaRemainingSeconds}s" }
-        } else {
-            $etaFormatted = "Calculating..."
+    try {
+        # --- Formatting functions ---
+        function Format-Size {
+            param ([long]$bytes)
+            switch ($bytes) {
+                { $_ -ge 1GB } { return "{0:N2} GB" -f ($bytes / 1GB) }
+                { $_ -ge 1MB } { return "{0:N2} MB" -f ($bytes / 1MB) }
+                { $_ -ge 1KB } { return "{0:N2} KB" -f ($bytes / 1KB) }
+                default        { return "$bytes B" }
+            }
         }
 
-        Write-Host "`rTotal: $(Format-Size $totalSize) | Progress: $([math]::Round($progress,2))% | Downloaded: $(Format-Size $downloaded) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted" -NoNewline
+        function Format-Speed {
+            param ([double]$bytesPerSecond)
+            switch ($bytesPerSecond) {
+                { $_ -ge 1GB } { return "{0:N2} GB/s" -f ($bytesPerSecond / 1GB) }
+                { $_ -ge 1MB } { return "{0:N2} MB/s" -f ($bytesPerSecond / 1MB) }
+                { $_ -ge 1KB } { return "{0:N2} KB/s" -f ($bytesPerSecond / 1KB) }
+                default        { return "{0:N2} B/s" -f $bytesPerSecond }
+            }
+        }
+
+        # --- HttpClient download with progress ---
+        if (-not ("System.Net.Http.HttpClient" -as [type])) {
+            Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll"
+        }
+
+        $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
+        $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
+
+        Write-Host "`nStarting download of PowerShell $targetVer..."
+        $response = $httpClient.GetAsync($msiUrl, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+
+        if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
+            Write-Host "`nHttpClient request failed: $($response.StatusCode) ($($response.ReasonPhrase))" -ForegroundColor Red
+            exit
+        }
+
+        $stream = $response.Content.ReadAsStreamAsync().Result
+        if (-not $stream) {
+            Write-Host "`nFailed to retrieve response stream." -ForegroundColor Red
+            exit
+        }
+
+        $totalSize = $response.Content.Headers.ContentLength
+        $fileStream = [System.IO.File]::OpenWrite($msiFile)
+        $bufferSize = 10MB
+        $buffer = New-Object byte[] ($bufferSize)
+        $downloaded = 0
+        $startTime = Get-Date
+
+        Write-Host "`nDownloading PowerShell MSI..."
+        while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $fileStream.Write($buffer, 0, $bytesRead)
+            $downloaded += $bytesRead
+            $elapsed = (Get-Date) - $startTime
+            $speed = $downloaded / $elapsed.TotalSeconds
+            $progress = ($downloaded / $totalSize) * 100
+
+            $remainingBytes = $totalSize - $downloaded
+            $etaSeconds = if ($speed -gt 0) { [math]::Round($remainingBytes / $speed, 2) } else { "Calculating..." }
+
+            if ($etaSeconds -is [double]) {
+                $etaHours = [math]::Floor($etaSeconds / 3600)
+                $etaMinutes = [math]::Floor(($etaSeconds % 3600) / 60)
+                $etaRemainingSeconds = [math]::Floor($etaSeconds % 60)
+
+                $etaFormatted = ""
+                if ($etaHours -gt 0) { $etaFormatted += "${etaHours}h " }
+                if ($etaMinutes -gt 0) { $etaFormatted += "${etaMinutes}m " }
+                if ($etaRemainingSeconds -gt 0 -or $etaFormatted -eq "") { $etaFormatted += "${etaRemainingSeconds}s" }
+            } else {
+                $etaFormatted = "Calculating..."
+            }
+
+            Write-Host "`rTotal: $(Format-Size $totalSize) | Progress: $([math]::Round($progress,2))% | Downloaded: $(Format-Size $downloaded) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted" -NoNewline
+        }
+
+        $fileStream.Close()
+        Write-Host "`nDownload Complete: $msiFile"
+        $httpClient.Dispose()
+
+        Start-Process "msiexec.exe" -ArgumentList "/i `"$msiFile`" /quiet /norestart" -Wait
+        Remove-Item $msiFile -Force -ErrorAction SilentlyContinue
+    } catch {
+        Write-Warn "Installation failed: $_"
     }
-
-    $fileStream.Close()
-    Write-Host "`nDownload Complete: $output"
-    $downloadSuccess = $true
-    $httpClient.Dispose()
-}
-
-if (-not $downloadSuccess) {
-    Write-Host "`nAll download methods failed. Please check your internet connection." -ForegroundColor Red
-    exit
-}
-  Start-Process "msiexec.exe" -ArgumentList "/i `"$msiFile`" /quiet /norestart" -Wait
-  Remove-Item $msiFile -Force -ErrorAction SilentlyContinue
 } else {
-  Write-Info "PowerShell 7 detected - upgrading with MSI..."
-  Invoke-WebRequest -Uri $msiUrl -OutFile $msiFile -UseBasicParsing
-  Start-Process "msiexec.exe" -ArgumentList "/i `"$msiFile`" /quiet /norestart" -Wait
-  Remove-Item $msiFile -Force -ErrorAction SilentlyContinue
+    Write-OK "PowerShell $installedVer is up to date (>= $targetVer). Skipping install."
 }
 
-if (Test-Path $pwshPath){ 
-  Write-OK "PowerShell 7 present: $pwshPath" 
+if (Test-Path $pwshPath) { 
+    Write-OK "PowerShell 7 present: $pwshPath" 
 } else { 
-  Write-Warn "PowerShell 7 not found after install attempt." 
+    Write-Warn "PowerShell 7 not found after install attempt." 
 }
-
-# Set default profile in Windows Terminal
-$terminalSettings = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
-if (Test-Path $terminalSettings){
-  Write-Info "Setting Windows Terminal default profile to PowerShell 7..."
-  try {
-    $settings = Get-Content $terminalSettings -Raw | ConvertFrom-Json
-    $pwshProfile = $settings.profiles.list | Where-Object { $_.commandline -like "*pwsh.exe" }
-    if ($pwshProfile){
-      $settings.defaultProfile = $pwshProfile.guid
-      $settings | ConvertTo-Json -Depth 10 | Set-Content $terminalSettings -Encoding utf8
-      Write-OK "Windows Terminal default set to PowerShell 7."
-    } else { Write-Warn "PowerShell 7 profile not found in Terminal settings.json" }
-  } catch { Write-Warn "Failed to update Windows Terminal settings: $_" }
-} else { Write-Warn "Windows Terminal settings.json not found - skipping." }
 
 # Replace Win+X menu PowerShell links
 Write-Info "Updating Win+X menu to use PowerShell 7..."
 $winxPath = "$env:LocalAppData\Microsoft\Windows\WinX"
 if ((Test-Path $winxPath) -and (Test-Path $pwshPath)) {
-  try {
-    $shortcuts = Get-ChildItem -Path $winxPath -Recurse -Filter *.lnk
-    foreach ($sc in $shortcuts) {
-      $wshell = New-Object -ComObject WScript.Shell
-      $shortcut = $wshell.CreateShortcut($sc.FullName)
-      if ($shortcut.TargetPath -match "powershell.exe"){
-        $shortcut.TargetPath = $pwshPath
-        $shortcut.IconLocation = "$pwshPath,0"
-        $shortcut.Save()
-        Write-Info "Updated Win+X shortcut: $($sc.FullName)"
-      }
+    try {
+        $shortcuts = Get-ChildItem -Path $winxPath -Recurse -Filter *.lnk
+        foreach ($sc in $shortcuts) {
+            $wshell = New-Object -ComObject WScript.Shell
+            $shortcut = $wshell.CreateShortcut($sc.FullName)
+            if ($shortcut.TargetPath -match "powershell.exe") {
+                $shortcut.TargetPath = $pwshPath
+                $shortcut.IconLocation = "$pwshPath,0"
+                $shortcut.Save()
+                Write-Info "Updated Win+X shortcut: $($sc.FullName)"
+            }
+        }
+        Write-OK "Win+X menu now launches PowerShell 7 (normal + admin). Sign out/in to see changes."
+    } catch { 
+        Write-Warn "Failed to update Win+X shortcuts: $_" 
     }
-    Write-OK "Win+X menu now launches PowerShell 7 (normal + admin). Sign out/in to see changes."
-  } catch { Write-Warn "Failed to update Win+X shortcuts: $_" }
-} else { Write-Warn "Win+X path or pwsh.exe missing - skipping." }
+} else { 
+    Write-Warn "Win+X path or pwsh.exe missing - skipping." 
+}
 
 # PowerShell 7 telemetry opt out
 Write-Info "Opting out of PowerShell telemetry..."
-try { [Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT','1','Machine') } catch {}
+try { 
+    [Environment]::SetEnvironmentVariable('POWERSHELL_TELEMETRY_OPTOUT','1','Machine') 
+} catch {}
 Write-OK "PowerShell 7 telemetry disabled."
 
 # -------------------------
