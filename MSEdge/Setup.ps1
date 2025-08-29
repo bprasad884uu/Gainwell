@@ -2,7 +2,7 @@
 # Author: Bishnu's Helper
 
 # MSI download URL and output path
-$url = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/MSEdge/MicrosoftEdgeEnterpriseX64.msi"
+$url = "https://github.com/bprasad884uu/Gainwell/releases/download/Edge/MicrosoftEdgeEnterpriseX64.msi"
 $output = "$env:TEMP\MicrosoftEdgeEnterpriseX64.msi"
 
 try {
