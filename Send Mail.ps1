@@ -22,6 +22,7 @@ if (![string]::IsNullOrWhiteSpace($mailID)) {
 
 # Set the email properties
 $mail.To = "servicedesk@acceleronsolutions.io"
+#$mail.CC = "cc.recipient@domain.com"  # Add CC recipients here
 $mail.Subject = "Subject"
 
 # Prepend your message above the signature
