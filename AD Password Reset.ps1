@@ -230,23 +230,22 @@ $txtPassword.Add_TextChanged({ ValidatePasswordRules })
 $txtMail.Add_TextChanged({ ValidatePasswordRules })
 ValidatePasswordRules
 
-# Trigger search on Enter key in Mail ID textbox
+# AD Search on Enter key
 $txtMail.Add_KeyDown({
-    param($sender, $e)
+    param($sender,$e)
     if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter) {
-        $e.SuppressKeyPress = $true  # prevent ding sound
+        $e.SuppressKeyPress = $true
         $searchTerm = $txtMail.Text.Trim()
         if (-not $searchTerm) { Write-Log "❌ Please enter a search term."; return }
 
         Try {
             $filter = "(&(objectClass=user)(|(mail=*${searchTerm}*)(userPrincipalName=*${searchTerm}*)(sAMAccountName=*${searchTerm}*)(displayName=*${searchTerm}*)))"
-            $ADUsers = Get-ADUser -LDAPFilter $filter -Properties Mail,UserPrincipalName,DisplayName |
-                        Select-Object SamAccountName,UserPrincipalName,Mail,DisplayName
+            $ADUsers = Get-ADUser -LDAPFilter $filter -Properties DisplayName,SamAccountName |
+                        Sort-Object DisplayName  # Sort ascending
         } Catch { Write-Log "❌ AD Search failed: $_"; return }
 
         if (-not $ADUsers) { Write-Log "❌ No users found matching [$searchTerm]."; return }
 
-        # Popup selection form
         $selectForm = New-Object System.Windows.Forms.Form
         $selectForm.Text = "Select AD User"
         $selectForm.Size = New-Object System.Drawing.Size(400,300)
@@ -254,10 +253,13 @@ $txtMail.Add_KeyDown({
         $listBox = New-Object System.Windows.Forms.ListBox
         $listBox.Dock = "Fill"
         $listBox.SelectionMode = "One"
-        foreach ($u in $ADUsers) { $listBox.Items.Add("$($u.SamAccountName) | $($u.DisplayName) | $($u.Mail)") }
+
+        foreach ($u in $ADUsers) {
+            $listBox.Items.Add($u.DisplayName)  # Only Display Name
+        }
+
         $selectForm.Controls.Add($listBox)
 
-        # Select button
         $okBtn = New-Object System.Windows.Forms.Button
         $okBtn.Text = "Select"
         $okBtn.Dock = "Bottom"
@@ -265,20 +267,19 @@ $txtMail.Add_KeyDown({
 
         $okBtn.Add_Click({
             if ($listBox.SelectedItem) {
-                $chosen = $listBox.SelectedItem.Split('|')[0].Trim()
-                $txtMail.Text = $chosen
+                $selectedUser = $ADUsers | Where-Object { $_.DisplayName -eq $listBox.SelectedItem }
+                $txtMail.Text = $selectedUser.SamAccountName
                 $selectForm.Close()
-                Write-Log "✅ Selected AD User: $chosen"
+                Write-Log "✅ Selected AD User: $($selectedUser.DisplayName)"
             }
         })
 
-        # Optional: double-click selects user
         $listBox.Add_DoubleClick({
             if ($listBox.SelectedItem) {
-                $chosen = $listBox.SelectedItem.Split('|')[0].Trim()
-                $txtMail.Text = $chosen
+                $selectedUser = $ADUsers | Where-Object { $_.DisplayName -eq $listBox.SelectedItem }
+                $txtMail.Text = $selectedUser.SamAccountName
                 $selectForm.Close()
-                Write-Log "✅ Selected AD User: $chosen"
+                Write-Log "✅ Selected AD User: $($selectedUser.DisplayName)"
             }
         })
 
@@ -286,7 +287,7 @@ $txtMail.Add_KeyDown({
     }
 })
 
-# Submit button
+# Submit button action
 $btnSubmit.Add_Click({
     if ($btnSubmit.IsDisabled) { return }
     $txtOutput.Clear()
@@ -301,23 +302,53 @@ $btnSubmit.Add_Click({
             (Mail -eq $User) -or
             (UserPrincipalName -eq $User) -or
             (SamAccountName -eq $User)
-        } -Properties Mail,UserPrincipalName -ErrorAction Stop
+        } -Properties Mail,UserPrincipalName,Enabled -ErrorAction Stop
+
         Write-Log "✅ Found AD User: $($ADUser.SamAccountName)"
-    } Catch { Write-Log "❌ User [$User] not found in AD."; return }
+    } Catch {
+        Write-Log "❌ User [$User] not found in AD."
+        return
+    }
+
+    # Check if account is enabled
+    if (-not $ADUser.Enabled) {
+        Write-Log "⚠️ Account is disabled. Password reset may fail."
+    }
 
     if ($chkReset.Checked) {
         $NewPassword = ConvertTo-SecureString $CustomPassword -AsPlainText -Force
-        Try { Set-ADAccountPassword -Identity $ADUser.SamAccountName -NewPassword $NewPassword -Reset; Write-Log "🔑 Password reset successful." } Catch { Write-Log "❌ Password reset failed: $_" }
+        Try {
+            Set-ADAccountPassword -Identity $ADUser.SamAccountName -NewPassword $NewPassword -Reset -ErrorAction Stop
+            Write-Log "🔑 Password reset successful."
+        } Catch {
+            Write-Log "❌ Password reset failed: $_"
+            Write-Log "💡 Make sure you have permission and the password meets domain policy."
+        }
     }
-    if ($chkUnlock.Checked) { Try { Unlock-ADAccount -Identity $ADUser.SamAccountName; Write-Log "🔓 Account unlocked." } Catch { Write-Log "❌ Unlock failed: $_" } }
+
+    if ($chkUnlock.Checked) {
+        Try {
+            Unlock-ADAccount -Identity $ADUser.SamAccountName -ErrorAction Stop
+            Write-Log "🔓 Account unlocked."
+        } Catch {
+            Write-Log "❌ Unlock failed: $_"
+        }
+    }
+
     if ($chkExtend.Checked) {
         Try {
-            Set-ADUser -Identity $ADUser.SamAccountName -Replace @{pwdLastSet=-1}
+            # Set password last set to now
+            Set-ADUser -Identity $ADUser.SamAccountName -Replace @{pwdLastSet=-1} -ErrorAction Stop
+
+            # Fetch new expiry date
             $expDate = (Get-ADUser $ADUser.SamAccountName -Properties msDS-UserPasswordExpiryTimeComputed |
                         Select-Object -ExpandProperty msDS-UserPasswordExpiryTimeComputed |
                         ForEach-Object { [datetime]::FromFileTime($_) })
+
             Write-Log "📅 Password expiry extended. Next expiry: $expDate"
-        } Catch { Write-Log "❌ Extend failed: $_" }
+        } Catch {
+            Write-Log "❌ Extend failed: $_"
+        }
     }
 })
 
