@@ -6,7 +6,7 @@ $form = New-Object System.Windows.Forms.Form
 $form.Text = "AD Tool"
 $form.Size = New-Object System.Drawing.Size(500,500)
 $form.StartPosition = "CenterScreen"
-$form.BackColor = [System.Drawing.SystemColors]::Control  # system theme
+$form.BackColor = [System.Drawing.SystemColors]::Control
 
 # Tooltip
 $tooltip = New-Object System.Windows.Forms.ToolTip
@@ -191,58 +191,31 @@ function ValidatePasswordRules {
     $username = $txtMail.Text.Trim()
 
     if ($chkReset.Checked) {
-        # Show rules
         $lblRule1.Visible = $true
         $lblRule2.Visible = $true
         $lblRule3.Visible = $true
 
-        # Rule 1: Minimum 8 characters
-        if ($pwd.Length -ge 8) { 
-            $lblRule1.ForeColor = [System.Drawing.Color]::Green 
-        } else { 
-            $lblRule1.ForeColor = [System.Drawing.Color]::Red 
-        }
+        if ($pwd.Length -ge 8) { $lblRule1.ForeColor = [System.Drawing.Color]::Green } else { $lblRule1.ForeColor = [System.Drawing.Color]::Red }
 
-        # Rule 2: Cannot contain username parts ≥3 characters
-        if ([string]::IsNullOrWhiteSpace($pwd)) {
-            $lblRule2.ForeColor = [System.Drawing.Color]::Red
-        } else {
-            $containsUsernamePart = $false
-            for ($i = 0; $i -le $username.Length - 3; $i++) {
-                for ($len = 3; $len -le $username.Length - $i; $len++) {
-                    $substr = $username.Substring($i,$len)
-                    if ($pwd.ToLower().Contains($substr.ToLower())) { 
-                        $containsUsernamePart = $true
-                        break
-                    }
+        $containsUsernamePart = $false
+        for ($i = 0; $i -le $username.Length - 3; $i++) {
+            for ($len = 3; $len -le $username.Length - $i; $len++) {
+                $substr = $username.Substring($i,$len)
+                if ($pwd.ToLower().Contains($substr.ToLower())) { 
+                    $containsUsernamePart = $true
+                    break
                 }
-                if ($containsUsernamePart) { break }
             }
-
-            if ($containsUsernamePart) {
-                $lblRule2.ForeColor = [System.Drawing.Color]::Red
-            } else {
-                $lblRule2.ForeColor = [System.Drawing.Color]::Green
-            }
+            if ($containsUsernamePart) { break }
         }
+        if ($containsUsernamePart) { $lblRule2.ForeColor = [System.Drawing.Color]::Red } else { $lblRule2.ForeColor = [System.Drawing.Color]::Green }
 
-        # Rule 3: Must contain 1 letter, 1 number, 1 symbol
-        if ($pwd -match '[A-Za-z]' -and $pwd -match '\d' -and $pwd -match '[^A-Za-z0-9]') { 
-            $lblRule3.ForeColor = [System.Drawing.Color]::Green 
-        } else { 
-            $lblRule3.ForeColor = [System.Drawing.Color]::Red 
-        }
+        if ($pwd -match '[A-Za-z]' -and $pwd -match '\d' -and $pwd -match '[^A-Za-z0-9]') { $lblRule3.ForeColor = [System.Drawing.Color]::Green } else { $lblRule3.ForeColor = [System.Drawing.Color]::Red }
 
-        # Disable Submit if any rule fails
-        if ($lblRule1.ForeColor -eq [System.Drawing.Color]::Red -or
-            $lblRule2.ForeColor -eq [System.Drawing.Color]::Red -or
-            $lblRule3.ForeColor -eq [System.Drawing.Color]::Red) {
+        if ($lblRule1.ForeColor -eq [System.Drawing.Color]::Red -or $lblRule2.ForeColor -eq [System.Drawing.Color]::Red -or $lblRule3.ForeColor -eq [System.Drawing.Color]::Red) {
             $btnSubmit.IsDisabled = $true
-        } else {
-            $btnSubmit.IsDisabled = $false
-        }
+        } else { $btnSubmit.IsDisabled = $false }
     } else {
-        # Hide rules and enable Submit
         $lblRule1.Visible = $false
         $lblRule2.Visible = $false
         $lblRule3.Visible = $false
@@ -257,7 +230,63 @@ $txtPassword.Add_TextChanged({ ValidatePasswordRules })
 $txtMail.Add_TextChanged({ ValidatePasswordRules })
 ValidatePasswordRules
 
-# Button Actions
+# Trigger search on Enter key in Mail ID textbox
+$txtMail.Add_KeyDown({
+    param($sender, $e)
+    if ($e.KeyCode -eq [System.Windows.Forms.Keys]::Enter) {
+        $e.SuppressKeyPress = $true  # prevent ding sound
+        $searchTerm = $txtMail.Text.Trim()
+        if (-not $searchTerm) { Write-Log "❌ Please enter a search term."; return }
+
+        Try {
+            $filter = "(&(objectClass=user)(|(mail=*${searchTerm}*)(userPrincipalName=*${searchTerm}*)(sAMAccountName=*${searchTerm}*)(displayName=*${searchTerm}*)))"
+            $ADUsers = Get-ADUser -LDAPFilter $filter -Properties Mail,UserPrincipalName,DisplayName |
+                        Select-Object SamAccountName,UserPrincipalName,Mail,DisplayName
+        } Catch { Write-Log "❌ AD Search failed: $_"; return }
+
+        if (-not $ADUsers) { Write-Log "❌ No users found matching [$searchTerm]."; return }
+
+        # Popup selection form
+        $selectForm = New-Object System.Windows.Forms.Form
+        $selectForm.Text = "Select AD User"
+        $selectForm.Size = New-Object System.Drawing.Size(400,300)
+
+        $listBox = New-Object System.Windows.Forms.ListBox
+        $listBox.Dock = "Fill"
+        $listBox.SelectionMode = "One"
+        foreach ($u in $ADUsers) { $listBox.Items.Add("$($u.SamAccountName) | $($u.DisplayName) | $($u.Mail)") }
+        $selectForm.Controls.Add($listBox)
+
+        # Select button
+        $okBtn = New-Object System.Windows.Forms.Button
+        $okBtn.Text = "Select"
+        $okBtn.Dock = "Bottom"
+        $selectForm.Controls.Add($okBtn)
+
+        $okBtn.Add_Click({
+            if ($listBox.SelectedItem) {
+                $chosen = $listBox.SelectedItem.Split('|')[0].Trim()
+                $txtMail.Text = $chosen
+                $selectForm.Close()
+                Write-Log "✅ Selected AD User: $chosen"
+            }
+        })
+
+        # Optional: double-click selects user
+        $listBox.Add_DoubleClick({
+            if ($listBox.SelectedItem) {
+                $chosen = $listBox.SelectedItem.Split('|')[0].Trim()
+                $txtMail.Text = $chosen
+                $selectForm.Close()
+                Write-Log "✅ Selected AD User: $chosen"
+            }
+        })
+
+        $selectForm.ShowDialog()
+    }
+})
+
+# Submit button
 $btnSubmit.Add_Click({
     if ($btnSubmit.IsDisabled) { return }
     $txtOutput.Clear()
@@ -268,18 +297,13 @@ $btnSubmit.Add_Click({
     if ($chkReset.Checked -and -not $CustomPassword) { Write-Log "❌ Password is required."; return }
 
     Try {
-    $ADUser = Get-ADUser -Filter {
-        (Mail -eq $User) -or
-        (UserPrincipalName -eq $User) -or
-        (SamAccountName -eq $User)
-    } -Properties Mail,UserPrincipalName -ErrorAction Stop
-
-    Write-Log "✅ Found AD User: $($ADUser.SamAccountName)"
-	}
-	Catch {
-		Write-Log "❌ User [$User] not found in AD (tried Mail, UPN, and SamAccountName)."
-		return
-	}
+        $ADUser = Get-ADUser -Filter {
+            (Mail -eq $User) -or
+            (UserPrincipalName -eq $User) -or
+            (SamAccountName -eq $User)
+        } -Properties Mail,UserPrincipalName -ErrorAction Stop
+        Write-Log "✅ Found AD User: $($ADUser.SamAccountName)"
+    } Catch { Write-Log "❌ User [$User] not found in AD."; return }
 
     if ($chkReset.Checked) {
         $NewPassword = ConvertTo-SecureString $CustomPassword -AsPlainText -Force
@@ -287,23 +311,17 @@ $btnSubmit.Add_Click({
     }
     if ($chkUnlock.Checked) { Try { Unlock-ADAccount -Identity $ADUser.SamAccountName; Write-Log "🔓 Account unlocked." } Catch { Write-Log "❌ Unlock failed: $_" } }
     if ($chkExtend.Checked) {
-    Try {
-        # Set password last set to now
-        Set-ADUser -Identity $ADUser.SamAccountName -Replace @{pwdLastSet=-1}
-
-        # Fetch new expiry date
-        $expDate = (Get-ADUser $ADUser.SamAccountName -Properties msDS-UserPasswordExpiryTimeComputed |
-                    Select-Object -ExpandProperty msDS-UserPasswordExpiryTimeComputed |
-                    ForEach-Object { [datetime]::FromFileTime($_) })
-
-        Write-Log "📅 Password expiry extended. Next expiry: $expDate"
+        Try {
+            Set-ADUser -Identity $ADUser.SamAccountName -Replace @{pwdLastSet=-1}
+            $expDate = (Get-ADUser $ADUser.SamAccountName -Properties msDS-UserPasswordExpiryTimeComputed |
+                        Select-Object -ExpandProperty msDS-UserPasswordExpiryTimeComputed |
+                        ForEach-Object { [datetime]::FromFileTime($_) })
+            Write-Log "📅 Password expiry extended. Next expiry: $expDate"
+        } Catch { Write-Log "❌ Extend failed: $_" }
     }
-    Catch {
-        Write-Log "❌ Extend failed: $_"
-		}
-	}
 })
 
+# Close button
 $btnClose.Add_Click({ $form.Close() })
 
 # Show Form
