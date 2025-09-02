@@ -286,7 +286,22 @@ $btnSubmit.Add_Click({
         Try { Set-ADAccountPassword -Identity $ADUser.SamAccountName -NewPassword $NewPassword -Reset; Write-Log "🔑 Password reset successful." } Catch { Write-Log "❌ Password reset failed: $_" }
     }
     if ($chkUnlock.Checked) { Try { Unlock-ADAccount -Identity $ADUser.SamAccountName; Write-Log "🔓 Account unlocked." } Catch { Write-Log "❌ Unlock failed: $_" } }
-    if ($chkExtend.Checked) { Try { Set-ADUser -Identity $ADUser.SamAccountName -Replace @{pwdLastSet=0}; $expDate = (Get-ADUser $ADUser.SamAccountName -Properties msDS-UserPasswordExpiryTimeComputed | Select-Object -ExpandProperty msDS-UserPasswordExpiryTimeComputed | ForEach-Object { [datetime]::FromFileTime($_) }); Write-Log "📅 Password expiry extended. Next expiry: $expDate" } Catch { Write-Log "❌ Extend failed: $_" } }
+    if ($chkExtend.Checked) {
+    Try {
+        # Set password last set to now
+        Set-ADUser -Identity $ADUser.SamAccountName -Replace @{pwdLastSet=-1}
+
+        # Fetch new expiry date
+        $expDate = (Get-ADUser $ADUser.SamAccountName -Properties msDS-UserPasswordExpiryTimeComputed |
+                    Select-Object -ExpandProperty msDS-UserPasswordExpiryTimeComputed |
+                    ForEach-Object { [datetime]::FromFileTime($_) })
+
+        Write-Log "📅 Password expiry extended. Next expiry: $expDate"
+    }
+    Catch {
+        Write-Log "❌ Extend failed: $_"
+		}
+	}
 })
 
 $btnClose.Add_Click({ $form.Close() })
