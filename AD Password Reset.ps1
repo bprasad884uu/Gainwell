@@ -268,9 +268,18 @@ $btnSubmit.Add_Click({
     if ($chkReset.Checked -and -not $CustomPassword) { Write-Log "❌ Password is required."; return }
 
     Try {
-        $ADUser = Get-ADUser -Filter {Mail -eq $User} -Properties Mail -ErrorAction Stop
-        Write-Log "✅ Found AD User: $($ADUser.SamAccountName)"
-    } Catch { Write-Log "❌ User with Mail ID [$User] not found."; return }
+    $ADUser = Get-ADUser -Filter {
+        (Mail -eq $User) -or
+        (UserPrincipalName -eq $User) -or
+        (SamAccountName -eq $User)
+    } -Properties Mail,UserPrincipalName -ErrorAction Stop
+
+    Write-Log "✅ Found AD User: $($ADUser.SamAccountName)"
+	}
+	Catch {
+		Write-Log "❌ User [$User] not found in AD (tried Mail, UPN, and SamAccountName)."
+		return
+	}
 
     if ($chkReset.Checked) {
         $NewPassword = ConvertTo-SecureString $CustomPassword -AsPlainText -Force
