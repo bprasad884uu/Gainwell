@@ -58,7 +58,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "msi_url=$MSI_URL" >> $GITHUB_OUTPUT
 
-      - name: Stop if version unchanged (optional but recommended)
+      - name: Stop if version unchanged
         run: |
           set -e
           curl -fsSL -H "Accept: application/vnd.github+json" \
@@ -75,7 +75,6 @@ jobs:
           set -e
           mkdir -p out
           cd out
-          # filename matches Microsoft’s typical artifact name
           curl -fL --retry 5 --retry-delay 2 \
             -o MicrosoftEdgeEnterpriseX64.msi \
             "${{ steps.parse.outputs.msi_url }}"
@@ -85,8 +84,8 @@ jobs:
       - name: Update rolling release (tag: Edge) with MSI
         uses: ncipollo/release-action@v1
         with:
-          tag: Edge
-          name: Microsoft Edge        # keep the title constant
+          tag: Edge                 # change if your rolling tag is different
+          name: Microsoft Edge      # keep the title constant
           body: |
             Channel: Stable
             Platform: Windows x64
@@ -96,7 +95,7 @@ jobs:
           allowUpdates: true
           replacesArtifacts: true
           artifacts: |
-            out/MicrosoftEdgeEnterpriseX64.msi,
+            out/MicrosoftEdgeEnterpriseX64.msi
             out/SHA256.txt
           draft: false
           prerelease: false
