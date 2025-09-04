@@ -17,43 +17,33 @@ jobs:
           set -e
           curl -fsSL "https://edgeupdates.microsoft.com/api/products?view=enterprise" > edge.json
 
-      - name: Parse latest Stable Windows x64 MSI (robust)
+      - name: Parse latest Stable Windows x64 MSI
         id: parse
         run: |
           set -e
-          # Latest Stable version
+          # Get the latest Stable Windows x64 version
           VERSION=$(jq -r '
             .[] | select(.Product=="Stable")
-            | .Releases[]? | .ProductVersion
+            | .Releases[]? 
+            | select(.Platform=="Windows" and .Architecture=="x64")
+            | .ProductVersion
           ' edge.json | sort -V | tail -n1)
 
-          # Find an MSI URL (handles both payload shapes)
+          # Get the MSI URL for that version
           MSI_URL=$(jq -r --arg VER "$VERSION" '
             .[] | select(.Product=="Stable")
-            | .Releases[]? | select(.ProductVersion==$VER)
-            | ( .Artifacts[]?, .Platforms[]?.Artifacts[]? )
-            | select((.Platform // "" | ascii_downcase)=="windows"
-                     and (.Architecture // "" | ascii_downcase)=="x64"
-                     and (.InstallerType // "" | ascii_downcase)=="msi")
+            | .Releases[]? 
+            | select(.ProductVersion==$VER and .Platform=="Windows" and .Architecture=="x64")
+            | .Artifacts[]? 
+            | select(.ArtifactName=="msi")
             | .Location
           ' edge.json | head -n1)
-
-          # Trim whitespace/CRLF just in case
-          VERSION=$(printf "%s" "$VERSION" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-          MSI_URL=$(printf "%s" "$MSI_URL" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
 
           echo "Parsed version: $VERSION"
           echo "Parsed MSI URL: $MSI_URL"
 
-          # Validate and prepare debug payload if needed
-          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
-            echo "No version parsed. Saving payload for debugging."
-            cp edge.json edge-debug.json
-            exit 1
-          fi
-          if ! printf "%s" "$MSI_URL" | grep -Eiq '^https?://'; then
-            echo "MSI URL invalid. Saving payload for debugging."
-            cp edge.json edge-debug.json
+          if [ -z "$MSI_URL" ]; then
+            echo "No MSI URL found for Stable Windows x64 version $VERSION"
             exit 1
           fi
 
@@ -88,10 +78,3 @@ jobs:
             out/SHA256.txt
           draft: false
           prerelease: false
-
-      - name: Upload debug payload (only if earlier step failed)
-        if: failure() && hashFiles('edge-debug.json') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: edge-debug
-          path: edge-debug.json
