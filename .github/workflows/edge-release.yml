@@ -1,0 +1,31 @@
+name: Update release from Microsoft Edge
+
+on:
+  schedule:
+    - cron: "17 */4 * * *"   # check every 4 hours
+  workflow_dispatch: {}
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to commit & create releases
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch Edge Updates API
+        run: |
+          set -e
+          curl -fsSL "https://edgeupdates.microsoft.com/api/products?view=enterprise" > edge.json
+          mkdir -p manifests
+          jq '.' edge.json > manifests/latest.json
+
+      - name: Extract latest Stable Windows x64 version and artifact links
+        id: parse
+        run: |
+          set -e
+          VERSION=$(jq -r '
+            .[] | select(.Product == "Stable")
+            | .Releases[]? | .ProductVersion
+          ' manifests/latest.json | sort -V | tail -n1)
