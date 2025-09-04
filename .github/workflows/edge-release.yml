@@ -84,8 +84,8 @@ jobs:
       - name: Update rolling release (tag: Edge) with MSI
         uses: ncipollo/release-action@v1
         with:
-          tag: Edge                 # change if your rolling tag is different
-          name: Microsoft Edge      # keep the title constant
+          tag: Edge
+          name: Microsoft Edge
           body: |
             Channel: Stable
             Platform: Windows x64
