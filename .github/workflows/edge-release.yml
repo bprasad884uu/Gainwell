@@ -1,4 +1,4 @@
-name: Update rolling "Microsoft Edge" release
+name: Update rolling "Microsoft Edge" release (MSI attached)
 
 on:
   schedule:
@@ -17,7 +17,7 @@ jobs:
           set -e
           curl -fsSL "https://edgeupdates.microsoft.com/api/products?view=enterprise" > edge.json
 
-      - name: Parse latest Stable Windows x64
+      - name: Find latest Stable Windows x64 version + MSI URL
         id: parse
         run: |
           set -e
@@ -26,41 +26,77 @@ jobs:
             | .Releases[]? | .ProductVersion
           ' edge.json | sort -V | tail -n1)
 
-          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
-            echo "Failed to get version"; exit 1
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          test -n "$VERSION" && [ "$VERSION" != "null" ] || { echo "No version found"; exit 1; }
 
-          # Build a simple file with official Microsoft URLs + SHA256
-          jq -r --arg VER "$VERSION" '
+          # Try common shape: Releases[].Artifacts[]
+          MSI_URL=$(jq -r --arg VER "$VERSION" '
             .[] | select(.Product=="Stable")
             | .Releases[]? | select(.ProductVersion==$VER)
             | .Artifacts[]?
-            | select(.Platform=="Windows" and .Architecture=="x64" and (.InstallerType=="msi" or .InstallerType=="exe"))
-            | "- \(.InstallerType) • \(.ArtifactName)\n  URL: \(.Location)\n  SHA256: \(.Hash)\n"
-          ' edge.json > links.txt
+            | select((.Platform // "" | ascii_downcase)=="windows"
+                     and (.Architecture // "" | ascii_downcase)=="x64"
+                     and (.InstallerType // "" | ascii_downcase)=="msi")
+            | .Location
+          ' edge.json | head -n1)
 
+          # Fallback: Releases[].Platforms[].Artifacts[]
+          if [ -z "$MSI_URL" ]; then
+            MSI_URL=$(jq -r --arg VER "$VERSION" '
+              .[] | select(.Product=="Stable")
+              | .Releases[]? | select(.ProductVersion==$VER)
+              | .Platforms[]?
+              | select((.Platform // "" | ascii_downcase)=="windows"
+                       and (.Architecture // "" | ascii_downcase)=="x64")
+              | .Artifacts[]?
+              | select((.InstallerType // "" | ascii_downcase)=="msi")
+              | .Location
+            ' edge.json | head -n1)
+          fi
+
+          test -n "$MSI_URL" || { echo "No MSI URL found for $VERSION"; exit 1; }
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "msi_url=$MSI_URL" >> $GITHUB_OUTPUT
+
+      - name: Stop if version unchanged (optional but recommended)
+        run: |
+          set -e
+          curl -fsSL -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/Edge" > current.json
+          LAST=$(jq -r '.body | capture("Version:\\s*(?<v>[0-9.]+)")?.v // empty' current.json)
+          echo "Current release shows: $LAST"
+          if [ "$LAST" = "${{ steps.parse.outputs.version }}" ]; then
+            echo "No new version. Exiting."
+            exit 78
+          fi
+
+      - name: Download MSI from Microsoft
+        run: |
+          set -e
           mkdir -p out
-          {
-            echo "Microsoft Edge Stable (Windows x64)"
-            echo "Version: $VERSION"
-            echo
-            cat links.txt
-          } > out/edge-links.txt
+          cd out
+          # filename matches Microsoft’s typical artifact name
+          curl -fL --retry 5 --retry-delay 2 \
+            -o MicrosoftEdgeEnterpriseX64.msi \
+            "${{ steps.parse.outputs.msi_url }}"
+          ls -lh MicrosoftEdgeEnterpriseX64.msi
+          sha256sum MicrosoftEdgeEnterpriseX64.msi | tee SHA256.txt
 
-      - name: Update the constant release
+      - name: Update rolling release (tag: Edge) with MSI
         uses: ncipollo/release-action@v1
         with:
-          tag: Edge                  # <-- your fixed tag; change if yours is different
-          name: Microsoft Edge       # <-- keep the release title constant
+          tag: Edge
+          name: Microsoft Edge        # keep the title constant
           body: |
             Channel: Stable
             Platform: Windows x64
             Version: ${{ steps.parse.outputs.version }}
 
-            See attached file (edge-links.txt) for official Microsoft download URLs and SHA256 hashes.
+            This private release includes the Microsoft Edge MSI attached for deployment.
           allowUpdates: true
           replacesArtifacts: true
-          artifacts: out/edge-links.txt
+          artifacts: |
+            out/MicrosoftEdgeEnterpriseX64.msi,
+            out/SHA256.txt
           draft: false
           prerelease: false
