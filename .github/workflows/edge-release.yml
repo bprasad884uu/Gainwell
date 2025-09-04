@@ -14,16 +14,20 @@ jobs:
     steps:
       - name: Fetch Edge Updates API
         run: |
+          set -e
           curl -fsSL "https://edgeupdates.microsoft.com/api/products?view=enterprise" > edge.json
 
-      - name: Parse latest Stable Windows x64 MSI
+      - name: Parse latest Stable Windows x64 MSI (robust)
         id: parse
         run: |
+          set -e
+          # Latest Stable version
           VERSION=$(jq -r '
             .[] | select(.Product=="Stable")
             | .Releases[]? | .ProductVersion
           ' edge.json | sort -V | tail -n1)
 
+          # Find an MSI URL (handles both payload shapes)
           MSI_URL=$(jq -r --arg VER "$VERSION" '
             .[] | select(.Product=="Stable")
             | .Releases[]? | select(.ProductVersion==$VER)
@@ -34,12 +38,33 @@ jobs:
             | .Location
           ' edge.json | head -n1)
 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "msi_url=$MSI_URL" >> $GITHUB_OUTPUT
+          # Trim whitespace/CRLF just in case
+          VERSION=$(printf "%s" "$VERSION" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+          MSI_URL=$(printf "%s" "$MSI_URL" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+
+          echo "Parsed version: $VERSION"
+          echo "Parsed MSI URL: $MSI_URL"
+
+          # Validate and prepare debug payload if needed
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "No version parsed. Saving payload for debugging."
+            cp edge.json edge-debug.json
+            exit 1
+          fi
+          if ! printf "%s" "$MSI_URL" | grep -Eiq '^https?://'; then
+            echo "MSI URL invalid. Saving payload for debugging."
+            cp edge.json edge-debug.json
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "msi_url=$MSI_URL" >> "$GITHUB_OUTPUT"
 
       - name: Download MSI from Microsoft
         run: |
+          set -e
           mkdir -p out
+          echo "Downloading: ${{ steps.parse.outputs.msi_url }}"
           curl -fL --retry 5 --retry-delay 2 \
             -o out/MicrosoftEdgeEnterpriseX64.msi \
             "${{ steps.parse.outputs.msi_url }}"
@@ -55,7 +80,7 @@ jobs:
             Platform: Windows x64
             Version: ${{ steps.parse.outputs.version }}
 
-            MSI downloaded from Microsoft and attached automatically.
+            MSI downloaded from Microsoft CDN and attached automatically.
           allowUpdates: true
           replacesArtifacts: true
           artifacts: |
@@ -63,3 +88,10 @@ jobs:
             out/SHA256.txt
           draft: false
           prerelease: false
+
+      - name: Upload debug payload (only if earlier step failed)
+        if: failure() && hashFiles('edge-debug.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: edge-debug
+          path: edge-debug.json
