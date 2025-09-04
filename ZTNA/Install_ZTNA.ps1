@@ -2,15 +2,15 @@
 # Install ZTNA
 # Author: Bishnu's Helper
 
-$DidInstall   = $false
+$DidInstall      = $false
 $downloadSuccess = $false
 
 Write-Host "`n=== Checking and Installing ZTNA (Zscaler) ==="
 
 $destination = "$env:TEMP\Zscaler-windows-installer-x64.msi"
-$ZTNA_setup = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/ZTNA/Zscaler-windows-4.7.0.61-installer-x64.msi"
+$ZTNA_setup  = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/ZTNA/Zscaler-windows-4.7.0.61-installer-x64.msi"
 
-# --- Functions ---
+# -------- Functions --------
 function Format-Size {
     param ([long]$bytes)
     switch ($bytes) {
@@ -20,7 +20,6 @@ function Format-Size {
         default        { return "$bytes B" }
     }
 }
-
 function Format-Speed {
     param ([double]$bytesPerSecond)
     switch ($bytesPerSecond) {
@@ -30,8 +29,37 @@ function Format-Speed {
         default        { return "{0:N2} B/s" -f $bytesPerSecond }
     }
 }
+function Test-ZTNAInstalled {
+    $entries = @()
+    $entries += Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* 2>$null | Where-Object { $_.DisplayName -like "*Zscaler*" }
+    $entries += Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* 2>$null | Where-Object { $_.DisplayName -like "*Zscaler*" }
+    $entries += Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* 2>$null | Where-Object { $_.DisplayName -like "*Zscaler*" }
+    return ($entries -and $entries.Count -gt 0)
+}
+
+# -------- 1) Check first --------
+if (Test-ZTNAInstalled) {
+    Write-Host "`nZTNA (Zscaler) is already installed. Skipping download and installation."
+    # Optional: remove leftover installer if present
+    if (Test-Path $destination) {
+        Remove-Item $destination -Force -ErrorAction SilentlyContinue
+        Write-Host "Cleaned up leftover installer: $destination"
+    }
+    Write-Host "`n=== Script Finished ==="
+    return
+}
+
+# -------- 2) Download only if not installed --------
+# Ensure TLS 1.2 for older hosts
+try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
+
+if (Test-Path $destination) {
+    # Clean any previous partial file
+    Remove-Item $destination -Force -ErrorAction SilentlyContinue
+}
 
 # --- Download File ---
+# Load HttpClient only now (needed)
 if (-not ("System.Net.Http.HttpClient" -as [type])) {
     Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll"
 }
@@ -39,9 +67,8 @@ if (-not ("System.Net.Http.HttpClient" -as [type])) {
 $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
 $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
 
-if (-not $downloadSuccess) {
-    Write-Host "`nStarting download..."
-
+Write-Host "`nStarting download..."
+try {
     $response = $httpClient.GetAsync($ZTNA_setup, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
 
     if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
@@ -98,30 +125,28 @@ if (-not $downloadSuccess) {
     $downloadSuccess = $true
     $httpClient.Dispose()
 }
+catch {
+    try { $httpClient.Dispose() } catch {}
+    Write-Host "`nERROR: Failed to download ZTNA installer. $_" -ForegroundColor Red
+    exit 1
+}
 
 if (-not $downloadSuccess) {
     Write-Host "`nAll download methods failed. Please check your internet connection." -ForegroundColor Red
-    exit
+    exit 1
 }
 
-# --- Check Existing Installation ---
-$ZTNAInstalled = @()
-$ZTNAInstalled += Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* 2>$null | Where-Object { $_.DisplayName -like "*Zscaler*" }
-$ZTNAInstalled += Get-ItemProperty HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\* 2>$null | Where-Object { $_.DisplayName -like "*Zscaler*" }
-$ZTNAInstalled += Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* 2>$null | Where-Object { $_.DisplayName -like "*Zscaler*" }
-
-if ($ZTNAInstalled.Count -gt 0) {
-    Write-Host "`nZTNA (Zscaler) is already installed. Skipping installation."
-} elseif (Test-Path $destination) {
-    Write-Host "`nInstalling ZTNA from: $destination"
-    Start-Process "msiexec.exe" -ArgumentList "/i `"$destination`" /qn /norestart" -Wait
+# -------- 3) Install silently --------
+Write-Host "`nInstalling ZTNA from: $destination"
+$proc = Start-Process "msiexec.exe" -ArgumentList "/i `"$destination`" /qn /norestart" -Wait -PassThru
+if ($proc.ExitCode -eq 0) {
     Write-Host "`nZTNA installation completed."
     $DidInstall = $true
 } else {
-    Write-Host "ERROR: Installer not found at $destination"
+    Write-Host "`nERROR: MSI installation failed with exit code $($proc.ExitCode)." -ForegroundColor Red
 }
 
-# --- Post Install Actions ---
+# -------- 4) Post-install --------
 if ($DidInstall) {
     Write-Host "`nZTNA (Zscaler) was installed."
 	Write-Host "`nStopping ZTNA processes..."
@@ -134,7 +159,7 @@ if ($DidInstall) {
     Write-Host "`nNo ZTNA installation performed."
 }
 
-# --- Always Cleanup ---
+# -------- 5) Always Cleanup --------
 if (Test-Path $destination) {
     Remove-Item $destination -Force -ErrorAction SilentlyContinue
     Write-Host "`nInstaller removed: $destination"
