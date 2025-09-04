@@ -1,31 +1,69 @@
-name: Update release from Microsoft Edge
+name: Update rolling "Microsoft Edge" release
 
 on:
   schedule:
-    - cron: "17 */4 * * *"   # check every 4 hours
+    - cron: "17 */4 * * *"   # every 4 hours
   workflow_dispatch: {}
 
 jobs:
   update:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # needed to commit & create releases
+      contents: write
 
     steps:
-      - uses: actions/checkout@v4
-
       - name: Fetch Edge Updates API
         run: |
           set -e
           curl -fsSL "https://edgeupdates.microsoft.com/api/products?view=enterprise" > edge.json
-          mkdir -p manifests
-          jq '.' edge.json > manifests/latest.json
 
-      - name: Extract latest Stable Windows x64 version and artifact links
+      - name: Parse latest Stable Windows x64
         id: parse
         run: |
           set -e
           VERSION=$(jq -r '
-            .[] | select(.Product == "Stable")
+            .[] | select(.Product=="Stable")
             | .Releases[]? | .ProductVersion
-          ' manifests/latest.json | sort -V | tail -n1)
+          ' edge.json | sort -V | tail -n1)
+
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "Failed to get version"; exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Build concise notes with official Microsoft URLs + SHA256
+          jq -r --arg VER "$VERSION" '
+            .[] | select(.Product=="Stable")
+            | .Releases[]? | select(.ProductVersion==$VER)
+            | .Artifacts[]?
+            | select(.Platform=="Windows" and .Architecture=="x64" and (.InstallerType=="msi" or .InstallerType=="exe"))
+            | "- \(.InstallerType) • \(.ArtifactName)
+  URL: \(.Location)
+  SHA256: \(.Hash)
+"
+          ' edge.json > notes.txt
+
+          mkdir -p out
+          printf "Microsoft Edge Stable (Windows x64)\nVersion: %s\n\n" "$VERSION" > out/edge-links.txt
+          cat notes.txt >> out/edge-links.txt
+
+      - name: Update the constant release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: Edge                       # <-- keep this as your fixed tag
+          name: Microsoft Edge            # <-- constant release name (no version)
+          body: |
+            **Channel:** Stable
+            **Platform:** Windows x64
+            **Version:** ${{ steps.parse.outputs.version }}
+
+            Official Microsoft download links for this version:
+
+            $(cat notes.txt)
+
+            This is a rolling release; the asset below is overwritten when a new version ships.
+          allowUpdates: true              # update the same release each run
+          replacesArtifacts: true         # overwrite the asset
+          artifacts: "out/edge-links.txt" # the single file that gets replaced
+          draft: false
+          prerelease: false
