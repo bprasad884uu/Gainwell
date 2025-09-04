@@ -70,7 +70,6 @@ jobs:
             Platform: Windows x64
             Version: ${{ steps.parse.outputs.version }}
 
-            MSI downloaded from Microsoft CDN and attached automatically.
           allowUpdates: true
           replacesArtifacts: true
           artifacts: |
