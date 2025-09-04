@@ -31,39 +31,36 @@ jobs:
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-          # Build concise notes with official Microsoft URLs + SHA256
+          # Build a simple file with official Microsoft URLs + SHA256
           jq -r --arg VER "$VERSION" '
             .[] | select(.Product=="Stable")
             | .Releases[]? | select(.ProductVersion==$VER)
             | .Artifacts[]?
             | select(.Platform=="Windows" and .Architecture=="x64" and (.InstallerType=="msi" or .InstallerType=="exe"))
-            | "- \(.InstallerType) • \(.ArtifactName)
-  URL: \(.Location)
-  SHA256: \(.Hash)
-"
-          ' edge.json > notes.txt
+            | "- \(.InstallerType) • \(.ArtifactName)\n  URL: \(.Location)\n  SHA256: \(.Hash)\n"
+          ' edge.json > links.txt
 
           mkdir -p out
-          printf "Microsoft Edge Stable (Windows x64)\nVersion: %s\n\n" "$VERSION" > out/edge-links.txt
-          cat notes.txt >> out/edge-links.txt
+          {
+            echo "Microsoft Edge Stable (Windows x64)"
+            echo "Version: $VERSION"
+            echo
+            cat links.txt
+          } > out/edge-links.txt
 
       - name: Update the constant release
         uses: ncipollo/release-action@v1
         with:
-          tag: Edge                       # <-- keep this as your fixed tag
-          name: Microsoft Edge            # <-- constant release name (no version)
+          tag: Edge                  # <-- your fixed tag; change if yours is different
+          name: Microsoft Edge       # <-- keep the release title constant
           body: |
-            **Channel:** Stable
-            **Platform:** Windows x64
-            **Version:** ${{ steps.parse.outputs.version }}
+            Channel: Stable
+            Platform: Windows x64
+            Version: ${{ steps.parse.outputs.version }}
 
-            Official Microsoft download links for this version:
-
-            $(cat notes.txt)
-
-            This is a rolling release; the asset below is overwritten when a new version ships.
-          allowUpdates: true              # update the same release each run
-          replacesArtifacts: true         # overwrite the asset
-          artifacts: "out/edge-links.txt" # the single file that gets replaced
+            See attached file (edge-links.txt) for official Microsoft download URLs and SHA256 hashes.
+          allowUpdates: true
+          replacesArtifacts: true
+          artifacts: out/edge-links.txt
           draft: false
           prerelease: false
