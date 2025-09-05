@@ -1,6 +1,6 @@
 <#
 AppLocker Policy in ENFORCE mode (Hybrid model + Refined PS Temp Fix + Installer Elevation + Non-System Drive Block)
-- Local Admins + Domain Admins allowed everywhere.
+- Local Admins allowed everywhere (only Administrators group).
 - Standard Users only allowed:
   * Windows, Program Files, Program Files (x86), ProgramData
   * Microsoft-signed DLLs + Scripts (system-critical)
@@ -117,20 +117,9 @@ function Enable-AppIDSvc {
     Start-Service -Name AppIDSvc -ErrorAction SilentlyContinue
 }
 function New-RuleGuid { [guid]::NewGuid().ToString().ToUpper() }
-function Get-DomainAdminsSID {
-    try {
-        $domainAdmins = New-Object System.Security.Principal.NTAccount("Domain Admins")
-        $sid = $domainAdmins.Translate([System.Security.Principal.SecurityIdentifier])
-        return $sid.Value
-    } catch {
-        Write-Host "Could not resolve Domain Admins SID. Skipping Domain Admins rule."
-        return $null
-    }
-}
 
 function Apply-AppLockerEnforcePolicy {
     Enable-AppIDSvc
-    $domainAdminsSID = Get-DomainAdminsSID
 
     $applockerXml = @"
 <?xml version="1.0" encoding="utf-8"?>
@@ -140,11 +129,6 @@ function Apply-AppLockerEnforcePolicy {
   <RuleCollection Type="Exe" EnforcementMode="Enabled">
     <FilePathRule Id="$(New-RuleGuid)" Name="Allow Local Admins - EXE" Description="Local Admins can run EXEs" UserOrGroupSid="S-1-5-32-544" Action="Allow"><Conditions><FilePathCondition Path="*"/></Conditions></FilePathRule>
 "@
-    if ($domainAdminsSID) {
-        $applockerXml += @"
-    <FilePathRule Id="$(New-RuleGuid)" Name="Allow Domain Admins - EXE" Description="Domain Admins can run EXEs" UserOrGroupSid="$domainAdminsSID" Action="Allow"><Conditions><FilePathCondition Path="*"/></Conditions></FilePathRule>
-"@
-    }
     $applockerXml += @"
     <FilePathRule Id="$(New-RuleGuid)" Name="Allow Everyone - Windows EXE" Description="Allow EXEs from Windows" UserOrGroupSid="S-1-1-0" Action="Allow"><Conditions><FilePathCondition Path="%WINDIR%\*"/></Conditions></FilePathRule>
     <FilePathRule Id="$(New-RuleGuid)" Name="Allow Everyone - Program Files EXE" Description="Allow EXEs from Program Files" UserOrGroupSid="S-1-1-0" Action="Allow"><Conditions><FilePathCondition Path="%PROGRAMFILES%\*"/></Conditions></FilePathRule>
