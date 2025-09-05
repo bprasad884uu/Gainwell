@@ -34,13 +34,6 @@ if ($OSType -ne 1) {
     exit
 }
 
-# Ensure administrative elevation
-if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
-    ).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
-    Write-Warning "This script must be run as Administrator. Exiting."
-    exit 1
-}
-
 # helper for GUIDs
 function New-RuleGuid { return [guid]::NewGuid().ToString() }
 
