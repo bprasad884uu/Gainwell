@@ -32,6 +32,7 @@ $OSType = (Get-CimInstance Win32_OperatingSystem).ProductType
 if ($OSType -ne 1) {
     Write-Host "Non-client OS detected. Exiting script."
     exit
+}
 
 # Ensure administrative elevation
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
