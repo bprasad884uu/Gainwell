@@ -2,7 +2,8 @@
 Revert ALL install restriction policies (Safe Version)
 - First tries to restore from most recent backup in C:\PolicyBackup
 - If no valid backup is found → pushes clean reset (<AppLockerPolicy Version="1" />)
-- Also clears SRP, WDAC, installer overrides, SmartScreen
+- Resets SRP safer key to default baseline (with ExecutableTypes list)
+- Clears installer overrides
 - Finally disables + stops Application Identity service (AppIDSvc)
 - gpupdate + AppIDSvc cleanup at the end
 #>
@@ -53,12 +54,32 @@ if (-not $restored) {
     Set-AppLockerPolicy -XmlPolicy $resetPath
 }
 
-# --- 2. Remove SRP ---
-$srpBase = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer"
-if (Test-Path $srpBase) {
-    Remove-Item -Path $srpBase -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host "SRP removed."
+# --- 2. Reset SRP safer key instead of removing ---
+$saferBase = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer\CodeIdentifiers"
+
+# Ensure base key exists
+if (-not (Test-Path $saferBase)) {
+    New-Item -Path $saferBase -Force | Out-Null
+    Write-Host "Created $saferBase"
 }
+
+# Set baseline values
+$exeTypesString = "ADE;ADP;BAS;BAT;CHM;CMD;COM;CPL;CRT;EXE;HLP;HTA;INF;INS;ISP;LNK;MDB;MDE;MSC;MSI;MSP;MST;OCX;PCD;PIF;REG;SCR;SHS;URL;VB;WSC"
+$exeArray = $exeTypesString -split ';'
+
+New-ItemProperty -Path $saferBase -Name "DefaultLevel" -Value 0x00040000 -PropertyType DWord -Force | Out-Null
+New-ItemProperty -Path $saferBase -Name "TransparentEnabled" -Value 1 -PropertyType DWord -Force | Out-Null
+New-ItemProperty -Path $saferBase -Name "PolicyScope" -Value 0 -PropertyType DWord -Force | Out-Null
+New-ItemProperty -Path $saferBase -Name "authenticodeenabled" -Value 0 -PropertyType DWord -Force | Out-Null
+New-ItemProperty -Path $saferBase -Name "ExecutableTypes" -Value $exeArray -PropertyType MultiString -Force | Out-Null
+
+# Ensure the '0' container with PATHS + HASHES
+$zeroKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer\CodeIdentifiers\0"
+if (-not (Test-Path $zeroKey)) { New-Item -Path $zeroKey -Force | Out-Null }
+if (-not (Test-Path (Join-Path $zeroKey "PATHS"))) { New-Item -Path (Join-Path $zeroKey "PATHS") -Force | Out-Null }
+if (-not (Test-Path (Join-Path $zeroKey "HASHES"))) { New-Item -Path (Join-Path $zeroKey "HASHES") -Force | Out-Null }
+
+Write-Host "SRP safer key reset to baseline."
 
 # --- 3. Reset installer overrides ---
 $msiKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer"
@@ -84,6 +105,10 @@ try {
     Write-Warning "Could not disable AppIDSvc: $_"
 }
 
-#Cleanup backup directory
-Remove-Item $backupRoot -Recurse -Force
+# Cleanup backup directory
+if (Test-Path $backupRoot) {
+    Remove-Item $backupRoot -Recurse -Force
+    Write-Host "Backup directory $backupRoot removed."
+}
+
 Write-Host "Revert complete. Reboot recommended."
