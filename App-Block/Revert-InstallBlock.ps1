@@ -10,13 +10,6 @@ Revert ALL install restriction policies (Safe Version)
 
 $ErrorActionPreference = 'Stop'
 
-# --- Ensure admin ---
-if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
-    ).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
-    Write-Warning "This script must be run as Administrator. Exiting..."
-    exit 1
-}
-
 Write-Host "=== Reverting ALL install restriction policies (Safe Mode) ==="
 
 # --- Find latest backup ---
