@@ -60,15 +60,15 @@ Write-Host "=== Creating Backup ($backupDir) ==="
 try {
     $xmlPath = Join-Path $backupDir "AppLocker-Backup.xml"
     Get-AppLockerPolicy -Effective -Xml | Out-File -FilePath $xmlPath -Encoding UTF8
-    Write-Host "AppLocker backed up to $xmlPath"
-} catch { Write-Warning "AppLocker backup failed: $_" }
+    Write-Host "`nAppLocker backed up to $xmlPath"
+} catch { Write-Warning "`nAppLocker backup failed: $_" }
 
 # 2. Backup SRP
 try {
     $regFile = Join-Path $backupDir "SRP-Backup.reg"
     reg export "HKLM\SOFTWARE\Policies\Microsoft\Windows\Safer" $regFile /y | Out-Null
-    Write-Host "SRP registry exported to $regFile"
-} catch { Write-Warning "SRP backup failed (may not exist)." }
+    Write-Host "`nSRP registry exported to $regFile"
+} catch { Write-Warning "`nSRP backup failed (may not exist)." }
 
 # 3. Attempt WDAC (.cipolicy/.xml) backup (if present)
 try {
@@ -78,13 +78,13 @@ try {
         ForEach-Object { Copy-Item -Path $_.FullName -Destination $wdacPath -Force }
     $found = Get-ChildItem -Path $wdacPath -ErrorAction SilentlyContinue
     if ($found) {
-        Write-Host "Attempted WDAC policy backup (if any) to $wdacPath"
+        Write-Host "`nAttempted WDAC policy backup (if any) to $wdacPath"
     } else {
-        Write-Host "No WDAC policy files found to back up."
+        Write-Host "`nNo WDAC policy files found to back up."
     }
-} catch { Write-Warning "WDAC backup step failed: $_" }
+} catch { Write-Warning "`nWDAC backup step failed: $_" }
 
-Write-Host "=== Backup complete. Applying Block Policy... ==="
+Write-Host "`n=== Backup complete. Applying Block Policy... ==="
 
 $ErrorActionPreference = 'Stop'
 
@@ -263,24 +263,24 @@ try {
     $dir = Split-Path $OutXmlPath -Parent
     if (-not (Test-Path $dir)) { New-Item -Path $dir -ItemType Directory -Force | Out-Null }
     $xml | Out-File -FilePath $OutXmlPath -Encoding UTF8 -Force
-    Write-Host "Wrote AppLocker XML to $OutXmlPath"
+    Write-Host "`nWrote AppLocker XML to $OutXmlPath"
 } catch {
-    Write-Error "Failed to write XML: $_"
+    Write-Error "`nFailed to write XML: $_"
     exit 1
 }
 
 # Apply policy
 try {
-    Write-Host "Applying AppLocker policy (Enforce) ..."
+    Write-Host "`nApplying AppLocker policy (Enforce) ..."
     Set-AppLockerPolicy -XmlPolicy $OutXmlPath
     gpupdate /force | Out-Null
 
     # ensure AppIDSvc is configured & restarted
     sc.exe config appidsvc start= auto | Out-Null
-    try { Restart-Service -Name AppIDSvc -Force -ErrorAction Stop; Write-Host "AppIDSvc restarted." } catch { Write-Warning "Could not restart AppIDSvc; reboot may be required." }
+    try { Restart-Service -Name AppIDSvc -Force -ErrorAction Stop; Write-Host "`nAppIDSvc restarted." } catch { Write-Warning "`nCould not restart AppIDSvc; reboot may be required." }
 
-    Write-Host "AppLocker policy applied in ENFORCE mode. Check Event Viewer > Microsoft > Windows > AppLocker for events."
+    Write-Host "`nAppLocker policy applied in ENFORCE mode. Check Event Viewer > Microsoft > Windows > AppLocker for events."
 } catch {
-    Write-Error "Failed to apply AppLocker policy: $_"
+    Write-Error "`nFailed to apply AppLocker policy: $_"
     exit 1
 }
