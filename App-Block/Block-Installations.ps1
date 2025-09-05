@@ -64,11 +64,18 @@ try {
 } catch { Write-Warning "`nAppLocker backup failed: $_" }
 
 # 2. Backup SRP
-try {
-    $regFile = Join-Path $backupDir "SRP-Backup.reg"
-    reg export "HKLM\SOFTWARE\Policies\Microsoft\Windows\Safer" $regFile /y | Out-Null
-    Write-Host "`nSRP registry exported to $regFile"
-} catch { Write-Warning "`nSRP backup failed (may not exist)." }
+$regPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer"
+if (Test-Path $regPath) {
+    try {
+        $regFile = Join-Path $backupDir "SRP-Backup.reg"
+        reg export "HKLM\SOFTWARE\Policies\Microsoft\Windows\Safer" $regFile /y | Out-Null
+        Write-Host "`nSRP registry exported to $regFile"
+    } catch {
+        Write-Warning "`nSRP backup failed."
+    }
+} else {
+    Write-Host "`nSRP registry path not found. Skipping backup."
+}
 
 # 3. Attempt WDAC (.cipolicy/.xml) backup (if present)
 try {
