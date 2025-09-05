@@ -198,10 +198,10 @@ $xml += "  </RuleCollection>`n"
 # ---------------- DLL rules ----------------
 $xml += "  <RuleCollection Type=`"Dll`" EnforcementMode=`"$EnforcementMode`">`n"
 
-# Allow Microsoft-signed DLLs
-$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Microsoft Signed DLLs`" Description=`"Allow Microsoft-signed DLLs`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+# Allow all digitally signed DLLs (any publisher)
+$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - All Signed DLLs`" Description=`"Allow all digitally signed DLLs`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
 $xml += "      <Conditions>`n"
-$xml += "        <FilePublisherCondition PublisherName=`"O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US`" ProductName=`"*`" BinaryName=`"*`">`n"
+$xml += "        <FilePublisherCondition PublisherName=`"*`" ProductName=`"*`" BinaryName=`"*`">`n"
 $xml += "          <BinaryVersionRange LowSection=`"0.0.0.0`" HighSection=`"*`" />`n"
 $xml += "        </FilePublisherCondition>`n"
 $xml += "      </Conditions>`n"
