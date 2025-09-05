@@ -105,7 +105,7 @@ $installerPatternsUsers = @(
   "$SystemDriveToken\Users\*\*update.exe"
 )
 foreach ($p in $installerPatternsUsers) {
-    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - Users - $([System.IO.Path]::GetFileName($p))`" Description=`"Deny installers in user profiles`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - Users - $(Split-Path $p -Leaf)`" Description=`"Deny installers in user profiles`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
     $xml += "      <Conditions><FilePathCondition Path=`"$p`"/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
 }
