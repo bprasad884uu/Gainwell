@@ -16,102 +16,117 @@ Write-Host "=== Reverting ALL install restriction policies (Safe Mode) ==="
 $backupRoot = "C:\PolicyBackup"
 $backupDir = $null
 if (Test-Path $backupRoot) {
-    $backupDir = Get-ChildItem -Path $backupRoot -Directory | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-}
-
-$restored = $false
-
-## --- 1. Find latest backup ---
-$backupRoot = "C:\PolicyBackup"
-$backupDir = $null
-if (Test-Path $backupRoot) {
-    $backupDir = Get-ChildItem -Path $backupRoot -Directory |
+    $backupDir = Get-ChildItem -Path $backupRoot -Directory -ErrorAction SilentlyContinue |
                  Sort-Object LastWriteTime -Descending |
                  Select-Object -First 1
 }
 
 # --- 1. Try AppLocker + SRP restore ---
-$restored = $false
+
+$restoredAny = $false
+$errors = @()
 
 if ($backupDir) {
-    Write-Host "`nFound backup: $($backupDir.FullName). Trying restore..."
+    Write-Host "`nFound backup folder: $($backupDir.FullName)"
     $xmlPath = Join-Path $backupDir.FullName "AppLocker-Backup.xml"
     $regFile = Join-Path $backupDir.FullName "SRP-Backup.reg"
 
+    # Restore AppLocker if XML exists
     if (Test-Path $xmlPath) {
+        Write-Host "`nAttempting AppLocker restore: $xmlPath"
         try {
             Set-AppLockerPolicy -XmlPolicy $xmlPath -ErrorAction Stop
-            Write-Host "`nRestored AppLocker from backup."
-            $restored = $true
+            Write-Host "`nAppLocker restored from backup."
+            $restoredAny = $true
         } catch {
-            Write-Warning "`nAppLocker restore failed: $($_.Exception.Message)"
+            $msg = "AppLocker restore failed: $($_.Exception.Message)"
+            Write-Warning "`n$msg"
+            $errors += $msg
         }
+    } else {
+        Write-Host "`nNo AppLocker XML found in latest backup."
     }
 
+    # Import SRP .reg if present
     if (Test-Path $regFile) {
-        Write-Host "`nRestoring SRP policy from backup: $regFile"
+        Write-Host "`nAttempting SRP import..."
         try {
-            # Use reg.exe import. Quote the path to handle spaces.
-            $arg = "import `"$regFile`""
-            Start-Process -FilePath "reg.exe" -ArgumentList $arg -Wait -NoNewWindow -ErrorAction Stop
-            Write-Host "SRP backup restored successfully."
-            $restored = $true
+            $proc = Start-Process -FilePath "reg.exe" -ArgumentList @("import", $regFile) -Wait -NoNewWindow -PassThru
+            if ($proc.ExitCode -eq 0) {
+                Write-Host "`nSRP imported successfully."
+                $restoredAny = $true
+            } else {
+                $msg = "reg.exe returned exit code $($proc.ExitCode) importing $regFile"
+                Write-Warning "`n$msg"
+                $errors += $msg
+            }
         } catch {
-            Write-Warning "Failed to restore SRP backup. Error: $($_.Exception.Message)"
+            $msg = "SRP import failed: $($_.Exception.Message)"
+            Write-Warning "`n$msg"
+            $errors += $msg
         }
+    } else {
+        Write-Host "`nNo SRP backup found in latest backup."
     }
+} else {
+    Write-Host "`nNo backup folder found at $backupRoot."
 }
 
-# --- If restore failed, push clean reset ---
-if (-not $restored) {
-    Write-Host "`nNo valid backup restored. Pushing clean reset..."
+# If nothing restored, apply clean reset
+if (-not $restoredAny) {
+    Write-Host "`nNo valid backup items restored. Applying clean reset..."
 
-    # AppLocker clean reset
+    # AppLocker reset
     $resetXml = @'
 <AppLockerPolicy Version="1" />
 '@
     $appLockerDir = Join-Path $env:ProgramData "AppLocker"
-    if (-not (Test-Path $appLockerDir)) {
-        New-Item -Path $appLockerDir -ItemType Directory -Force | Out-Null
-    }
-    $resetPath = Join-Path $appLockerDir "FullReset.xml"
-    $resetXml | Out-File -FilePath $resetPath -Encoding UTF8 -Force
-
     try {
+        if (-not (Test-Path $appLockerDir)) { 
+            New-Item -Path $appLockerDir -ItemType Directory -Force | Out-Null 
+            Write-Host "`nCreated AppLocker directory: $appLockerDir"
+        }
+        $resetPath = Join-Path $appLockerDir "FullReset.xml"
+        $resetXml | Out-File -FilePath $resetPath -Encoding UTF8 -Force
         Set-AppLockerPolicy -XmlPolicy $resetPath -ErrorAction Stop
-        Write-Host "AppLocker reset applied."
+        Write-Host "`nAppLocker reset applied."
+        $restoredAny = $true
     } catch {
-        Write-Warning "Failed to apply AppLocker reset: $($_.Exception.Message)"
+        $msg = "Failed to apply AppLocker reset: $($_.Exception.Message)"
+        Write-Warning "`n$msg"
+        $errors += $msg
     }
-	
+
     # SRP (Safer) baseline reset
-    Write-Host "`nResetting SRP safer key to baseline..."
+    try {
+        Write-Host "`nResetting SRP (Safer) baseline..."
+        $saferBase = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer\CodeIdentifiers"
+        if (-not (Test-Path $saferBase)) { 
+            New-Item -Path $saferBase -Force | Out-Null 
+            #Write-Host "`nCreated $saferBase"
+        }
 
-    $saferBase = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer\CodeIdentifiers"
+        $exeTypes = "ADE;ADP;BAS;BAT;CHM;CMD;COM;CPL;CRT;EXE;HLP;HTA;INF;INS;ISP;LNK;MDB;MDE;MSC;MSI;MSP;MST;OCX;PCD;PIF;REG;SCR;SHS;URL;VB;WSC"
+        $exeArray = $exeTypes -split ';'
 
-    # Ensure base key exists
-    if (-not (Test-Path $saferBase)) {
-        New-Item -Path $saferBase -Force | Out-Null
-        Write-Host "Created $saferBase"
+        New-ItemProperty -Path $saferBase -Name "DefaultLevel" -Value 0x00040000 -PropertyType DWord -Force | Out-Null
+        New-ItemProperty -Path $saferBase -Name "TransparentEnabled" -Value 1 -PropertyType DWord -Force | Out-Null
+        New-ItemProperty -Path $saferBase -Name "PolicyScope" -Value 0 -PropertyType DWord -Force | Out-Null
+        New-ItemProperty -Path $saferBase -Name "authenticodeenabled" -Value 0 -PropertyType DWord -Force | Out-Null
+        New-ItemProperty -Path $saferBase -Name "ExecutableTypes" -Value $exeArray -PropertyType MultiString -Force | Out-Null
+
+        $zeroKey = Join-Path $saferBase "0"
+        if (-not (Test-Path $zeroKey)) { New-Item -Path $zeroKey -Force | Out-Null }
+        if (-not (Test-Path (Join-Path $zeroKey "PATHS"))) { New-Item -Path (Join-Path $zeroKey "PATHS") -Force | Out-Null }
+        if (-not (Test-Path (Join-Path $zeroKey "HASHES"))) { New-Item -Path (Join-Path $zeroKey "HASHES") -Force | Out-Null }
+
+        Write-Host "`nSRP (Safer) baseline reset done."
+        $restoredAny = $true
+    } catch {
+        $msg = "Failed to reset SRP baseline: $($_.Exception.Message)"
+        Write-Warning "`n$msg"
+        $errors += $msg
     }
-
-    # Set baseline values
-    $exeTypesString = "ADE;ADP;BAS;BAT;CHM;CMD;COM;CPL;CRT;EXE;HLP;HTA;INF;INS;ISP;LNK;MDB;MDE;MSC;MSI;MSP;MST;OCX;PCD;PIF;REG;SCR;SHS;URL;VB;WSC"
-    $exeArray = $exeTypesString -split ';'
-
-    New-ItemProperty -Path $saferBase -Name "DefaultLevel" -Value 0x00040000 -PropertyType DWord -Force | Out-Null
-    New-ItemProperty -Path $saferBase -Name "TransparentEnabled" -Value 1 -PropertyType DWord -Force | Out-Null
-    New-ItemProperty -Path $saferBase -Name "PolicyScope" -Value 0 -PropertyType DWord -Force | Out-Null
-    New-ItemProperty -Path $saferBase -Name "authenticodeenabled" -Value 0 -PropertyType DWord -Force | Out-Null
-    New-ItemProperty -Path $saferBase -Name "ExecutableTypes" -Value $exeArray -PropertyType MultiString -Force | Out-Null
-
-    # Ensure the '0' container with PATHS + HASHES
-    $zeroKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer\CodeIdentifiers\0"
-    if (-not (Test-Path $zeroKey)) { New-Item -Path $zeroKey -Force | Out-Null }
-    if (-not (Test-Path (Join-Path $zeroKey "PATHS"))) { New-Item -Path (Join-Path $zeroKey "PATHS") -Force | Out-Null }
-    if (-not (Test-Path (Join-Path $zeroKey "HASHES"))) { New-Item -Path (Join-Path $zeroKey "HASHES") -Force | Out-Null }
-
-    Write-Host "`nSRP safer key reset to baseline."
 }
 
 # --- 2. Reset installer overrides ---
