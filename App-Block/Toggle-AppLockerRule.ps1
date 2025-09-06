@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-  Toggle an AppLocker rule's Action between Allow and Deny.
+  Toggle an AppLocker rule's Action between Allow and Deny and update the rule Name to match.
 .DESCRIPTION
   Accepts a rule by Index or Name (partial match, case-insensitive).
-  Flips Action=Allow to Deny, or Deny to Allow, then applies immediately.
+  Flips Action=Allow to Deny, or Deny to Allow, updates the Name accordingly, then applies immediately.
 .USAGE
   # Example 1: by index
   $ruleToToggle = 5
@@ -21,7 +21,7 @@
 # -------------------------
 # CONFIGURE: set $ruleToToggle before running
 # Example:
-# $ruleToToggle = 5
+# $ruleToToggle = 25
 # $ruleToToggle = "Notepad"
 # $ruleToToggle = 3,"Chrome"
 # -------------------------
@@ -74,7 +74,7 @@ if ($rules.Count -eq 0) {
     exit 0
 }
 
-# Normalize input
+# Normalize input (allow single or array)
 $targets = @($ruleToToggle)
 $matches = @()
 
@@ -92,7 +92,7 @@ foreach ($item in $targets) {
     }
 }
 
-# Deduplicate
+# Deduplicate matches by Id
 $matches = $matches | Sort-Object -Property Id -Unique
 
 if (-not $matches) {
@@ -100,17 +100,43 @@ if (-not $matches) {
     exit 0
 }
 
-# Toggle Action
+# Toggle Action and update Name
 foreach ($r in $matches) {
     $current = $r.XmlNode.GetAttribute("Action")
-    if ($current -eq "Allow") {
-        $r.XmlNode.SetAttribute("Action","Deny")
-        Write-Host "Toggled: $($r.Name) (Index $($r.Index)) → Deny" -ForegroundColor Red
-    } elseif ($current -eq "Deny") {
-        $r.XmlNode.SetAttribute("Action","Allow")
-        Write-Host "Toggled: $($r.Name) (Index $($r.Index)) → Allow" -ForegroundColor Green
-    } else {
-        Write-Warning "Rule $($r.Name) (Index $($r.Index)) has unexpected Action '$current'"
+    $curName = $r.XmlNode.GetAttribute("Name")
+    try {
+        if ($current -eq "Allow") {
+            # set to Deny
+            $r.XmlNode.SetAttribute("Action","Deny")
+
+            # update name: if starts with Allow/Deny, replace the first token; else prepend
+            if ($curName -match '^\s*(Allow|Deny)\b(.*)$') {
+                $rest = $Matches[2].Trim()
+                if ($rest -ne "") { $newName = "Deny $rest" } else { $newName = "Deny" }
+            } else {
+                $newName = "Deny - $curName"
+            }
+            $r.XmlNode.SetAttribute("Name",$newName)
+            Write-Host "Toggled: $($r.Name) (Index $($r.Index)) > Deny; renamed to '$newName'" -ForegroundColor Yellow
+
+        } elseif ($current -eq "Deny") {
+            # set to Allow
+            $r.XmlNode.SetAttribute("Action","Allow")
+
+            if ($curName -match '^\s*(Allow|Deny)\b(.*)$') {
+                $rest = $Matches[2].Trim()
+                if ($rest -ne "") { $newName = "Allow $rest" } else { $newName = "Allow" }
+            } else {
+                $newName = "Allow - $curName"
+            }
+            $r.XmlNode.SetAttribute("Name",$newName)
+            Write-Host "Toggled: $($r.Name) (Index $($r.Index)) > Allow; renamed to '$newName'" -ForegroundColor Green
+
+        } else {
+            Write-Warning "Rule $($r.Name) (Index $($r.Index)) has unexpected Action '$current' and was skipped."
+        }
+    } catch {
+        Write-Warning "Failed toggling rule $($r.Name): $_"
     }
 }
 
