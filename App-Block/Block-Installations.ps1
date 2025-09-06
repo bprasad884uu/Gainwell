@@ -198,7 +198,12 @@ $xml += "    </FilePathRule>`n"
 
 # Allow Wallpaper Temp scripts (anywhere)
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Wallpaper Scripts`" Description=`"Allow Wallpaper Temp RAD*.ps1 scripts anywhere`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
-$xml += "      <Conditions><FilePathCondition Path=`"*\RAD*.ps1`"/></Conditions>`n"
+$xml += "      <Conditions><FilePathCondition Path=`"$($SystemDriveToken)\Users\*\AppData\Local\Temp\RAD*.ps1`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
+# Allow ManageEngine Temp scripts (anywhere)
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Wallpaper Scripts`" Description=`"Allow ManageEngine Temp TempScript.ps1 scripts anywhere`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"$($SystemDriveToken)\Users\*\AppData\Local\Temp\TempScript.ps1`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 # Allow Windows/ProgramFiles scripts
