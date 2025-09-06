@@ -40,10 +40,10 @@ function New-RuleGuid { return [guid]::NewGuid().ToString() }
 # Use standard SystemDrive token for XML paths
 $SystemDriveToken = "%SYSTEMDRIVE%"
 
-# discover non-system fixed drives
+# discover non-system fixed drives (only roots like C:\, D:\ etc.)
 $systemRoot = $env:SystemDrive.TrimEnd('\') + '\'
 $nonSystemDrives = Get-PSDrive -PSProvider FileSystem |
-                   Where-Object { $_.Root -ne $systemRoot -and $_.DisplayRoot -ne $null } |
+                   Where-Object { $_.Root -ne $systemRoot } |
                    Select-Object -ExpandProperty Root -ErrorAction SilentlyContinue
 if ($null -eq $nonSystemDrives) { $nonSystemDrives = @() }
 
@@ -112,6 +112,7 @@ $installerPatternsUsers = @(
   "$SystemDriveToken\Users\*\*update.exe"
 )
 foreach ($p in $installerPatternsUsers) {
+    # $p already contains the %SYSTEMDRIVE% token because $SystemDriveToken holds "%SYSTEMDRIVE%"
     $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - Users - $(Split-Path $p -Leaf)`" Description=`"Deny installers in user profiles`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
     $xml += "      <Conditions><FilePathCondition Path=`"$p`"/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
@@ -186,8 +187,8 @@ $xml += "      </Conditions>`n"
 $xml += "    </FilePublisherRule>`n"
 
 # PowerShell engine temp test scripts allowed
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - PowerShell Temp Tests`" Description=`"Allow __PSScriptPolicyTest*.ps1`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
-$xml += "      <Conditions><FilePathCondition Path=`"%SystemDriveToken%\Users\*\AppData\Local\Temp\__PSScriptPolicyTest*.ps1`"/></Conditions>`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - PowerShell Temp Tests`" Description=`"Allow __PSScriptPolicyTest*.ps*`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"$($SystemDriveToken)\Users\*\AppData\Local\Temp\__PSScriptPolicyTest*.ps*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 # Allow Wallpaper Temp scripts (anywhere)
@@ -226,11 +227,11 @@ $xml += "  <RuleCollection Type=`"Msi`" EnforcementMode=`"$EnforcementMode`">`n"
 
 # Deny MSI in user profiles
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - Users - MSI in Profiles`" Description=`"Deny MSI in user profiles`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
-$xml += "      <Conditions><FilePathCondition Path=`"%SystemDriveToken%\Users\*\*.msi`"/></Conditions>`n"
+$xml += "      <Conditions><FilePathCondition Path=`"$($SystemDriveToken)\Users\*\*.msi`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 # Deny MSI on non-system drives
-foreach ($driveRoot in $nonSystemDriveTokens) {
+foreach ($driveRoot in $nonSystemDrives) {
     $driveLetter = $driveRoot.TrimEnd('\')
     if ($driveLetter -match '^[A-Za-z]:$') {
         $pp = "$driveLetter\*\*.msi"
@@ -246,7 +247,7 @@ $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES%\*`"/></Condi
 $xml += "    </FilePathRule>`n"
 
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles (x86) MSI`" Description=`"Allow MSIs from Program Files (x86)`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
-$xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES%(x86)\*`"/></Conditions>`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES(x86)%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 $xml += "  </RuleCollection>`n"
