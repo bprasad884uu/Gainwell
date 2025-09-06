@@ -132,7 +132,7 @@ foreach ($driveRoot in $nonSystemDrives) {
     }
 }
 
-# Allow Local Admins everywhere
+# Allow Local Admins everywhere (EXE)
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All`" Description=`"Local Administrators allowed everywhere`" UserOrGroupSid=`"S-1-5-32-544`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
@@ -177,6 +177,11 @@ $xml += "  </RuleCollection>`n"
 # ---------------- SCRIPT rules ----------------
 $xml += "  <RuleCollection Type=`"Script`" EnforcementMode=`"$EnforcementMode`">`n"
 
+# Allow Local Admins everywhere for Scripts (added so admins retain full access)
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All (Scripts)`" Description=`"Local Administrators allowed everywhere for scripts`" UserOrGroupSid=`"S-1-5-32-544`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
 # Microsoft-signed scripts allowed
 $xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Microsoft Signed Scripts`" Description=`"Allow Microsoft-signed scripts`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
 $xml += "      <Conditions>`n"
@@ -206,6 +211,11 @@ $xml += "  </RuleCollection>`n"
 # ---------------- DLL rules ----------------
 $xml += "  <RuleCollection Type=`"Dll`" EnforcementMode=`"$EnforcementMode`">`n"
 
+# Allow Local Admins everywhere for DLLs (added so admins retain full access)
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All (DLLs)`" Description=`"Local Administrators allowed everywhere for DLLs`" UserOrGroupSid=`"S-1-5-32-544`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
 # Allow all digitally signed DLLs (any publisher)
 $xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - All Signed DLLs`" Description=`"Allow all digitally signed DLLs`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
 $xml += "      <Conditions>`n"
@@ -224,6 +234,11 @@ $xml += "  </RuleCollection>`n"
 
 # ---------------- MSI rules ----------------
 $xml += "  <RuleCollection Type=`"Msi`" EnforcementMode=`"$EnforcementMode`">`n"
+
+# Allow Local Admins everywhere for MSI (added so admins retain full access)
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All (MSI)`" Description=`"Local Administrators allowed everywhere for MSI`" UserOrGroupSid=`"S-1-5-32-544`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
 
 # Deny MSI in user profiles
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - Users - MSI in Profiles`" Description=`"Deny MSI in user profiles`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
@@ -254,6 +269,12 @@ $xml += "  </RuleCollection>`n"
 
 # ---------------- Appx rules ----------------
 $xml += "  <RuleCollection Type=`"Appx`" EnforcementMode=`"$EnforcementMode`">`n"
+
+# Allow Local Admins everywhere for Appx (added so admins retain full access)
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All (Appx)`" Description=`"Local Administrators allowed everywhere for Appx`" UserOrGroupSid=`"S-1-5-32-544`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
 $xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - All Signed Appx`" Description=`"Allow signed packaged apps`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
 $xml += "      <Conditions>`n"
 $xml += "        <FilePublisherCondition PublisherName=`"*`" ProductName=`"*`" BinaryName=`"*`">`n"
