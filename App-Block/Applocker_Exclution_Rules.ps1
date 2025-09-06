@@ -1,72 +1,69 @@
-# ==========================
-# AppLocker Allow Rules
-# ==========================
+# ================================
+# AppLocker Rule Add Template
+# ================================
 
-# --- Allow an EXE ---
-# $rule = New-AppLockerFileRule -RuleType Path -Path "C:\Path\To\MyApp.exe" -User "Everyone" -Action Allow -RuleCollectionType Exe
-# $policy = Get-AppLockerPolicy -Local
-# $policy.RuleCollections[0].FilePathRules.Add($rule)
-# Set-AppLockerPolicy -PolicyObject $policy -Merge
-# gpupdate /force | Out-Null
-# Write-Host "✅ Exe ALLOWED: C:\Path\To\MyApp.exe"
+# --- CHANGE THESE VARIABLES ---
+$ruleType       = "Exe"   # Options: Exe, Dll, Script, Msi, Appx
+$action         = "Allow" # Options: Allow, Deny
+$ruleName       = "Allow Notepad++"
+$description    = "Allow Notepad++ EXE"
+$targetPath     = "%PROGRAMFILES%\Notepad++\notepad++.exe"  # Path or wildcard
+$userOrGroupSid = "S-1-1-0"  # Default = Everyone (S-1-1-0)
+$outFile        = "$env:Temp\AppLocker-Patched.xml"
 
-# --- Allow a DLL ---
-# $rule = New-AppLockerFileRule -RuleType Path -Path "C:\Path\To\MyLib.dll" -User "Everyone" -Action Allow -RuleCollectionType Dll
-# $policy = Get-AppLockerPolicy -Local
-# $policy.RuleCollections[2].FilePathRules.Add($rule)
-# Set-AppLockerPolicy -PolicyObject $policy -Merge
-# gpupdate /force | Out-Null
-# Write-Host "✅ DLL ALLOWED: C:\Path\To\MyLib.dll"
+# --- DO NOT CHANGE BELOW UNLESS NEEDED ---
 
-# --- Allow a Script (.ps1 / .vbs / .js) ---
-# $rule = New-AppLockerFileRule -RuleType Path -Path "C:\Path\To\MyScript.ps1" -User "Everyone" -Action Allow -RuleCollectionType Script
-# $policy = Get-AppLockerPolicy -Local
-# $policy.RuleCollections[1].FilePathRules.Add($rule)
-# Set-AppLockerPolicy -PolicyObject $policy -Merge
-# gpupdate /force | Out-Null
-# Write-Host "✅ Script ALLOWED: C:\Path\To\MyScript.ps1"
+# 1. Export current AppLocker policy (as XML string)
+$xml = Get-AppLockerPolicy -Effective -Xml
 
-# --- Allow an MSI installer ---
-# $rule = New-AppLockerFileRule -RuleType Path -Path "C:\Path\To\Setup.msi" -User "Everyone" -Action Allow -RuleCollectionType Msi
-# $policy = Get-AppLockerPolicy -Local
-# $policy.RuleCollections[3].FilePathRules.Add($rule)
-# Set-AppLockerPolicy -PolicyObject $policy -Merge
-# gpupdate /force | Out-Null
-# Write-Host "✅ MSI ALLOWED: C:\Path\To\Setup.msi"
+# 2. Load XML into an editable object
+$policy = [xml]$xml
 
+# 3. Create a new <FilePathRule> element
+$newRule = $policy.CreateElement("FilePathRule")
+$newRule.SetAttribute("Id", ([guid]::NewGuid().ToString()))  # Unique GUID for the rule
+$newRule.SetAttribute("Name", $ruleName)                     # Friendly name
+$newRule.SetAttribute("Description", $description)           # Optional description
+$newRule.SetAttribute("UserOrGroupSid", $userOrGroupSid)     # Target user/group
+$newRule.SetAttribute("Action", $action)                     # "Allow" or "Deny"
 
-# ==========================
-# AppLocker Block Rules
-# ==========================
+# 4. Build the <Conditions> container
+$conditions = $policy.CreateElement("Conditions")
 
-# --- Block an EXE ---
-# $rule = New-AppLockerFileRule -RuleType Path -Path "C:\Path\To\BadApp.exe" -User "Everyone" -Action Deny -RuleCollectionType Exe
-# $policy = Get-AppLockerPolicy -Local
-# $policy.RuleCollections[0].FilePathRules.Add($rule)
-# Set-AppLockerPolicy -PolicyObject $policy -Merge
-# gpupdate /force | Out-Null
-# Write-Host "❌ Exe BLOCKED: C:\Path\To\BadApp.exe"
+# 5. Add the actual condition (FilePathCondition for path-based rule)
+$condition  = $policy.CreateElement("FilePathCondition")
+$condition.SetAttribute("Path", $targetPath)  # Path or wildcard (e.g., %PROGRAMFILES%\App\*)
+$conditions.AppendChild($condition) | Out-Null
 
-# --- Block a DLL ---
-# $rule = New-AppLockerFileRule -RuleType Path -Path "C:\Path\To\BadLib.dll" -User "Everyone" -Action Deny -RuleCollectionType Dll
-# $policy = Get-AppLockerPolicy -Local
-# $policy.RuleCollections[2].FilePathRules.Add($rule)
-# Set-AppLockerPolicy -PolicyObject $policy -Merge
-# gpupdate /force | Out-Null
-# Write-Host "❌ DLL BLOCKED: C:\Path\To\BadLib.dll"
+# 6. Attach <Conditions> to the new rule
+$newRule.AppendChild($conditions) | Out-Null
 
-# --- Block a Script (.ps1 / .vbs / .js) ---
-# $rule = New-AppLockerFileRule -RuleType Path -Path "C:\Path\To\Malicious.ps1" -User "Everyone" -Action Deny -RuleCollectionType Script
-# $policy = Get-AppLockerPolicy -Local
-# $policy.RuleCollections[1].FilePathRules.Add($rule)
-# Set-AppLockerPolicy -PolicyObject $policy -Merge
-# gpupdate /force | Out-Null
-# Write-Host "❌ Script BLOCKED: C:\Path\To\Malicious.ps1"
+# 7. Find the correct RuleCollection (Exe, Dll, Script, Msi, Appx)
+$targetCollection = $policy.AppLockerPolicy.RuleCollection | Where-Object { $_.Type -eq $ruleType }
 
-# --- Block an MSI installer ---
-# $rule = New-AppLockerFileRule -RuleType Path -Path "C:\Path\To\BadSetup.msi" -User "Everyone" -Action Deny -RuleCollectionType Msi
-# $policy = Get-AppLockerPolicy -Local
-# $policy.RuleCollections[3].FilePathRules.Add($rule)
-# Set-AppLockerPolicy -PolicyObject $policy -Merge
-# gpupdate /force | Out-Null
-# Write-Host "❌ MSI BLOCKED: C:\Path\To\BadSetup.msi"
+# 8. Insert the new rule into that collection
+$targetCollection.AppendChild($newRule) | Out-Null
+
+# 9. Save the updated policy to a file
+$policy.OuterXml | Out-File $outFile -Encoding UTF8
+Write-Host "Saved patched policy to $outFile"
+
+# 10. Apply the policy immediately
+Set-AppLockerPolicy -XmlPolicy $outFile
+Write-Host "Applied new AppLocker rule: $ruleName ($action $ruleType)"
+
+# 11. Apply policy
+try {
+    Write-Host "`nApplying AppLocker policy (Enforce) ..."
+    Set-AppLockerPolicy -XmlPolicy $outFile
+    gpupdate /force | Out-Null
+
+    # ensure AppIDSvc is configured & restarted
+    sc.exe config appidsvc start= auto | Out-Null
+    try { Restart-Service -Name AppIDSvc -Force -ErrorAction Stop; Write-Host "`nAppIDSvc restarted." } catch { Write-Warning "`nCould not restart AppIDSvc; reboot may be required." }
+
+    Write-Host "`nAppLocker policy applied in ENFORCE mode. Check Event Viewer > Microsoft > Windows > AppLocker for events."
+} catch {
+    Write-Error "`nFailed to apply AppLocker policy: $_"
+    exit 1
+}
