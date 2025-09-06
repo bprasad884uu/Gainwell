@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Interactive AppLocker rule lister + removal (supports Index or partial Name match).
+  Interactive AppLocker rule lister + removal or toggle (supports Index or partial Name match).
   No backups; applies changes immediately.
 .NOTES
   Run as Administrator.
@@ -58,7 +58,7 @@ function Get-AppLockerRuleIndexList {
 }
 
 # --------------------------
-# Interactive removal (supports partial name matching)
+# Interactive removal/toggle (supports partial name matching)
 # --------------------------
 function Invoke-InteractiveAppLockerRemoval {
     $data   = Get-AppLockerRuleIndexList
@@ -106,11 +106,11 @@ function Invoke-InteractiveAppLockerRemoval {
         $nameTokens += $t
     }
 
-    # Build list of rules to remove
-    $toRemove = @()
+    # Build list of rules to act on
+    $toAct = @()
 
     if ($indexes) {
-        $toRemove += $rules | Where-Object { $indexes -contains $_.Index }
+        $toAct += $rules | Where-Object { $indexes -contains $_.Index }
     }
 
     if ($nameTokens) {
@@ -118,30 +118,71 @@ function Invoke-InteractiveAppLockerRemoval {
             $lc = $token.ToLower()
             # partial, case-insensitive match against rule Name
             $matches = $rules | Where-Object { $_.Name -and ($_.Name.ToLower().Contains($lc)) }
-            if ($matches) { $toRemove += $matches }
+            if ($matches) { $toAct += $matches }
         }
     }
 
     # Deduplicate by Id
-    $toRemove = $toRemove | Sort-Object -Property Id -Unique
+    $toAct = $toAct | Sort-Object -Property Id -Unique
 
-    if (-not $toRemove) {
+    if (-not $toAct) {
         Write-Host "No matching rules found." -ForegroundColor Yellow
         return
     }
 
-    Write-Host "`nRules to be removed:" -ForegroundColor Red
-    $toRemove | Select-Object Index, CollectionType, Action, Name, Condition | Format-Table -AutoSize
+    Write-Host "`nRules matched:" -ForegroundColor Magenta
+    $toAct | Select-Object Index, CollectionType, Action, Name, Condition | Format-Table -AutoSize
 
-    $confirm = Read-Host "Type YES to confirm deletion"
+    # Ask user which operation to perform
+    Write-Host ""
+    Write-Host "Choose operation:" -ForegroundColor Cyan
+    Write-Host "  1) DELETE  - remove the selected rule(s) completely" -ForegroundColor Gray
+    Write-Host "  2) TOGGLE  - flip Action between Allow and Deny for each selected rule" -ForegroundColor Gray
+    Write-Host "  Q) Cancel" -ForegroundColor Gray
+    $op = Read-Host "Enter 1 or 2 (DELETE/TOGGLE) or Q to cancel"
+    if ($op.Trim().ToLower() -eq 'q' -or [string]::IsNullOrWhiteSpace($op)) {
+        Write-Host "Cancelled by user." -ForegroundColor Yellow
+        return
+    }
+
+    if ($op.Trim() -eq '1') {
+        $operation = 'DELETE'
+    } elseif ($op.Trim() -eq '2') {
+        $operation = 'TOGGLE'
+    } else {
+        Write-Host "Invalid choice. Exiting." -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host ""
+    $confirm = Read-Host "Type YES to confirm operation '$operation' on the above rule(s)"
     if ($confirm -ne "YES") {
         Write-Host "Cancelled." -ForegroundColor Yellow
         return
     }
 
-    foreach ($r in $toRemove) {
-        $r.ParentNode.RemoveChild($r.XmlNode) | Out-Null
-        Write-Host "Removed: $($r.Name) (Index $($r.Index))" -ForegroundColor Green
+    # Perform operation
+    foreach ($r in $toAct) {
+        try {
+            if ($operation -eq 'DELETE') {
+                $r.ParentNode.RemoveChild($r.XmlNode) | Out-Null
+                Write-Host "Deleted: $($r.Name) (Index $($r.Index))" -ForegroundColor Green
+            } else {
+                # Toggle Allow <-> Deny
+                $current = $r.XmlNode.GetAttribute("Action")
+                if ($current -eq "Allow") {
+                    $r.XmlNode.SetAttribute("Action","Deny")
+                    Write-Host "Toggled to Deny: $($r.Name) (Index $($r.Index))" -ForegroundColor Yellow
+                } elseif ($current -eq "Deny") {
+                    $r.XmlNode.SetAttribute("Action","Allow")
+                    Write-Host "Toggled to Allow: $($r.Name) (Index $($r.Index))" -ForegroundColor Green
+                } else {
+                    Write-Warning "Rule $($r.Name) (Index $($r.Index)) has unexpected Action '$current' and was skipped."
+                }
+            }
+        } catch {
+            Write-Warning "Failed to apply operation to $($r.Name): $_"
+        }
     }
 
     # Apply modified policy
@@ -156,6 +197,7 @@ function Invoke-InteractiveAppLockerRemoval {
         Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue
     }
 
+    # Refresh GP and restart AppIDSvc
     gpupdate /force | Out-Null
     sc.exe config appidsvc start= auto | Out-Null
     try {
@@ -221,5 +263,5 @@ function Remove-AppLockerRule {
     try { Restart-Service -Name AppIDSvc -Force -ErrorAction Stop } catch {}
 }
 
-# --- Run interactive removal ---
+# --- Run interactive removal/toggle ---
 Invoke-InteractiveAppLockerRemoval
