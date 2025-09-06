@@ -112,7 +112,6 @@ $installerPatternsUsers = @(
   "$SystemDriveToken\Users\*\*update.exe"
 )
 foreach ($p in $installerPatternsUsers) {
-    # $p already contains the %SYSTEMDRIVE% token because $SystemDriveToken holds "%SYSTEMDRIVE%"
     $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - Users - $(Split-Path $p -Leaf)`" Description=`"Deny installers in user profiles`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
     $xml += "      <Conditions><FilePathCondition Path=`"$p`"/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
@@ -137,7 +136,7 @@ $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admi
 $xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
-# Allow system paths for everyone
+# Allow system paths for everyone (EXE)
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Windows EXE`" Description=`"Allow EXEs from Windows folder`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%WINDIR%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
@@ -150,6 +149,7 @@ $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramF
 $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES(x86)%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
+# Allow ProgramData for EXEs (everyone)
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramData EXE`" Description=`"Allow EXEs from ProgramData`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%ProgramData%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
@@ -206,9 +206,21 @@ $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ManageEn
 $xml += "      <Conditions><FilePathCondition Path=`"$($SystemDriveToken)\Users\*\AppData\Local\Temp\TempScript.ps1`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
-# Allow Windows/ProgramFiles scripts
+# Allow Windows/ProgramFiles/ProgramData scripts (everyone)
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Windows Scripts`" Description=`"Allow scripts from Windows`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%WINDIR%\*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles Scripts`" Description=`"Allow scripts from Program Files`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES%\*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles (x86) Scripts`" Description=`"Allow scripts from Program Files (x86)`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES(x86)%\*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramData Scripts`" Description=`"Allow scripts from ProgramData`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%ProgramData%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 $xml += "  </RuleCollection>`n"
@@ -230,9 +242,22 @@ $xml += "        </FilePublisherCondition>`n"
 $xml += "      </Conditions>`n"
 $xml += "    </FilePublisherRule>`n"
 
-# Allow system DLLs
+# Allow system DLLs and core program folders
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Windows DLLs`" Description=`"Allow DLLs from Windows`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%WINDIR%\*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL - ProgramFiles`" Description=`"Allow DLLs from Program Files`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES%\*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL - ProgramFiles (x86)`" Description=`"Allow DLLs from Program Files (x86)`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES(x86)%\*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
+# Allow ProgramData for DLLs (everyone)
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL - ProgramData`" Description=`"Allow DLLs from ProgramData`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%ProgramData%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 $xml += "  </RuleCollection>`n"
@@ -268,6 +293,11 @@ $xml += "    </FilePathRule>`n"
 
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles (x86) MSI`" Description=`"Allow MSIs from Program Files (x86)`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES(x86)%\*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
+# Allow ProgramData for MSIs (everyone)
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramData MSI`" Description=`"Allow MSIs from ProgramData`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%ProgramData%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 $xml += "  </RuleCollection>`n"
