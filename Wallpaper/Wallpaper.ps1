@@ -65,7 +65,7 @@ function Save-Base64Image {
 # Detect Hostname and Domain
 # ==========================
 
-$hostname = $env:COMPUTERNAME
+$hostname = (Get-CimInstance Win32_ComputerSystem).DNSHostName
 $system = Get-CimInstance Win32_ComputerSystem
 $domain = $system.Domain
 $isDomainJoined = $system.PartOfDomain
@@ -77,7 +77,9 @@ $isDomainJoined = $system.PartOfDomain
 # Dynamic company config
 $CompanyConfig = @(
     @{ Name = "GCPL"; Domains = @("gainwellindia.com");			HostnamePatterns = @("GCPL", "ASPL") },
-	@{ Name = "GTPL"; Domains = @("");       					HostnamePatterns = @("GTPL") }
+	@{ Name = "GTPL"; Domains = @("");       					HostnamePatterns = @("GTPL") },
+    @{ Name = "GEPL"; Domains = @("gainwellengineering.com");   HostnamePatterns = @("GEPL") },
+    @{ Name = "TIL"; Domains = @("");       					HostnamePatterns = @("TIL") }
 )
 
 # ==========================
@@ -135,14 +137,14 @@ $base64Image = @"
 # STEP 4: Set your Base64 image strings for each company
 #=======================================================
 
-if ($company -eq "GTPL") {
+if ($company -in @("GTPL", "GEPL", "TIL")) {
     # GTPL special case
     $source = "C:\Windows\Web\Wallpaper\Windows\img19.jpg"
     $destination = "C:\Windows\Web\Wallpaper\Windows\wallpaper.jpg"
 
     if (Test-Path $source) {
         Copy-Item -Path $source -Destination $destination -Force
-        Write-Host "GTPL detected: Image Applied"
+        Write-Host "Image Applied"
     } else {
         #Write-Warning "GTPL detected but source image not found: $source"
     }
