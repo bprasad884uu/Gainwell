@@ -1,9 +1,65 @@
 # Define system locale
 $systemLocale = (dism /online /get-intl | Where-Object { $_ -match '^Installed language\(s\):' }) -replace '.*:\s*',''
 
+# --- Choose Temp location: prefer C: if it has >= 20 GB, otherwise find another drive ---
+function Select-TempRoot {
+    param(
+        [long]$MinimumBytes = (20 * 1024 * 1024 * 1024)  # 20 GB
+    )
+
+    # Try current $env:TEMP drive first
+    try {
+        $envTempRoot = [System.IO.Path]::GetPathRoot($env:TEMP)
+        if ($envTempRoot) {
+            $deviceId = $envTempRoot.TrimEnd('\')
+            $logical = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID = '$deviceId'" -ErrorAction SilentlyContinue
+            if ($logical -and $logical.FreeSpace -ge $MinimumBytes) {
+                return $env:TEMP.TrimEnd('\')
+            }
+        }
+    } catch {
+        # ignore and continue scanning other drives
+    }
+
+    # Scan other local fixed drives for free space
+    $drives = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 } | Sort-Object -Property DeviceID
+    foreach ($d in $drives) {
+        if ($d.FreeSpace -ge $MinimumBytes) {
+            $root = "$($d.DeviceID)\"
+            $candidateTemp = Join-Path -Path $root -ChildPath "Temp"
+            try {
+                if (-not (Test-Path $candidateTemp)) {
+                    New-Item -Path $candidateTemp -ItemType Directory -Force | Out-Null
+                }
+                # quick write test
+                $testFile = Join-Path $candidateTemp ".__writetest.tmp"
+                Set-Content -Path $testFile -Value "ok" -ErrorAction Stop
+                Remove-Item -Path $testFile -Force -ErrorAction SilentlyContinue
+                return $candidateTemp.TrimEnd('\')
+            } catch {
+                # If can't create/write, skip this drive
+                continue
+            }
+        }
+    }
+
+    # Fallback to $env:TEMP if nothing matches
+    return $env:TEMP.TrimEnd('\')
+}
+
+$TempRoot = Select-TempRoot -MinimumBytes (20 * 1024 * 1024 * 1024)
+
+# If returned root is a drive root like "C:", normalize to a Temp subfolder
+if ($TempRoot -match "^[A-Za-z]:$") {
+    $TempRoot = Join-Path $TempRoot "Temp"
+    if (-not (Test-Path $TempRoot)) { New-Item -Path $TempRoot -ItemType Directory -Force | Out-Null }
+}
+
+Write-Host "Using temp root: $TempRoot"
+
 # Define network path and destination folder
 $sourceFolder = "\\10.131.45.121\Basic Softwares"
-$destinationFolder = "$env:Temp"
+$destinationFolder = $TempRoot
 $MountDrive = "Y"
 
 # Ensure destination folder exists
@@ -37,7 +93,7 @@ if (Test-Path $destinationISO) {
         $downloadSuccess = $true
     } catch {
         Write-Warning "`nFailed to mount ISO. File may be corrupted. Re-copying..."
-        Remove-Item $destinationISO -Force
+        Remove-Item $destinationISO -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -120,11 +176,6 @@ $volumes = Get-Volume | Where-Object { $_.DriveType -eq 'CD-ROM' }
 foreach ($volume in $volumes) {
     try {
         $devicePath = "\\.\$($volume.DriveLetter):"
-        $image = Get-CimInstance -Namespace root\cimv2 -ClassName Win32_DiskDrive | Where-Object {
-            $_.DeviceID -like "*$($volume.DriveLetter)*"
-        }
-
-        # Try to dismount using the drive letter
         Write-Host "`nAttempting to dismount image mounted at: $devicePath"
         Dismount-DiskImage -DevicePath $devicePath -ErrorAction Stop
         Write-Host "`nSuccessfully dismounted: $devicePath"
@@ -134,10 +185,11 @@ foreach ($volume in $volumes) {
 }
 
 # Find Copied ISO File
-$isoPath = Get-ChildItem -Path "$env:Temp\" -Filter "Win11*.iso" -File | Select-Object -ExpandProperty FullName -First 1
+$isoPath = Get-ChildItem -Path ($TempRoot + '\') -Filter "Win11*.iso" -File -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName -First 1
+if (-not $isoPath -and (Test-Path $destinationISO)) { $isoPath = $destinationISO }
 
 if (-not $isoPath) {
-    Write-Host "`nNo ISO file found in Temp Folder." -ForegroundColor Red
+    Write-Host "`nNo ISO file found in Temp Folder ($TempRoot)." -ForegroundColor Red
     exit
 }
 
@@ -198,7 +250,7 @@ if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
 # Fallback if match fails
 if (-not $cleanCpuName) {
     Write-Host "`nCould not extract a matching CPU model from '$rawCpuName'" -ForegroundColor Yellow
-    $cleanCpuName = $rawCpuName  # Proceed with raw name
+    $cleanCpuName = $rawCpuName  # Proceed with raw name
 }
 
 # Load System.Net.Http.dll for PowerShell 5.1 if needed
@@ -256,7 +308,6 @@ function Get-SecureBootStatus {
             $secureBoot = Confirm-SecureBootUEFI -ErrorAction Stop
             return [bool]$secureBoot
         } else {
-            #Write-Verbose "Confirm-SecureBootUEFI requires 64-bit PowerShell. Falling back..."
             throw "`nNot 64-bit"
         }
     } catch {
@@ -349,17 +400,17 @@ if ($incompatibilityReasons.Count -gt 0) {
         Write-Host " - $reason" -ForegroundColor Red
     }
     Write-Host "`nRegistry Tweaks will be applied to bypass the checks..." -ForegroundColor Yellow
-	$null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\MoSetup" /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1 /f
+    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\MoSetup" /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1 /f
     $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassTPMCheck /t REG_DWORD /d 1 /f
     $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassSecureBootCheck /t REG_DWORD /d 1 /f
     $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassRAMCheck /t REG_DWORD /d 1 /f
     $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassStorageCheck /t REG_DWORD /d 1 /f
     $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassCPUCheck /t REG_DWORD /d 1 /f
     Write-Host "`nBypass Applied Successfully. Now Proceed for installation..." -ForegroundColor Green
-	$installArgs = "/product server /auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable /noreboot"
+    $installArgs = "/product server /auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable /noreboot"
 } else {
     Write-Host "`nThis system meets all Windows 11 hardware requirements." -ForegroundColor Green
-	$installArgs = "/auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable /noreboot"
+    $installArgs = "/auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable /noreboot"
 }
 
 # Start Windows 11 Upgrade
@@ -372,7 +423,7 @@ $setupFolder = 'C:\$WINDOWS.~BT'
 
 # Delete the log file if it exists
 if (Test-Path $logPath) {
-        $null = Remove-Item -Path $logPath -Force -ErrorAction SilentlyContinue
+    $null = Remove-Item -Path $logPath -Force -ErrorAction SilentlyContinue
 }
 
 function Is-SetupRunning {
@@ -385,12 +436,12 @@ while ($true) {
     $logExists = Test-Path $logPath
     $setupRunning = Is-SetupRunning
 
-   if ($logExists -or (-not $folderExists -and -not $setupRunning)) {
-    if (-not $folderExists -and -not $setupRunning) {
-        Write-Host "`nNeither setup folder nor upgrade process found. Exiting..." -ForegroundColor Yellow
-		}
-    break
-	}
+    if ($logExists -or (-not $folderExists -and -not $setupRunning)) {
+        if (-not $folderExists -and -not $setupRunning) {
+            Write-Host "`nNeither setup folder nor upgrade process found. Exiting..." -ForegroundColor Yellow
+        }
+        break
+    }
     Start-Sleep -Seconds 1
 }
 
@@ -439,9 +490,11 @@ while ($true) {
 
 # Unmount ISO
 Write-Host "`nUnmounting ISO..."
-
-# Unmount the ISO after installation
-Dismount-DiskImage -ImagePath $isoPath
+try {
+    Dismount-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContinue
+} catch {
+    Write-Warning "Failed to dismount ISO: $_"
+}
 Write-Host "`nWindows 11 upgrade process complete."
 
 Write-Host "`nRebooting System..."
