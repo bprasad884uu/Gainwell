@@ -11,11 +11,11 @@
 
 # --- CHANGE THESE VARIABLES ---
 # You may provide a single value or an array for $ruleTypes and $targetPaths
-$ruleTypes      = @("Exe")       # Options: Exe, Dll, Script, Msi, Appx
+$ruleTypes      = @("Exe", "Script", "Dll")       # Options: Exe, Dll, Script, Msi, Appx
 $action         = "Allow"        # Allow or Deny
 $ruleNameBase   = ""             # If empty, the script will autogenerate a full friendly name from path/app and rule type
 $description    = ""             # If empty, the script will autogenerate a description from path/app and rule type
-$targetPaths    = @("C:\*", "%PROGRAMFILES%\Notepad++\notepad++.exe")  # one or more paths/wildcards or Appx package family names
+$targetPaths    = @("C:\Siemens\*", "C:\Java\*", "%OSDRIVE%\USERS\*\.SWT\*", "%OSDRIVE%\USERS\*\TEAMCENTER\*", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\RAD*.ps1", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\__PSSCRIPTPOLICYTEST*.ps1")  # one or more paths/wildcards or Appx package family names
 $userOrGroupSid = "S-1-1-0"     # Default Everyone
 $outFile        = "$env:Temp\AppLocker-Patched.xml"
 
