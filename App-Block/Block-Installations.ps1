@@ -6,7 +6,7 @@ AppLocker Policy in ENFORCE mode
   * Microsoft-signed DLLs + Scripts (system-critical)
   * Store Apps (Appx)
   * PowerShell engine test scripts (__PSScriptPolicyTest*.ps1 in Temp)
-  * Wallpaper policy temp scripts (RD*.ps1 in Temp)
+  * Wallpaper policy temp scripts (RAD*.ps1 in Temp)
 - EXE + MSI limited to system paths (no user self-install).
 - Per-user installers blocked (AppData, Downloads, Desktop, Temp).
 - All installers (MSI + EXE) require Admin.
@@ -23,9 +23,14 @@ param (
 	[string]$EnforcementMode = "Enabled",   # ENFORCE. Change to "AuditOnly" if you want to test first.
 
 	[string[]]$WhitelistedApps = @("Diagsmart*.exe", "Uninstall*.exe"),
-	[string[]]$WhitelistedPaths = @(),
-	[string[]]$WhitelistedPublishers = @("O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US","CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US")
+	[string[]]$WhitelistedPaths = @("%OSDRIVE%\Siemens\*", "%OSDRIVE%\Java\*", "%OSDRIVE%\USERS\*\.SWT\*", "%OSDRIVE%\USERS\*\TEAMCENTER\*"),
+	[string[]]$WhitelistedPublishers = @("O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US","CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US"),
+	[string[]]$WhitelistedScripts = @("%OSDRIVE%\Users\*\AppData\Local\Temp\TempScript.ps1", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\RAD*.ps1", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\__PSSCRIPTPOLICYTEST*.ps*")    # default temp script patterns included
 )
+
+# Who should the whitelisted scripts be allowed for?
+	# Use "S-1-1-0" for Everyone (current), or "S-1-5-32-544" for Local Administrators.
+	[string]$WhitelistedScriptsSid = "S-1-1-0"
 
 # Checking Windows Compatibility
 $OSType = (Get-CimInstance Win32_OperatingSystem).ProductType
@@ -34,11 +39,17 @@ if ($OSType -ne 1) {
     exit
 }
 
+# Normalize and deduplicate WhitelistedScripts to avoid duplicate rules and inconsistent slashes
+$WhitelistedScripts = ($WhitelistedScripts | ForEach-Object {
+    if ($_ -eq $null) { return }
+    $_.ToString().Trim() -replace '/','\'
+}) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+
 # helper for GUIDs
 function New-RuleGuid { return [guid]::NewGuid().ToString() }
 
 # Use standard SystemDrive token for XML paths
-$SystemDriveToken = "%SYSTEMDRIVE%"
+$SystemDriveToken = "%OSDRIVE%"
 
 # discover non-system fixed drives (only roots like C:\, D:\ etc.)
 $systemRoot = $env:SystemDrive.TrimEnd('\') + '\'
@@ -191,20 +202,22 @@ $xml += "        </FilePublisherCondition>`n"
 $xml += "      </Conditions>`n"
 $xml += "    </FilePublisherRule>`n"
 
-# PowerShell engine temp test scripts allowed
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - PowerShell Temp Tests`" Description=`"Allow __PSScriptPolicyTest*.ps*`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
-$xml += "      <Conditions><FilePathCondition Path=`"$($SystemDriveToken)\Users\*\AppData\Local\Temp\__PSScriptPolicyTest*.ps*`"/></Conditions>`n"
-$xml += "    </FilePathRule>`n"
+# ---- WhitelistedScripts support (allow either filename patterns anywhere or explicit paths) ----
+foreach ($s in $WhitelistedScripts) {
+    if ([string]::IsNullOrWhiteSpace($s)) { continue }
 
-# Allow Wallpaper Temp scripts (anywhere)
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Wallpaper Scripts`" Description=`"Allow Wallpaper Temp RAD*.ps1 scripts anywhere`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
-$xml += "      <Conditions><FilePathCondition Path=`"$($SystemDriveToken)\Users\*\AppData\Local\Temp\RAD*.ps1`"/></Conditions>`n"
-$xml += "    </FilePathRule>`n"
+    # If entry looks like a path (contains backslash, forward slash, percent token, or drive letter), treat as path.
+    if ($s -match '[\\/]' -or $s -match '[:%]') {
+        $conditionPath = $s
+    } else {
+        # treat as filename/pattern and allow anywhere
+        $conditionPath = "*\$s"
+    }
 
-# Allow ManageEngine Temp scripts (anywhere)
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ManageEngine Scripts`" Description=`"Allow ManageEngine Temp TempScript.ps1 scripts anywhere`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
-$xml += "      <Conditions><FilePathCondition Path=`"$($SystemDriveToken)\Users\*\AppData\Local\Temp\TempScript.ps1`"/></Conditions>`n"
-$xml += "    </FilePathRule>`n"
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Script - $s`" Description=`"Allow whitelisted script: $s`" UserOrGroupSid=`"$WhitelistedScriptsSid`" Action=`"Allow`">`n"
+    $xml += "      <Conditions><FilePathCondition Path=`"$conditionPath`"/></Conditions>`n"
+    $xml += "    </FilePathRule>`n"
+}
 
 # Allow Windows/ProgramFiles/ProgramData scripts (everyone)
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Windows Scripts`" Description=`"Allow scripts from Windows`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
