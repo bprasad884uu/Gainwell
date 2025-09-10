@@ -23,7 +23,7 @@ param (
 	[string]$EnforcementMode = "Enabled",   # ENFORCE. Change to "AuditOnly" if you want to test first.
 
 	[string[]]$WhitelistedApps = @("Diagsmart*.exe", "Uninstall*.exe"),
-	[string[]]$WhitelistedPaths = @("%OSDRIVE%\Siemens\*", "%OSDRIVE%\Java\*", "%OSDRIVE%\USERS\*\.SWT\*", "%OSDRIVE%\USERS\*\TEAMCENTER\*", "D:\ManageEngine*\*", "E:\ManageEngine*\*", "%OSDRIVE%\DEVSUITEHOME*\*", "%OSDRIVE%\QUEST_TOAD\*"),
+	[string[]]$WhitelistedPaths = @("%OSDRIVE%\Siemens\*", "%OSDRIVE%\Java\*", "%OSDRIVE%\USERS\*\.SWT\*", "%OSDRIVE%\USERS\*\TEAMCENTER\*", "D:\ManageEngine*\*", "E:\ManageEngine*\*", "%OSDRIVE%\DEVSUITEHOME*\*", "%OSDRIVE%\QUEST_TOAD\*", "%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*"),
 	[string[]]$WhitelistedPublishers = @("O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US","CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US"),
 	[string[]]$WhitelistedScripts = @("%OSDRIVE%\Users\*\AppData\Local\Temp\TempScript.ps1", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\RAD*.ps1", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\__PSSCRIPTPOLICYTEST*.ps*", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\IPW*.*")    # default temp script patterns included
 )
