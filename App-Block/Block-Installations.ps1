@@ -26,11 +26,11 @@ param (
 	[string[]]$WhitelistedPaths = @("%OSDRIVE%\Siemens\*", "%OSDRIVE%\Java\*", "%OSDRIVE%\USERS\*\.SWT\*", "%OSDRIVE%\USERS\*\TEAMCENTER\*", "D:\ManageEngine*\*", "E:\ManageEngine*\*"),
 	[string[]]$WhitelistedPublishers = @("O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US","CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US"),
 	[string[]]$WhitelistedScripts = @("%OSDRIVE%\Users\*\AppData\Local\Temp\TempScript.ps1", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\RAD*.ps1", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\__PSSCRIPTPOLICYTEST*.ps*")    # default temp script patterns included
+	# Who should the whitelisted scripts/paths be allowed for?
+	# Use "S-1-1-0" for Everyone (default), or "S-1-5-32-544" for Local Administrators.
+	[string]$WhitelistedScriptsSid = "S-1-1-0",
+	[string]$WhitelistedPathsSid   = "S-1-1-0"
 )
-
-# Who should the whitelisted scripts be allowed for?
-	# Use "S-1-1-0" for Everyone (current), or "S-1-5-32-544" for Local Administrators.
-	[string]$WhitelistedScriptsSid = "S-1-1-0"
 
 # Checking Windows Compatibility
 $OSType = (Get-CimInstance Win32_OperatingSystem).ProductType
@@ -43,6 +43,14 @@ if ($OSType -ne 1) {
 $WhitelistedScripts = ($WhitelistedScripts | ForEach-Object {
     if ($_ -eq $null) { return }
     $_.ToString().Trim() -replace '/','\'
+}) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+
+# Normalize and deduplicate WhitelistedPaths
+$WhitelistedPaths = ($WhitelistedPaths | ForEach-Object {
+    if ($_ -eq $null) { return }
+    $p = $_.ToString().Trim() -replace '/', '\'
+    $p = $p -replace '\\{2,}', '\'
+    $p
 }) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
 
 # helper for GUIDs
@@ -172,6 +180,22 @@ foreach ($app in $WhitelistedApps) {
     $xml += "    </FilePathRule>`n"
 }
 
+# Whitelisted paths (EXE) — allow EXEs from explicit folders
+foreach ($p in $WhitelistedPaths) {
+    if ([string]::IsNullOrWhiteSpace($p)) { continue }
+
+    # ensure path pattern ends with wildcard so folder root is covered
+    $path = $p
+    # if user passed a folder path (no wildcard), append \* 
+    if ($path -notmatch '[*?]') {
+        if ($path -match '\\$') { $path = $path + '*' } else { $path = $path + '\*' }
+    }
+
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Path - $path`" Description=`"Allow EXEs from $path`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+    $xml += "      <Conditions><FilePathCondition Path=`"$path`"/></Conditions>`n"
+    $xml += "    </FilePathRule>`n"
+}
+
 # Publisher allow rules (EXE)
 foreach ($pub in $WhitelistedPublishers) {
     $xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Publisher - $pub`" Description=`"Allow signed apps from $pub`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
@@ -216,6 +240,20 @@ foreach ($s in $WhitelistedScripts) {
 
     $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Script - $s`" Description=`"Allow whitelisted script: $s`" UserOrGroupSid=`"$WhitelistedScriptsSid`" Action=`"Allow`">`n"
     $xml += "      <Conditions><FilePathCondition Path=`"$conditionPath`"/></Conditions>`n"
+    $xml += "    </FilePathRule>`n"
+}
+
+# Whitelisted paths (Scripts) — allow scripts from explicit folders
+foreach ($p in $WhitelistedPaths) {
+    if ([string]::IsNullOrWhiteSpace($p)) { continue }
+
+    $path = $p
+    if ($path -notmatch '[*?]') {
+        if ($path -match '\\$') { $path = $path + '*' } else { $path = $path + '\*' }
+    }
+
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Script Path - $path`" Description=`"Allow scripts from $path`" UserOrGroupSid=`"$WhitelistedPathsSid`" Action=`"Allow`">`n"
+    $xml += "      <Conditions><FilePathCondition Path=`"$path`"/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
 }
 
@@ -267,6 +305,21 @@ $xml += "    </FilePathRule>`n"
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL - ProgramFiles (x86)`" Description=`"Allow DLLs from Program Files (x86)`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES(x86)%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
+
+# ---- INSERT: Whitelisted paths (DLL) — allow DLLs from explicit folders ----
+foreach ($p in $WhitelistedPaths) {
+    if ([string]::IsNullOrWhiteSpace($p)) { continue }
+
+    $path = $p
+    if ($path -notmatch '[*?]') {
+        if ($path -match '\\$') { $path = $path + '*' } else { $path = $path + '\*' }
+    }
+
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL Path - $path`" Description=`"Allow DLLs from $path`" UserOrGroupSid=`"$WhitelistedPathsSid`" Action=`"Allow`">`n"
+    $xml += "      <Conditions><FilePathCondition Path=`"$path`"/></Conditions>`n"
+    $xml += "    </FilePathRule>`n"
+}
+# ---- END INSERT ----
 
 # Allow ProgramData for DLLs (everyone)
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL - ProgramData`" Description=`"Allow DLLs from ProgramData`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
