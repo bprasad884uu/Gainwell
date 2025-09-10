@@ -41,9 +41,7 @@ param (
 
     [string[]]$WhitelistedPublishers = @(
         "O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US",
-        "CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US",
-        # Oracle - verify subject on your machines; adjust if certificate subject differs
-        "O=Oracle America, Inc., L=Redwood Shores, S=California, C=US"
+        "CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US"
     ),
 
     [string[]]$WhitelistedScripts = @(
