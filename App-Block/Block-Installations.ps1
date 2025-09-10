@@ -24,7 +24,7 @@ param (
 
 	[string[]]$WhitelistedApps = @("Diagsmart*.exe", "Uninstall*.exe"),
 	[string[]]$WhitelistedPaths = @("%OSDRIVE%\Siemens\*", "%OSDRIVE%\Java\*", "%OSDRIVE%\USERS\*\.SWT\*", "%OSDRIVE%\USERS\*\TEAMCENTER\*", "D:\ManageEngine*\*", "E:\ManageEngine*\*", "%OSDRIVE%\DEVSUITEHOME*\*", "%OSDRIVE%\QUEST_TOAD\*", "%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*"),
-	[string[]]$WhitelistedPublishers = @("O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US","CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US"),
+	[string[]]$WhitelistedPublishers = @("O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US","CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US", "O=Oracle America, Inc., L=Redwood Shores, S=California, C=US"),
 	[string[]]$WhitelistedScripts = @("%OSDRIVE%\Users\*\AppData\Local\Temp\TempScript.ps1", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\RAD*.ps1", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\__PSSCRIPTPOLICYTEST*.ps*", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\IPW*.*")    # default temp script patterns included
 )
 
@@ -126,11 +126,15 @@ $xml += "  <RuleCollection Type=`"Exe`" EnforcementMode=`"$EnforcementMode`">`n"
 
 # Deny installers in user profiles for local Users
 $installerPatternsUsers = @(
-  "$SystemDriveToken\Users\*\*.msi",
-  "$SystemDriveToken\Users\*\*setup.exe",
-  "$SystemDriveToken\Users\*\*install.exe",
-  "$SystemDriveToken\Users\*\*update.exe"
+  "$SystemDriveToken\Users\*\Downloads\*.msi",
+  "$SystemDriveToken\Users\*\Desktop\*.msi",
+  "$SystemDriveToken\Users\*\AppData\Local\Temp\*.msi",
+  "$SystemDriveToken\Users\*\AppData\Local\Temp\**\*.msi",  # nested temp folders
+  "$SystemDriveToken\Users\*\Downloads\*setup.exe",
+  "$SystemDriveToken\Users\*\Desktop\*setup.exe",
+  "$SystemDriveToken\Users\*\AppData\Local\Temp\*setup.exe"
 )
+
 foreach ($p in $installerPatternsUsers) {
     $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - Users - $(Split-Path $p -Leaf)`" Description=`"Deny installers in user profiles`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
     $xml += "      <Conditions><FilePathCondition Path=`"$p`"/></Conditions>`n"
