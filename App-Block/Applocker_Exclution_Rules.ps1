@@ -15,7 +15,7 @@ $ruleTypes      = @("Exe", "Script", "Dll")       # Options: Exe, Dll, Script, M
 $action         = "Allow"        # Allow or Deny
 $ruleNameBase   = ""             # If empty, the script will autogenerate a full friendly name from path/app and rule type
 $description    = ""             # If empty, the script will autogenerate a description from path/app and rule type
-$targetPaths    = @("C:\Siemens\*", "C:\Java\*", "%OSDRIVE%\USERS\*\.SWT\*", "%OSDRIVE%\USERS\*\TEAMCENTER\*", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\RAD*.ps1", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\__PSSCRIPTPOLICYTEST*.ps1")  # one or more paths/wildcards or Appx package family names
+$targetPaths    = @("%OSDRIVE%\Siemens\*", "%OSDRIVE%\Java\*", "%OSDRIVE%\USERS\*\.SWT\*", "%OSDRIVE%\USERS\*\TEAMCENTER\*", "D:\ManageEngine*\*", "E:\ManageEngine*\*", "%OSDRIVE%\DEVSUITEHOME*\*", "%OSDRIVE%\QUEST_TOAD\*")  # one or more paths/wildcards or Appx package family names
 $userOrGroupSid = "S-1-1-0"     # Default Everyone
 $outFile        = "$env:Temp\AppLocker-Patched.xml"
 
