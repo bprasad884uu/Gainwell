@@ -1,6 +1,19 @@
 # --- Step 0: Detect System Locale ---
 $systemLocale = (dism /online /get-intl | Where-Object { $_ -match '^Installed language\(s\):' }) -replace '.*:\s*',''
 
+# Define network path (source) and mount drive
+$sourceFolder = "\\10.131.31.77\Softwares"
+
+# Define source ISO based on system locale (sourceISO defined early to avoid null errors later)
+switch ($systemLocale) {
+    "en-US" { $sourceISO = Join-Path $sourceFolder "Win11_24H2_ENUS.iso" }
+    "en-GB" { $sourceISO = Join-Path $sourceFolder "Win11_24H2_ENGB.iso" }
+    default {
+        Write-Output "`nNo matching ISO found for system locale: $systemLocale"
+        exit 1
+    }
+}
+
 # --- Choose Temp location: prefer C: if it has >= 20 GB, otherwise find another drive ---
 function Select-TempRoot {
     param(
@@ -57,24 +70,13 @@ if ($TempRoot -match "^[A-Za-z]:$") {
 
 Write-Host "Using temp root: $TempRoot"
 
-# Define network path and destination folder
-$sourceFolder = "\\10.131.31.77\Softwares"
+# Define destination folder
 $destinationFolder = $TempRoot
 $MountDrive = "Y"
 
 # Ensure destination folder exists
 if (-not (Test-Path $destinationFolder)) {
     New-Item -Path $destinationFolder -ItemType Directory | Out-Null
-}
-
-# Define source ISO based on system locale
-switch ($systemLocale) {
-    "en-US" { $sourceISO = Join-Path $sourceFolder "Win11_24H2_ENUS.iso" }
-    "en-GB" { $sourceISO = Join-Path $sourceFolder "Win11_24H2_ENGB.iso" }
-    default {
-        Write-Output "`nNo matching ISO found for system locale: $systemLocale"
-        exit 1
-    }
 }
 
 $destinationISO = Join-Path $destinationFolder (Split-Path $sourceISO -Leaf)
