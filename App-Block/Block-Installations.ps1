@@ -27,7 +27,7 @@ param (
 
     # explicit folder patterns (use tokens like %OSDRIVE% if you like).
     # NOTE: do NOT supply patterns that produce consecutive wildcards like "*\*"
-    [string[]]$WhitelistedPaths = @("%OSDRIVE%\Siemens\*", "%OSDRIVE%\Java\*", "%OSDRIVE%\USERS\*\.SWT\*", "%OSDRIVE%\USERS\*\TEAMCENTER\*", "D:\ManageEngine*\*", "E:\ManageEngine*\*", "%OSDRIVE%\DEVSUITEHOME*\*", "%OSDRIVE%\QUEST_TOAD\*", "%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*"),
+    [string[]]$WhitelistedPaths = @("%OSDRIVE%\Siemens\*", "%OSDRIVE%\Java\*", "%OSDRIVE%\USERS\*\.SWT\*", "%OSDRIVE%\USERS\*\TEAMCENTER\*", "%OSDRIVE%\DEVSUITEHOME*\*", "%OSDRIVE%\QUEST_TOAD\*", "%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*"),
 
     [string[]]$WhitelistedPublishers = @(
         "O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US",
