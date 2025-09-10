@@ -3,24 +3,22 @@
   AppLocker-MultiRule.ps1
 .Description
   Create and append one or more AppLocker File Path rules to the current effective AppLocker policy.
-  Supports multiple rule types (Exe, Dll, Script, Msi, Appx) and multiple paths per rule type.
-  NOTE: Appx/packaged-app rules require a different structure and are only sketched here.
+  Supports multiple rule types (Exe, Dll, Script, Msi, Appx/PackagedApp) and multiple paths per rule type.
 .Usage
   Edit the variables in the "CHANGE THESE" section, save and run as Administrator.
 #>
 
 # --- CHANGE THESE VARIABLES ---
 # You may provide a single value or an array for $ruleTypes and $targetPaths
-$ruleTypes      = @("Exe", "Script", "Dll")       # Options: Exe, Dll, Script, Msi, Appx
+$ruleTypes      = @("Exe", "Script", "Dll")       # Options: Exe, Dll, Script, Msi, Appx (or PackagedApp)
 $action         = "Allow"        # Allow or Deny
-$ruleNameBase   = ""             # If empty, the script will autogenerate a full friendly name from path/app and rule type
-$description    = ""             # If empty, the script will autogenerate a description from path/app and rule type
-$targetPaths    = @("%OSDRIVE%\Siemens\*", "%OSDRIVE%\Java\*", "%OSDRIVE%\USERS\*\.SWT\*", "%OSDRIVE%\USERS\*\TEAMCENTER\*", "D:\ManageEngine*\*", "E:\ManageEngine*\*", "%OSDRIVE%\DEVSUITEHOME*\*", "%OSDRIVE%\QUEST_TOAD\*")  # one or more paths/wildcards or Appx package family names
+$ruleNameBase   = ""             # If empty, the script will autogenerate a friendly name
+$description    = ""             # If empty, the script will autogenerate a description
+$targetPaths    = @("%OSDRIVE%\Siemens\*", "%OSDRIVE%\Java\*", "%OSDRIVE%\USERS\*\.SWT\*", "%OSDRIVE%\USERS\*\TEAMCENTER\*", "D:\ManageEngine*\*", "E:\ManageEngine*\*", "%OSDRIVE%\DEVSUITEHOME*\*", "%OSDRIVE%\QUEST_TOAD\*", "%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*")  # one or more paths/wildcards or Appx package family names
 $userOrGroupSid = "S-1-1-0"     # Default Everyone
 $outFile        = "$env:Temp\AppLocker-Patched.xml"
 
 # --- Do not change below unless you know what you're doing ---
-
 try {
     Write-Host "Exporting effective AppLocker policy..."
     $xml = Get-AppLockerPolicy -Effective -Xml
@@ -31,9 +29,32 @@ try {
 
 $policy = [xml]$xml
 
-# helper to find collection by type
+# helper to find collection by type (robust: exact, alias, contains)
 function Get-RuleCollectionByType($policyXml, $type) {
-    return $policyXml.AppLockerPolicy.RuleCollection | Where-Object { $_.Type -eq $type }
+    if (-not $policyXml) { return $null }
+
+    # try exact match first
+    $node = $policyXml.SelectSingleNode("//RuleCollection[@Type='$type']")
+    if ($node) { return $node }
+
+    # common alias map (Appx vs PackagedApp)
+    $aliasMap = @{ 'Appx' = 'PackagedApp'; 'PackagedApp' = 'PackagedApp' }
+
+    if ($aliasMap.ContainsKey($type)) {
+        $node = $policyXml.SelectSingleNode("//RuleCollection[@Type='$($aliasMap[$type])']")
+        if ($node) { return $node }
+    }
+
+    # fallback: find any RuleCollection whose Type attribute contains the requested string (case-insensitive)
+    $nodes = $policyXml.SelectNodes("//RuleCollection")
+    foreach ($n in $nodes) {
+        $t = $n.GetAttribute('Type')
+        if ($t -and $t.ToLower().Contains($type.ToLower())) {
+            return $n
+        }
+    }
+
+    return $null
 }
 
 # sanitize a name part derived from a path or package name
@@ -54,6 +75,12 @@ function Get-SafeNamePart($raw, $isPath) {
 # track if we added any rules
 $added = 0
 
+# Diagnostic: list existing rule collection types (helps ensure matching names)
+Write-Host "Existing RuleCollection types in current policy:"
+$policy.SelectNodes("//RuleCollection") | ForEach-Object {
+    Write-Host "  - $($_.GetAttribute('Type'))"
+}
+
 foreach ($ruleType in $ruleTypes) {
     # Validate target collection exists
     $targetCollection = Get-RuleCollectionByType $policy $ruleType
@@ -64,7 +91,7 @@ foreach ($ruleType in $ruleTypes) {
 
     # For each path create a separate rule
     foreach ($p in $targetPaths) {
-        $isAppx = ($ruleType -eq 'Appx')
+        $isAppx = ($ruleType -eq 'Appx' -or $ruleType -eq 'PackagedApp')
 
         # Derive a safe name part from path or package family name
         $safeNamePart = Get-SafeNamePart $p (-not $isAppx)
@@ -82,11 +109,13 @@ foreach ($ruleType in $ruleTypes) {
             $finalDescription = "${description} - ${safeNamePart} (Path/Package: ${p})"
         }
 
-        # Create the rule element
-        if ($isAppx) {
-            $ruleElementName = 'AppxPackageRule'
+        # Decide the element name for new rule. If the collection already contains child nodes, use the same element name as those.
+        if ($targetCollection.HasChildNodes) {
+            $sampleChild = $targetCollection.FirstChild
+            $ruleElementName = $sampleChild.LocalName
         } else {
-            $ruleElementName = 'FilePathRule'
+            # fallback defaults
+            $ruleElementName = $isAppx ? 'AppxPackageRule' : 'FilePathRule'
         }
 
         $newRule = $policy.CreateElement($ruleElementName)
@@ -105,20 +134,20 @@ foreach ($ruleType in $ruleTypes) {
             $conditions.AppendChild($condition) | Out-Null
             $newRule.AppendChild($conditions) | Out-Null
 
-            # Append to collection
+            # Append to collection (targetCollection is an XmlElement via SelectSingleNode)
             $targetCollection.AppendChild($newRule) | Out-Null
             Write-Host "Added $ruleType rule for path: $p (Name: $finalName)"
             $added++
         }
         elseif ($isAppx) {
-            # Appx packaged app rules require a different XML structure (AppLocker uses AppxPackageRule)
+            # Appx packaged app rules require a different XML structure (PackageFamilyNameCondition is common)
             $pfCondition = $policy.CreateElement('PackageFamilyNameCondition')
             $pfCondition.SetAttribute('PackageFamilyName', $p)
             $conditions.AppendChild($pfCondition) | Out-Null
             $newRule.AppendChild($conditions) | Out-Null
 
             $targetCollection.AppendChild($newRule) | Out-Null
-            Write-Host "Added Appx rule for package family: $p (Name: $finalName)"
+            Write-Host "Added Appx/PackagedApp rule for package family: $p (Name: $finalName)"
             $added++
         }
         else {
@@ -142,16 +171,23 @@ try {
     exit 1
 }
 
-# Apply the policy
+# Apply the policy (pass XML content, not filename)
 try {
-    Write-Host "Applying AppLocker policy (XML from $outFile)..."
-    Set-AppLockerPolicy -XmlPolicy $outFile
+    Write-Host "Applying AppLocker policy (XML content)..."
+    Set-AppLockerPolicy -XmlPolicy $policy.OuterXml -ErrorAction Stop
+
+    # Force a group policy update and try to ensure AppIDSvc is running
     gpupdate /force | Out-Null
 
     sc.exe config appidsvc start= auto | Out-Null
-    try { Restart-Service -Name AppIDSvc -Force -ErrorAction Stop; Write-Host "AppIDSvc restarted." } catch { Write-Warning "Could not restart AppIDSvc; reboot may be required." }
+    try {
+        Restart-Service -Name AppIDSvc -Force -ErrorAction Stop
+        Write-Host "AppIDSvc restarted."
+    } catch {
+        Write-Warning "Could not restart AppIDSvc; a reboot or manual service start may be required. $_"
+    }
 
-    Write-Host "AppLocker policy applied in ENFORCE mode. Check Event Viewer > Microsoft > Windows > AppLocker for events."
+    Write-Host "AppLocker policy applied. Check Event Viewer > Applications and Services Logs > Microsoft > Windows > AppLocker for events."
 } catch {
     Write-Error "Failed to apply AppLocker policy: $_"
     exit 1
