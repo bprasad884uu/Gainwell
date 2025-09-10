@@ -155,7 +155,7 @@ try {
                 Write-Host "Installed version is older than remote. Will download and install." -ForegroundColor Cyan
                 $needDownload = $true
             } else {
-                Write-Host "Installed version ($installed) is >= remote version ($remoteVersion). No action needed." -ForegroundColor Green
+                Write-Host "Installed version ($installed) is >= Latest version ($remoteVersion). No action needed." -ForegroundColor Green
                 $needDownload = $false
             }
         } catch {
