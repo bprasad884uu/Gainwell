@@ -17,21 +17,47 @@ AppLocker Policy in ENFORCE mode
 #>
 
 param (
-	[string]$OutXmlPath = "C:\ProgramData\AppLocker\Enforce-AppLocker-Block.xml",
+    [string]$OutXmlPath = "C:\ProgramData\AppLocker\Enforce-AppLocker-Block.xml",
 
-	[ValidateSet("Enabled","AuditOnly")]
-	[string]$EnforcementMode = "Enabled",   # ENFORCE. Change to "AuditOnly" if you want to test first.
+    [ValidateSet("Enabled","AuditOnly")]
+    [string]$EnforcementMode = "Enabled",   # ENFORCE. Change to "AuditOnly" to test first.
 
-	[string[]]$WhitelistedApps = @("Diagsmart*.exe", "Uninstall*.exe"),
-	[string[]]$WhitelistedPaths = @("%OSDRIVE%\Siemens\*", "%OSDRIVE%\Java\*", "%OSDRIVE%\USERS\*\.SWT\*", "%OSDRIVE%\USERS\*\TEAMCENTER\*", "D:\ManageEngine*\*", "E:\ManageEngine*\*", "%OSDRIVE%\DEVSUITEHOME*\*", "%OSDRIVE%\QUEST_TOAD\*", "%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*"),
-	[string[]]$WhitelistedPublishers = @("O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US","CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US", "O=Oracle America, Inc., L=Redwood Shores, S=California, C=US"),
-	[string[]]$WhitelistedScripts = @("%OSDRIVE%\Users\*\AppData\Local\Temp\TempScript.ps1", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\RAD*.ps1", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\__PSSCRIPTPOLICYTEST*.ps*", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\IPW*.*")    # default temp script patterns included
+    [string[]]$WhitelistedApps = @(
+        "Diagsmart*.exe",
+        "Uninstall*.exe"
+    ),
+
+    [string[]]$WhitelistedPaths = @(
+        "%OSDRIVE%\Siemens\*",
+        "%OSDRIVE%\Java\*",
+        "%OSDRIVE%\USERS\*\.SWT\*",
+        "%OSDRIVE%\USERS\*\TEAMCENTER\*",
+        "D:\ManageEngine*\*",
+        "E:\ManageEngine*\*",
+        "%OSDRIVE%\DEVSUITEHOME*\*",
+        "%OSDRIVE%\QUEST_TOAD\*",
+        "%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*"
+    ),
+
+    [string[]]$WhitelistedPublishers = @(
+        "O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US",
+        "CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US",
+        # Oracle - verify subject on your machines; adjust if certificate subject differs
+        "O=Oracle America, Inc., L=Redwood Shores, S=California, C=US"
+    ),
+
+    [string[]]$WhitelistedScripts = @(
+        "%OSDRIVE%\Users\*\AppData\Local\Temp\TempScript.ps1",
+        "%OSDRIVE%\Users\*\AppData\Local\Temp\RAD*.ps1",
+        "%OSDRIVE%\Users\*\AppData\Local\Temp\__PSScriptPolicyTest*.ps*",
+        "%OSDRIVE%\Users\*\AppData\Local\Temp\IPW*.*"
+    ),
+
+    # Which SID should receive whitelisted script/path allowances?
+    # "S-1-1-0" = Everyone (default). Use "S-1-5-32-544" for Local Administrators.
+    [string]$WhitelistedScriptsSid = "S-1-1-0",
+    [string]$WhitelistedPathsSid   = "S-1-1-0"
 )
-
-	# Who should the whitelisted scripts/paths be allowed for?
-	# Use "S-1-1-0" for Everyone (default), or "S-1-5-32-544" for Local Administrators.
-	[string]$WhitelistedScriptsSid = "S-1-1-0"
-	[string]$WhitelistedPathsSid   = "S-1-1-0"
 
 # Checking Windows Compatibility	
 $OSType = (Get-CimInstance Win32_OperatingSystem).ProductType
@@ -136,20 +162,25 @@ $installerPatternsUsers = @(
 )
 
 foreach ($p in $installerPatternsUsers) {
-    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - Users - $(Split-Path $p -Leaf)`" Description=`"Deny installers in user profiles`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - Users - $(Split-Path $p -Leaf)`" Description=`"Deny installers in user common folders`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
     $xml += "      <Conditions><FilePathCondition Path=`"$p`"/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
 }
 
-# Deny installers on all fixed non-system drives
+# Deny installers on non-system fixed drives (explicit per-drive, single-wildcard)
 $drivePatterns = @("*.msi","setup.exe","install.exe","update.exe")
 foreach ($driveRoot in $nonSystemDrives) {
     $driveLetter = $driveRoot.TrimEnd('\')
     if ($driveLetter -match '^[A-Za-z]:$') {
         foreach ($pat in $drivePatterns) {
-            $pp = "$driveLetter\*\$pat"
-            $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - $driveLetter - $pat`" Description=`"Deny installers on $driveLetter`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
-            $xml += "      <Conditions><FilePathCondition Path=`"$pp`"/></Conditions>`n"
+            # block installer files anywhere on that drive root or under a first-level subfolder (no consecutive wildcards)
+            $pp1 = "$driveLetter\$pat"         # root-of-drive
+            $pp2 = "$driveLetter\*\$pat"       # one folder deep (allowed pattern)
+            $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - $driveLetter - Root - $pat`" Description=`"Deny installers on $driveLetter root`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
+            $xml += "      <Conditions><FilePathCondition Path=`"$pp1`"/></Conditions>`n"
+            $xml += "    </FilePathRule>`n"
+            $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - $driveLetter - Subfolders - $pat`" Description=`"Deny installers on $driveLetter (1st-level subfolders)`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
+            $xml += "      <Conditions><FilePathCondition Path=`"$pp2`"/></Conditions>`n"
             $xml += "    </FilePathRule>`n"
         }
     }
@@ -337,6 +368,11 @@ $xml += "  <RuleCollection Type=`"Msi`" EnforcementMode=`"$EnforcementMode`">`n"
 # Allow Local Admins everywhere for MSI (added so admins retain full access)
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All (MSI)`" Description=`"Local Administrators allowed everywhere for MSI`" UserOrGroupSid=`"S-1-5-32-544`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
+# Allow Oracle MSIs from AppData\LocalLow\Oracle for Everyone
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Oracle MSI - AppDataLocalLow`" Description=`"Allow Oracle MSIs in AppData\LocalLow\Oracle`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%OSDRIVE%\Users\*\AppData\LocalLow\Oracle\*.msi`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 # Deny MSI in user profiles
