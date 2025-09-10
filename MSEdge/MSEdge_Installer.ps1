@@ -66,7 +66,7 @@ function Get-RemoteReleaseInfo {
     try {
         return Invoke-RestMethod -Uri $ApiUrl -Headers $headers -ErrorAction Stop
     } catch {
-        Write-Error "Failed to query GitHub Releases API: $($_.Exception.Message)"
+        Write-Error "`nFailed to query GitHub Releases API: $($_.Exception.Message)"
         return $null
     }
 }
@@ -114,18 +114,18 @@ function Format-Speed {
 }
 
 try {
-    Write-Host "Checking local Microsoft Edge version..." -ForegroundColor Cyan
+    Write-Host "`nChecking local Microsoft Edge version..." -ForegroundColor Cyan
     $installed = Get-InstalledEdgeVersion
     if ($installed) {
         # ensure scalar string
         if ($installed -is [System.Array]) { $installed = ($installed | Where-Object { $_ } | Select-Object -First 1).ToString().Trim() }
         $installed = $installed.ToString().Trim()
-        Write-Host "Installed Edge version: $installed" -ForegroundColor Green
+        Write-Host "`nInstalled Edge version: $installed" -ForegroundColor Green
     } else {
-        Write-Host "Microsoft Edge not detected on this system." -ForegroundColor Yellow
+        Write-Host "`nMicrosoft Edge not detected on this system." -ForegroundColor Yellow
     }
 
-    Write-Host "Querying GitHub release '$ReleaseTag' from $Owner/$Repo ..." -ForegroundColor Cyan
+    Write-Host "`nChecking latest release '$ReleaseTag' ..." -ForegroundColor Cyan
     $release = Get-RemoteReleaseInfo -ApiUrl $githubApiUrl
     if (-not $release) { throw "Cannot get release info from GitHub." }
 
@@ -136,34 +136,34 @@ try {
         # normalize to scalar string
         if ($remoteVersion -is [System.Array]) { $remoteVersion = ($remoteVersion | Where-Object { $_ } | Select-Object -First 1).ToString().Trim() }
         $remoteVersion = $remoteVersion.ToString().Trim()
-        Write-Host "Remote release version (parsed): $remoteVersion" -ForegroundColor Cyan
+        Write-Host "`nLatest release version (parsed): $remoteVersion" -ForegroundColor Cyan
     } else {
-        Write-Warning "Could not parse version from release body/name. Remote treated as unknown."
+        Write-Warning "`nCould not parse version from release body/name. Remote treated as unknown."
     }
 
     # Decide whether to download
     $needDownload = $false
     if ($Force) {
-        Write-Host "Force flag set. Will download and install." -ForegroundColor Yellow
+        Write-Host "`nForce flag set. Will download and install." -ForegroundColor Yellow
         $needDownload = $true
     } elseif (-not $installed) {
-        Write-Host "Edge not installed. Will download and install." -ForegroundColor Cyan
+        Write-Host "`nEdge not installed. Will download and install." -ForegroundColor Cyan
         $needDownload = $true
     } elseif ($remoteVersion) {
         try {
             if ([version]$installed -lt [version]$remoteVersion) {
-                Write-Host "Installed version is older than remote. Will download and install." -ForegroundColor Cyan
+                Write-Host "`nInstalled version is older than remote. Will download and install." -ForegroundColor Cyan
                 $needDownload = $true
             } else {
-                Write-Host "Installed version ($installed) is >= Latest version ($remoteVersion). No action needed." -ForegroundColor Green
+                Write-Host "`nInstalled version ($installed) is >= Latest version ($remoteVersion). No action needed." -ForegroundColor Green
                 $needDownload = $false
             }
         } catch {
-            Write-Warning "Version compare failed: $($_.Exception.Message). Will download by default."
+            Write-Warning "`nVersion compare failed: $($_.Exception.Message). Will download by default."
             $needDownload = $true
         }
     } else {
-        Write-Warning "Remote version unknown and Edge is installed. Defaulting to download+install."
+        Write-Warning "`nRemote version unknown and Edge is installed. Defaulting to download+install."
         $needDownload = $true
     }
 
@@ -172,7 +172,7 @@ try {
     # Get MSI download URL from assets
     $msiUrl = Get-MsiAssetDownloadUrl -releaseObj $release -assetName $assetFileName
     if (-not $msiUrl) { throw "MSI asset '$assetFileName' not found in release assets." }
-    Write-Host "MSI download URL: $msiUrl" -ForegroundColor Cyan
+    #Write-Host "`nMSI download URL: $msiUrl" -ForegroundColor Cyan
 
     # Download MSI with HttpClient and progress
     if (-not ("System.Net.Http.HttpClient" -as [type])) {
@@ -185,13 +185,13 @@ try {
     }
     $client.DefaultRequestHeaders.Add('User-Agent','Edge-Updater-Script')
 
-    Write-Host "Starting download to $tempMsi" -ForegroundColor Cyan
+    Write-Host "`nStarting download to $tempMsi" -ForegroundColor Cyan
     $resp = $client.GetAsync($msiUrl, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
     if ($resp.StatusCode -ne [System.Net.HttpStatusCode]::OK) { throw "Download request failed: $($resp.StatusCode) $($resp.ReasonPhrase)" }
 
     $stream = $resp.Content.ReadAsStreamAsync().Result
     $total = $resp.Content.Headers.ContentLength
-    if (-not $total) { Write-Warning "Server did not return content length."; $total = 0 }
+    if (-not $total) { Write-Warning "`nServer did not return content length."; $total = 0 }
 
     $dir = Split-Path $tempMsi
     if (-not (Test-Path $dir)) { New-Item -Path $dir -ItemType Directory -Force | Out-Null }
@@ -225,17 +225,17 @@ try {
     if (-not (Test-Path $tempMsi)) { throw "Downloaded MSI not found at $tempMsi" }
 
     # Run silent MSI install
-    Write-Host "Running silent MSI install..." -ForegroundColor Cyan
+    Write-Host "`nRunning silent MSI install..." -ForegroundColor Cyan
     $msiArgs = "/i `"$tempMsi`" /qn /norestart"
     $proc = Start-Process -FilePath msiexec.exe -ArgumentList $msiArgs -Wait -PassThru
     if ($proc.ExitCode -eq 0) {
-        Write-Host "MSI install completed successfully." -ForegroundColor Green
+        Write-Host "`nMSI install completed successfully." -ForegroundColor Green
     } else {
-        Write-Warning "msiexec returned exit code $($proc.ExitCode). Consider using /l*v to generate a log."
+        Write-Warning "`nmsiexec returned exit code $($proc.ExitCode). Consider using /l*v to generate a log."
     }
 
 } catch {
-    Write-Error "Error: $($_.Exception.Message)"
+    Write-Error "`nError: $($_.Exception.Message)"
     return
 } finally {
     try { if (Test-Path $tempMsi) { Remove-Item -Path $tempMsi -Force -ErrorAction SilentlyContinue } } catch {}
