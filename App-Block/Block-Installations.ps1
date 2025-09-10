@@ -26,11 +26,12 @@ param (
 	[string[]]$WhitelistedPaths = @("%OSDRIVE%\Siemens\*", "%OSDRIVE%\Java\*", "%OSDRIVE%\USERS\*\.SWT\*", "%OSDRIVE%\USERS\*\TEAMCENTER\*", "D:\ManageEngine*\*", "E:\ManageEngine*\*"),
 	[string[]]$WhitelistedPublishers = @("O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US","CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US"),
 	[string[]]$WhitelistedScripts = @("%OSDRIVE%\Users\*\AppData\Local\Temp\TempScript.ps1", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\RAD*.ps1", "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\__PSSCRIPTPOLICYTEST*.ps*")    # default temp script patterns included
+)
+
 	# Who should the whitelisted scripts/paths be allowed for?
 	# Use "S-1-1-0" for Everyone (default), or "S-1-5-32-544" for Local Administrators.
-	[string]$WhitelistedScriptsSid = "S-1-1-0",
+	[string]$WhitelistedScriptsSid = "S-1-1-0"
 	[string]$WhitelistedPathsSid   = "S-1-1-0"
-)
 
 # Checking Windows Compatibility
 $OSType = (Get-CimInstance Win32_OperatingSystem).ProductType
