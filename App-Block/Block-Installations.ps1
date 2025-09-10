@@ -307,7 +307,6 @@ $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL - Pr
 $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES(x86)%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
-# ---- INSERT: Whitelisted paths (DLL) — allow DLLs from explicit folders ----
 foreach ($p in $WhitelistedPaths) {
     if ([string]::IsNullOrWhiteSpace($p)) { continue }
 
@@ -320,7 +319,6 @@ foreach ($p in $WhitelistedPaths) {
     $xml += "      <Conditions><FilePathCondition Path=`"$path`"/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
 }
-# ---- END INSERT ----
 
 # Allow ProgramData for DLLs (everyone)
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL - ProgramData`" Description=`"Allow DLLs from ProgramData`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
@@ -362,6 +360,19 @@ $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramF
 $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES(x86)%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
+foreach ($p in $WhitelistedPaths) {
+    if ([string]::IsNullOrWhiteSpace($p)) { continue }
+
+    $path = $p
+    if ($path -notmatch '[*?]') {
+        if ($path -match '\\$') { $path = $path + '*' } else { $path = $path + '\*' }
+    }
+
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - MSI Path - $path`" Description=`"Allow MSIs from $path`" UserOrGroupSid=`"$WhitelistedPathsSid`" Action=`"Allow`">`n"
+    $xml += "      <Conditions><FilePathCondition Path=`"$path`"/></Conditions>`n"
+    $xml += "    </FilePathRule>`n"
+}
+
 # Allow ProgramData for MSIs (everyone)
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramData MSI`" Description=`"Allow MSIs from ProgramData`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%ProgramData%\*`"/></Conditions>`n"
@@ -372,11 +383,12 @@ $xml += "  </RuleCollection>`n"
 # ---------------- Appx rules ----------------
 $xml += "  <RuleCollection Type=`"Appx`" EnforcementMode=`"$EnforcementMode`">`n"
 
-# Allow Local Admins everywhere for Appx (added so admins retain full access)
+# Allow Local Admins everywhere for Appx
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All (Appx)`" Description=`"Local Administrators allowed everywhere for Appx`" UserOrGroupSid=`"S-1-5-32-544`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
+# Allow signed packaged apps by publisher (existing)
 $xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - All Signed Appx`" Description=`"Allow signed packaged apps`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
 $xml += "      <Conditions>`n"
 $xml += "        <FilePublisherCondition PublisherName=`"*`" ProductName=`"*`" BinaryName=`"*`">`n"
@@ -384,6 +396,20 @@ $xml += "          <BinaryVersionRange LowSection=`"0.0.0.0`" HighSection=`"6553
 $xml += "        </FilePublisherCondition>`n"
 $xml += "      </Conditions>`n"
 $xml += "    </FilePublisherRule>`n"
+
+foreach ($p in $WhitelistedPaths) {
+    if ([string]::IsNullOrWhiteSpace($p)) { continue }
+
+    $path = $p
+    if ($path -notmatch '[*?]') {
+        if ($path -match '\\$') { $path = $path + '*' } else { $path = $path + '\*' }
+    }
+
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Appx Path - $path`" Description=`"Allow Appx packages from $path`" UserOrGroupSid=`"$WhitelistedPathsSid`" Action=`"Allow`">`n"
+    $xml += "      <Conditions><FilePathCondition Path=`"$path`"/></Conditions>`n"
+    $xml += "    </FilePathRule>`n"
+}
+
 $xml += "  </RuleCollection>`n"
 
 # close xml
