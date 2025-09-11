@@ -83,6 +83,12 @@ $WhitelistedPaths = ($WhitelistedPaths | ForEach-Object {
     $p
 }) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
 
+# ---------------- XML helper ----------------
+function XmlEscape([string]$s) {
+    if ($null -eq $s) { return "" }
+    return [System.Security.SecurityElement]::Escape($s)
+}
+
 # helper for GUIDs
 function New-RuleGuid { return [guid]::NewGuid().ToString() }
 
@@ -90,18 +96,40 @@ function New-RuleGuid { return [guid]::NewGuid().ToString() }
 $SystemDriveToken = "%OSDRIVE%"
 
 # discover non-system fixed drives (only roots like C:\, D:\ etc.)
-$systemRoot = $env:SystemDrive.TrimEnd('\') + '\'
+$systemRoot = ($env:SystemDrive.TrimEnd('\') + '\')
 $nonSystemDrives = Get-PSDrive -PSProvider FileSystem |
-                   Where-Object { $_.Root -ne $systemRoot } |
-                   Select-Object -ExpandProperty Root -ErrorAction SilentlyContinue
+    Where-Object {
+        # accept roots like "D:\"
+        ($_.Root -ne $systemRoot) -and
+        ($_.Root -match '^[A-Za-z]:\\$')
+    } |
+    ForEach-Object { $_.Root } -ErrorAction SilentlyContinue
 if ($null -eq $nonSystemDrives) { $nonSystemDrives = @() }
 
 $ErrorActionPreference = 'Stop'
 
 # --- Create timestamped backup folder ---
-$timestamp = Get-Date -Format "MMyyyyddHHmmss"
-$backupDir = "C:\PolicyBackup\$timestamp"
-New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
+# create root if missing
+$backupRoot = "C:\PolicyBackup"
+if (-not (Test-Path $backupRoot)) { New-Item -Path $backupRoot -ItemType Directory -Force | Out-Null }
+
+# create a timestamped folder (keeps your "random-looking" style if desired)
+$tsFolder = Get-Date -Format "MMyyyyddHHmmss"   # your original style; change if you prefer sortable ts
+$backupDir = Join-Path $backupRoot $tsFolder
+New-Item -Path $backupDir -ItemType Directory -Force | Out-Null
+
+# write metadata (human-friendly timestamp + details) into the timestamped folder
+$humanTs = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+$meta = @{
+    CreatedAt        = $humanTs
+    BackupFolderName = $tsFolder
+    BackupFolderPath = $backupDir
+    ComputerName     = $env:COMPUTERNAME
+    User             = [Environment]::UserName
+    ScriptPath       = $MyInvocation.MyCommand.Path
+}
+$metaFile = Join-Path $backupDir 'backup-info.txt'
+$meta.GetEnumerator() | ForEach-Object { "$($_.Key): $($_.Value)" } | Out-File -FilePath $metaFile -Encoding UTF8 -Force
 
 Write-Host "=== Creating Backup ($backupDir) ==="
 
@@ -228,9 +256,10 @@ foreach ($p in $WhitelistedPaths) {
 
 # Publisher allow rules (EXE)
 foreach ($pub in $WhitelistedPublishers) {
-    $xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Publisher - $pub`" Description=`"Allow signed apps from $pub`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
+    $pubEsc = XmlEscape($pub)
+    $xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Publisher - $pubEsc`" Description=`"Allow signed apps from $pubEsc`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
     $xml += "      <Conditions>`n"
-    $xml += "        <FilePublisherCondition PublisherName=`"$pub`" ProductName=`"*`" BinaryName=`"*`">`n"
+    $xml += "        <FilePublisherCondition PublisherName=`"$pubEsc`" ProductName=`"*`" BinaryName=`"*`">`n"
     $xml += "          <BinaryVersionRange LowSection=`"0.0.0.0`" HighSection=`"65535.65535.65535.65535`" />`n"
     $xml += "        </FilePublisherCondition>`n"
     $xml += "      </Conditions>`n"
@@ -469,7 +498,7 @@ try {
 
 # Apply policy
 try {
-    Write-Host "`nApplying AppLocker policy (Enforce) ..."
+    Write-Host "`nApplying AppLocker policy ..."
     Set-AppLockerPolicy -XmlPolicy $OutXmlPath
     gpupdate /force | Out-Null
 
@@ -477,7 +506,7 @@ try {
     sc.exe config appidsvc start= auto | Out-Null
     try { Restart-Service -Name AppIDSvc -Force -ErrorAction Stop; Write-Host "`nAppIDSvc restarted." } catch { Write-Warning "`nCould not restart AppIDSvc; reboot may be required." }
 
-    Write-Host "`nAppLocker policy applied. Check Check Event Viewer > Applications and Services Logs > Microsoft > Windows > AppLocker for events."
+    Write-Host "`nAppLocker policy applied. Check Event Viewer > Applications and Services Logs > Microsoft > Windows > AppLocker for events."
 } catch {
     Write-Error "`nFailed to apply AppLocker policy: $_"
     exit 1
