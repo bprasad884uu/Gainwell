@@ -37,6 +37,7 @@ param (
 	"%OSDRIVE%\DEVSUITEHOME*\*",
 	"%OSDRIVE%\QUEST_TOAD\*",
 	"%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*"
+	"%OSDRIVE%\Users\*\Appdata\Local\Packages\*"
 	),
 	
 	[string[]]$WhitelistedPublishers = @(
