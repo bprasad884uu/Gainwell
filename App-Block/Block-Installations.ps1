@@ -41,9 +41,9 @@ param (
 	),
 	
 	[string[]]$WhitelistedPublishers = @(
-	"O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US",
+	"CN=Microsoft Corporation, O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US",
 	"CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US",
-	"O=Oracle Corporation, L=Redwood Shores, S=California, C=US"
+	"CN=Oracle America, O=`"Oracle America, L=Redwood City, S=California, C=US"
 	),
 	
 	[string[]]$WhitelistedScripts = @(
