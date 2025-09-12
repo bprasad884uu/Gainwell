@@ -24,7 +24,8 @@ param (
 
 	[string[]]$WhitelistedApps = @(
 	"Diagsmart*.exe",
-	"Uninstall*.exe"
+	"Uninstall*.exe",
+	"ITD_EFILING_JFX*.jar"
 	),
 	
 	[string[]]$WhitelistedPaths = @(
