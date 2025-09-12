@@ -37,13 +37,16 @@ param (
 	"E:\ManageEngine*\*", 
 	"%OSDRIVE%\DEVSUITEHOME*\*",
 	"%OSDRIVE%\QUEST_TOAD\*",
-	"%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*"
+	"%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*",
+	"%OSDRIVE%\Users\*\Appdata\Local\Packages\*",
+	"%OSDRIVE%\FG WILSON*\*"
 	),
 	
 	[string[]]$WhitelistedPublishers = @(
-	"O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US",
+	"CN=Microsoft Corporation, O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US",
 	"CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US",
-	"O=Oracle Corporation, L=Redwood Shores, S=California, C=US"
+	"CN=Oracle America, O=Oracle America, L=Redwood City, S=California, C=US",
+	"CN=ZOHO Corporation Private Limited, O=ZOHO Corporation Private Limited, L=Chennai, S=Tamil Nadu, C=IN"
 	),
 	
 	[string[]]$WhitelistedScripts = @(
@@ -81,6 +84,12 @@ $WhitelistedPaths = ($WhitelistedPaths | ForEach-Object {
     $p
 }) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
 
+# ---------------- XML helper ----------------
+function XmlEscape([string]$s) {
+    if ($null -eq $s) { return "" }
+    return [System.Security.SecurityElement]::Escape($s)
+}
+
 # helper for GUIDs
 function New-RuleGuid { return [guid]::NewGuid().ToString() }
 
@@ -88,18 +97,40 @@ function New-RuleGuid { return [guid]::NewGuid().ToString() }
 $SystemDriveToken = "%OSDRIVE%"
 
 # discover non-system fixed drives (only roots like C:\, D:\ etc.)
-$systemRoot = $env:SystemDrive.TrimEnd('\') + '\'
+$systemRoot = ($env:SystemDrive.TrimEnd('\') + '\')
 $nonSystemDrives = Get-PSDrive -PSProvider FileSystem |
-                   Where-Object { $_.Root -ne $systemRoot } |
-                   Select-Object -ExpandProperty Root -ErrorAction SilentlyContinue
+    Where-Object {
+        # accept roots like "D:\"
+        ($_.Root -ne $systemRoot) -and
+        ($_.Root -match '^[A-Za-z]:\\$')
+    } |
+    ForEach-Object { $_.Root } -ErrorAction SilentlyContinue
 if ($null -eq $nonSystemDrives) { $nonSystemDrives = @() }
 
 $ErrorActionPreference = 'Stop'
 
 # --- Create timestamped backup folder ---
-$timestamp = Get-Date -Format "MMyyyyddHHmmss"
-$backupDir = "C:\PolicyBackup\$timestamp"
-New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
+# create root if missing
+$backupRoot = "C:\PolicyBackup"
+if (-not (Test-Path $backupRoot)) { New-Item -Path $backupRoot -ItemType Directory -Force | Out-Null }
+
+# create a timestamped folder (keeps your "random-looking" style if desired)
+$tsFolder = Get-Date -Format "MMyyyyddHHmmss"   # your original style; change if you prefer sortable ts
+$backupDir = Join-Path $backupRoot $tsFolder
+New-Item -Path $backupDir -ItemType Directory -Force | Out-Null
+
+# write metadata (human-friendly timestamp + details) into the timestamped folder
+$humanTs = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+$meta = @{
+    CreatedAt        = $humanTs
+    BackupFolderName = $tsFolder
+    BackupFolderPath = $backupDir
+    ComputerName     = $env:COMPUTERNAME
+    User             = [Environment]::UserName
+    ScriptPath       = $MyInvocation.MyCommand.Path
+}
+$metaFile = Join-Path $backupDir 'backup-info.txt'
+$meta.GetEnumerator() | ForEach-Object { "$($_.Key): $($_.Value)" } | Out-File -FilePath $metaFile -Encoding UTF8 -Force
 
 Write-Host "=== Creating Backup ($backupDir) ==="
 
@@ -159,7 +190,7 @@ $installerPatternsUsers = @(
   "$SystemDriveToken\Users\*\*update.exe"
 )
 foreach ($p in $installerPatternsUsers) {
-    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - Users - $(Split-Path $p -Leaf)`" Description=`"Deny installers in user profiles`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - Users - $(Split-Path $p -Leaf)`" Description=`"Deny installers in user profiles`" UserOrGroupSid=`"$UsersSid`" Action=`"Deny`">`n"
     $xml += "      <Conditions><FilePathCondition Path=`"$p`"/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
 }
@@ -171,7 +202,7 @@ foreach ($driveRoot in $nonSystemDrives) {
     if ($driveLetter -match '^[A-Za-z]:$') {
         foreach ($pat in $drivePatterns) {
             $pp = "$driveLetter\*\$pat"
-            $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - $driveLetter - $pat`" Description=`"Deny installers on $driveLetter`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
+            $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - $driveLetter - $pat`" Description=`"Deny installers on $driveLetter`" UserOrGroupSid=`"$UsersSid`" Action=`"Deny`">`n"
             $xml += "      <Conditions><FilePathCondition Path=`"$pp`"/></Conditions>`n"
             $xml += "    </FilePathRule>`n"
         }
@@ -179,31 +210,31 @@ foreach ($driveRoot in $nonSystemDrives) {
 }
 
 # Allow Local Admins everywhere (EXE)
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All`" Description=`"Local Administrators allowed everywhere`" UserOrGroupSid=`"S-1-5-32-544`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All`" Description=`"Local Administrators allowed everywhere`" UserOrGroupSid=`"$AdministratorsSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 # Allow system paths for everyone (EXE)
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Windows EXE`" Description=`"Allow EXEs from Windows folder`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Windows EXE`" Description=`"Allow EXEs from Windows folder`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%WINDIR%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles EXE`" Description=`"Allow EXEs from Program Files`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles EXE`" Description=`"Allow EXEs from Program Files`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles (x86) EXE`" Description=`"Allow EXEs from Program Files (x86)`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles (x86) EXE`" Description=`"Allow EXEs from Program Files (x86)`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES(x86)%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 # Allow ProgramData for EXEs (everyone)
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramData EXE`" Description=`"Allow EXEs from ProgramData`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramData EXE`" Description=`"Allow EXEs from ProgramData`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%ProgramData%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 # Whitelisted filenames anywhere (allow)
 foreach ($app in $WhitelistedApps) {
-    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - $app`" Description=`"Allow $app anywhere`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - $app`" Description=`"Allow $app anywhere`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
     $xml += "      <Conditions><FilePathCondition Path=`"*\$app`"/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
 }
@@ -219,16 +250,17 @@ foreach ($p in $WhitelistedPaths) {
         if ($path -match '\\$') { $path = $path + '*' } else { $path = $path + '\*' }
     }
 
-    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Path - $path`" Description=`"Allow EXEs from $path`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Path - $path`" Description=`"Allow EXEs from $path`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
     $xml += "      <Conditions><FilePathCondition Path=`"$path`"/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
 }
 
 # Publisher allow rules (EXE)
 foreach ($pub in $WhitelistedPublishers) {
-    $xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Publisher - $pub`" Description=`"Allow signed apps from $pub`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+    $pubEsc = XmlEscape($pub)
+    $xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Publisher - $pubEsc`" Description=`"Allow signed apps from $pubEsc`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
     $xml += "      <Conditions>`n"
-    $xml += "        <FilePublisherCondition PublisherName=`"$pub`" ProductName=`"*`" BinaryName=`"*`">`n"
+    $xml += "        <FilePublisherCondition PublisherName=`"$pubEsc`" ProductName=`"*`" BinaryName=`"*`">`n"
     $xml += "          <BinaryVersionRange LowSection=`"0.0.0.0`" HighSection=`"65535.65535.65535.65535`" />`n"
     $xml += "        </FilePublisherCondition>`n"
     $xml += "      </Conditions>`n"
@@ -241,12 +273,12 @@ $xml += "  </RuleCollection>`n"
 $xml += "  <RuleCollection Type=`"Script`" EnforcementMode=`"$EnforcementMode`">`n"
 
 # Allow Local Admins everywhere for Scripts (added so admins retain full access)
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All (Scripts)`" Description=`"Local Administrators allowed everywhere for scripts`" UserOrGroupSid=`"S-1-5-32-544`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All (Scripts)`" Description=`"Local Administrators allowed everywhere for scripts`" UserOrGroupSid=`"$AdministratorsSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 # Microsoft-signed scripts allowed
-$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Microsoft Signed Scripts`" Description=`"Allow Microsoft-signed scripts`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Microsoft Signed Scripts`" Description=`"Allow Microsoft-signed scripts`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions>`n"
 $xml += "        <FilePublisherCondition PublisherName=`"O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US`" ProductName=`"*`" BinaryName=`"*`">`n"
 $xml += "          <BinaryVersionRange LowSection=`"0.0.0.0`" HighSection=`"65535.65535.65535.65535`" />`n"
@@ -286,19 +318,19 @@ foreach ($p in $WhitelistedPaths) {
 }
 
 # Allow Windows/ProgramFiles/ProgramData scripts (everyone)
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Windows Scripts`" Description=`"Allow scripts from Windows`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Windows Scripts`" Description=`"Allow scripts from Windows`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%WINDIR%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles Scripts`" Description=`"Allow scripts from Program Files`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles Scripts`" Description=`"Allow scripts from Program Files`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles (x86) Scripts`" Description=`"Allow scripts from Program Files (x86)`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles (x86) Scripts`" Description=`"Allow scripts from Program Files (x86)`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES(x86)%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramData Scripts`" Description=`"Allow scripts from ProgramData`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramData Scripts`" Description=`"Allow scripts from ProgramData`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%ProgramData%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
@@ -308,12 +340,12 @@ $xml += "  </RuleCollection>`n"
 $xml += "  <RuleCollection Type=`"Dll`" EnforcementMode=`"$EnforcementMode`">`n"
 
 # Allow Local Admins everywhere for DLLs (added so admins retain full access)
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All (DLLs)`" Description=`"Local Administrators allowed everywhere for DLLs`" UserOrGroupSid=`"S-1-5-32-544`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All (DLLs)`" Description=`"Local Administrators allowed everywhere for DLLs`" UserOrGroupSid=`"$AdministratorsSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 # Allow all digitally signed DLLs (any publisher)
-$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - All Signed DLLs`" Description=`"Allow all digitally signed DLLs`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - All Signed DLLs`" Description=`"Allow all digitally signed DLLs`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions>`n"
 $xml += "        <FilePublisherCondition PublisherName=`"*`" ProductName=`"*`" BinaryName=`"*`">`n"
 $xml += "          <BinaryVersionRange LowSection=`"0.0.0.0`" HighSection=`"65535.65535.65535.65535`" />`n"
@@ -322,15 +354,15 @@ $xml += "      </Conditions>`n"
 $xml += "    </FilePublisherRule>`n"
 
 # Allow system DLLs and core program folders
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Windows DLLs`" Description=`"Allow DLLs from Windows`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Windows DLLs`" Description=`"Allow DLLs from Windows`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%WINDIR%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL - ProgramFiles`" Description=`"Allow DLLs from Program Files`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL - ProgramFiles`" Description=`"Allow DLLs from Program Files`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL - ProgramFiles (x86)`" Description=`"Allow DLLs from Program Files (x86)`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL - ProgramFiles (x86)`" Description=`"Allow DLLs from Program Files (x86)`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES(x86)%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
@@ -348,7 +380,7 @@ foreach ($p in $WhitelistedPaths) {
 }
 
 # Allow ProgramData for DLLs (everyone)
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL - ProgramData`" Description=`"Allow DLLs from ProgramData`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL - ProgramData`" Description=`"Allow DLLs from ProgramData`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%ProgramData%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
@@ -358,12 +390,12 @@ $xml += "  </RuleCollection>`n"
 $xml += "  <RuleCollection Type=`"Msi`" EnforcementMode=`"$EnforcementMode`">`n"
 
 # Allow Local Admins everywhere for MSI (added so admins retain full access)
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All (MSI)`" Description=`"Local Administrators allowed everywhere for MSI`" UserOrGroupSid=`"S-1-5-32-544`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All (MSI)`" Description=`"Local Administrators allowed everywhere for MSI`" UserOrGroupSid=`"$AdministratorsSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 # Deny MSI in user profiles
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - Users - MSI in Profiles`" Description=`"Deny MSI in user profiles`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - Users - MSI in Profiles`" Description=`"Deny MSI in user profiles`" UserOrGroupSid=`"$UsersSid`" Action=`"Deny`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"$($SystemDriveToken)\Users\*\*.msi`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
@@ -372,14 +404,14 @@ foreach ($driveRoot in $nonSystemDrives) {
     $driveLetter = $driveRoot.TrimEnd('\')
     if ($driveLetter -match '^[A-Za-z]:$') {
         $pp = "$driveLetter\*\*.msi"
-        $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - $driveLetter - MSI`" Description=`"Deny MSI on $driveLetter`" UserOrGroupSid=`"S-1-5-32-545`" Action=`"Deny`">`n"
+        $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny - $driveLetter - MSI`" Description=`"Deny MSI on $driveLetter`" UserOrGroupSid=`"$UsersSid`" Action=`"Deny`">`n"
         $xml += "      <Conditions><FilePathCondition Path=`"$pp`"/></Conditions>`n"
         $xml += "    </FilePathRule>`n"
     }
 }
 # Whitelisted filenames anywhere (MSI)
 foreach ($app in $WhitelistedApps) {
-    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - MSI - $app`" Description=`"Allow MSI filename/pattern: $app`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - MSI - $app`" Description=`"Allow MSI filename/pattern: $app`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
     $xml += "      <Conditions><FilePathCondition Path=`"*\$app`"/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
 }
@@ -398,16 +430,16 @@ foreach ($p in $WhitelistedPaths) {
 }
 
 # Allow ProgramFiles/MSI caches
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles MSI`" Description=`"Allow MSIs from Program Files`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles MSI`" Description=`"Allow MSIs from Program Files`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles (x86) MSI`" Description=`"Allow MSIs from Program Files (x86)`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles (x86) MSI`" Description=`"Allow MSIs from Program Files (x86)`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES(x86)%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 # Allow ProgramData for MSIs (everyone)
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramData MSI`" Description=`"Allow MSIs from ProgramData`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramData MSI`" Description=`"Allow MSIs from ProgramData`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%ProgramData%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
@@ -417,11 +449,11 @@ $xml += "  </RuleCollection>`n"
 $xml += "  <RuleCollection Type=`"Appx`" EnforcementMode=`"$EnforcementMode`">`n"
 
 # Allow Local Admins everywhere for Appx (added so admins retain full access)
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All (Appx)`" Description=`"Local Administrators allowed everywhere for Appx`" UserOrGroupSid=`"S-1-5-32-544`" Action=`"Allow`">`n"
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All (Appx)`" Description=`"Local Administrators allowed everywhere for Appx`" UserOrGroupSid=`"$AdministratorsSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
-$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - All Signed Appx`" Description=`"Allow signed packaged apps`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - All Signed Appx`" Description=`"Allow signed packaged apps`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions>`n"
 $xml += "        <FilePublisherCondition PublisherName=`"*`" ProductName=`"*`" BinaryName=`"*`">`n"
 $xml += "          <BinaryVersionRange LowSection=`"0.0.0.0`" HighSection=`"65535.65535.65535.65535`" />`n"
@@ -431,7 +463,7 @@ $xml += "    </FilePublisherRule>`n"
 
 # Whitelisted filenames anywhere (Appx)
 foreach ($app in $WhitelistedApps) {
-    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Appx - $app`" Description=`"Allow Appx filename/pattern: $app`" UserOrGroupSid=`"S-1-1-0`" Action=`"Allow`">`n"
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Appx - $app`" Description=`"Allow Appx filename/pattern: $app`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
     $xml += "      <Conditions><FilePathCondition Path=`"*\$app`"/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
 }
@@ -467,7 +499,7 @@ try {
 
 # Apply policy
 try {
-    Write-Host "`nApplying AppLocker policy (Enforce) ..."
+    Write-Host "`nApplying AppLocker policy ..."
     Set-AppLockerPolicy -XmlPolicy $OutXmlPath
     gpupdate /force | Out-Null
 
@@ -475,7 +507,7 @@ try {
     sc.exe config appidsvc start= auto | Out-Null
     try { Restart-Service -Name AppIDSvc -Force -ErrorAction Stop; Write-Host "`nAppIDSvc restarted." } catch { Write-Warning "`nCould not restart AppIDSvc; reboot may be required." }
 
-    Write-Host "`nAppLocker policy applied. Check Check Event Viewer > Applications and Services Logs > Microsoft > Windows > AppLocker for events."
+    Write-Host "`nAppLocker policy applied. Check Event Viewer > Applications and Services Logs > Microsoft > Windows > AppLocker for events."
 } catch {
     Write-Error "`nFailed to apply AppLocker policy: $_"
     exit 1
