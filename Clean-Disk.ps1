@@ -220,11 +220,48 @@ function Remove-JunkFiles {
     return $totalFreed
 }
 
+# Replace the old Stop-Service block with this (waits until services actually stop)
 if (-not $DryRun) {
-    Write-Host "`n==> Stopping Windows Update service..." -ForegroundColor Yellow
-    Stop-Service wuauserv -Force -ErrorAction SilentlyContinue
-	Stop-Service usosvc -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
+    function Wait-UntilServicesStopped {
+        param(
+            [string[]]$ServiceNames = @('wuauserv','usosvc'),
+            [int]$SpinnerDelayMs = 100   # change to 150 or 200 for a slower spinner
+        )
+
+        $origWarningPref = $WarningPreference
+        $WarningPreference = 'SilentlyContinue'
+        try {
+            # ask them to stop once
+            foreach ($s in $ServiceNames) {
+                try { Stop-Service -Name $s -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue } catch {}
+            }
+
+            $spinner = @('|','/','-',[char]92)  # backslash as last char
+            $i = 0
+            while ($true) {
+                $allStopped = $true
+                foreach ($s in $ServiceNames) {
+                    $svc = Get-Service -Name $s -ErrorAction SilentlyContinue
+                    if ($null -eq $svc) { continue }
+                    if ($svc.Status -ne 'Stopped') { $allStopped = $false; break }
+                }
+                if ($allStopped) {
+                    Write-Host "`r==> Stopping Windows Update service... Done.`n" -ForegroundColor Green
+                    return $true
+                }
+
+                $char = $spinner[$i % $spinner.Count]
+                Write-Host ("`r==> Stopping Windows Update service... {0} " -f $char) -NoNewline
+                Start-Sleep -Milliseconds $SpinnerDelayMs
+                $i++
+            }
+        } finally {
+            $WarningPreference = $origWarningPref
+        }
+    }
+
+    # call it silently (prevents PowerShell from echoing the returned boolean)
+    $null = Wait-UntilServicesStopped -SpinnerDelayMs 100
 }
 
 $totalCleaned = 0
@@ -392,10 +429,72 @@ function Clear-RecycleBin {
 
 $totalCleaned += Clear-RecycleBin
 
+# Replace the old Start-Service block with this (retries & waits until services run)
 if (-not $DryRun) {
-    Write-Host "`n==> Restarting Windows Update service..." -ForegroundColor Yellow
-    Start-Service wuauserv -ErrorAction SilentlyContinue
-	Start-Service usosvc -ErrorAction SilentlyContinue	
+    function Start-WindowsUpdateWithSpinner {
+        param(
+            [string[]]$ServiceNames = @('wuauserv','usosvc'),
+            [int]$TimeoutSeconds = 0,          # 0 = wait indefinitely; set >0 for a timeout if desired
+            [int]$SpinnerDelayMs = 100,        # spinner update interval in ms
+            [int]$StartRetryIntervalMs = 3000  # how often to re-issue Start-Service while waiting (ms)
+        )
+
+        $origWarningPref = $WarningPreference
+        $WarningPreference = 'SilentlyContinue'
+        try {
+            # initial start attempt
+            foreach ($s in $ServiceNames) {
+                try { Start-Service -Name $s -ErrorAction SilentlyContinue -WarningAction SilentlyContinue } catch {}
+            }
+
+            $sw = [Diagnostics.Stopwatch]::StartNew()
+            $spinner = @('|','/','-',[char]92)
+            $i = 0
+            $msSinceLastStart = 0
+
+            while ($true) {
+                # optional timeout support
+                if ($TimeoutSeconds -gt 0 -and $sw.Elapsed.TotalSeconds -ge $TimeoutSeconds) {
+                    Write-Host "`r==> Restarting Windows Update service... Timed out after $TimeoutSeconds seconds.`n" -ForegroundColor Yellow
+                    return $false
+                }
+
+                $allRunning = $true
+                foreach ($s in $ServiceNames) {
+                    $svc = Get-Service -Name $s -ErrorAction SilentlyContinue
+                    if ($null -eq $svc -or $svc.Status -ne 'Running') { $allRunning = $false; break }
+                }
+                if ($allRunning) {
+                    Write-Host "`r==> Restarting Windows Update service... Done.`n" -ForegroundColor Green
+                    return $true
+                }
+
+                # re-try Start-Service periodically for those not running
+                $msSinceLastStart += $SpinnerDelayMs
+                if ($msSinceLastStart -ge $StartRetryIntervalMs) {
+                    foreach ($s in $ServiceNames) {
+                        try {
+                            $svc = Get-Service -Name $s -ErrorAction SilentlyContinue
+                            if ($null -ne $svc -and $svc.Status -ne 'Running') {
+                                Start-Service -Name $s -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+                            }
+                        } catch {}
+                    }
+                    $msSinceLastStart = 0
+                }
+
+                $char = $spinner[$i % $spinner.Count]
+                Write-Host ("`r==> Restarting Windows Update service... {0} " -f $char) -NoNewline
+                Start-Sleep -Milliseconds $SpinnerDelayMs
+                $i++
+            }
+        } finally {
+            $WarningPreference = $origWarningPref
+        }
+    }
+
+    # call it silently (prevents PowerShell from echoing the returned boolean)
+    $null = Start-WindowsUpdateWithSpinner -SpinnerDelayMs 100 -StartRetryIntervalMs 3000
 }
 
 if ($TrimSSDs) {
