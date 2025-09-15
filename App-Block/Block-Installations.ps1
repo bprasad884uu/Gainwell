@@ -482,6 +482,34 @@ Copy-Item -Path $dir\FullReset.xml $OutXmlPath -Force -ErrorAction SilentlyConti
     exit 1
 }
 
+# Add "Install as administrator" option for .MSI files
+try {
+    $baseKey = "Registry::HKEY_CLASSES_ROOT\Msi.Package\shell\runas"
+    $cmdKey  = "$baseKey\command"
+
+    # Create parent key if not exists
+    if (-not (Test-Path $baseKey)) {
+        New-Item -Path $baseKey -Force | Out-Null
+    }
+
+    # Set the menu text
+    Set-ItemProperty -Path $baseKey -Name '(default)' -Value "Install as administrator"
+
+    # Create command subkey if missing
+    if (-not (Test-Path $cmdKey)) {
+        New-Item -Path $cmdKey -Force | Out-Null
+    }
+
+    # Set command line to use msiexec with elevation
+    Set-ItemProperty -Path $cmdKey -Name '(default)' -Value 'msiexec.exe /i "%1"'
+
+    Write-Host "`n'Install as administrator' option added to MSI right-click menu."
+    Write-Host "   Right-click any .MSI file -> You'll see 'Install as administrator'."
+}
+catch {
+    Write-Error "Failed to add context menu: $_"
+}
+
 # Apply policy
 try {
     Write-Host "`nApplying AppLocker policy ..."
