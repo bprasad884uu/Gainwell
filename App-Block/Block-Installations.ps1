@@ -56,8 +56,9 @@ param (
 )
 
 # SIDs
-[string]$AdministratorsSid = "S-1-5-32-544"   # local Administrators group (covers domain admins if they are members)
-[string]$UsersSid = "S-1-5-32-545"            # built-in Users group
+[string]$AdministratorsSid = "S-1-5-32-544"		# local Administrators group (covers domain admins if they are members)
+[string]$UsersSid = "S-1-5-32-545"				# built-in Users group
+[string]$EveryoneSid = "S-1-1-0"				# for Everyone
 
 # check client OS
 $OSType = (Get-CimInstance Win32_OperatingSystem).ProductType
@@ -160,7 +161,7 @@ function Add-Users-Path-RulesToXml {
         if ($path -notmatch '[*?]') {
             if ($path -match '\\$') { $path = $path + '*' } else { $path = $path + '\*' }
         }
-        $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - Path - $path`" Description=`"Allow Users from $path ($collectionName)`" UserOrGroupSid=`"$UsersSid`" Action=`"Allow`">`n"
+        $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - Path - $path`" Description=`"Allow Users from $path ($collectionName)`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
         $xml += "      <Conditions><FilePathCondition Path=`"$path`"/></Conditions>`n"
         $xml += "    </FilePathRule>`n"
     }
@@ -180,7 +181,7 @@ Add-Users-Path-RulesToXml -collectionName "Exe"
 # Allow Users signed apps from trusted publishers (if listed)
 foreach ($pub in $WhitelistedPublishers) {
     $pubEsc = XmlEscape($pub)
-    $xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - Publisher - $pubEsc`" Description=`"Allow signed EXE from $pubEsc for Users`" UserOrGroupSid=`"$UsersSid`" Action=`"Allow`">`n"
+    $xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - Publisher - $pubEsc`" Description=`"Allow signed EXE from $pubEsc for Users`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
     $xml += "      <Conditions>`n"
     $xml += "        <FilePublisherCondition PublisherName=`"$pubEsc`" ProductName=`"*`" BinaryName=`"*`">`n"
     $xml += "          <BinaryVersionRange LowSection=`"0.0.0.0`" HighSection=`"65535.65535.65535.65535`" />`n"
@@ -191,7 +192,7 @@ foreach ($pub in $WhitelistedPublishers) {
 
 # Allow Users specific filenames anywhere (whitelisted apps)
 foreach ($app in $WhitelistedApps) {
-    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - File - $app`" Description=`"Allow specific filename for Users: $app`" UserOrGroupSid=`"$UsersSid`" Action=`"Allow`">`n"
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - File - $app`" Description=`"Allow specific filename for Users: $app`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
     $xml += "      <Conditions><FilePathCondition Path=`"*\$app`"/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
 }
@@ -210,7 +211,7 @@ $xml += "    </FilePathRule>`n"
 Add-Users-Path-RulesToXml -collectionName "Script"
 
 # Allow Users Microsoft-signed scripts (keeps system-signed scripts working)
-$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - Microsoft Signed Scripts`" Description=`"Allow Microsoft-signed scripts for Users`" UserOrGroupSid=`"$UsersSid`" Action=`"Allow`">`n"
+$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - Microsoft Signed Scripts`" Description=`"Allow Microsoft-signed scripts for Users`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions>`n"
 $xml += "        <FilePublisherCondition PublisherName=`"O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US`" ProductName=`"*`" BinaryName=`"*`">`n"
 $xml += "          <BinaryVersionRange LowSection=`"0.0.0.0`" HighSection=`"65535.65535.65535.65535`" />`n"
@@ -223,7 +224,7 @@ foreach ($s in $WhitelistedScripts) {
     if ([string]::IsNullOrWhiteSpace($s)) { continue }
     if ($s -match '[\\/]' -or $s -match '[:%]') { $conditionPath = $s } else { $conditionPath = "*\$s" }
 
-    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - Script - $s`" Description=`"Allow whitelisted script for Users: $s`" UserOrGroupSid=`"$UsersSid`" Action=`"Allow`">`n"
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - Script - $s`" Description=`"Allow whitelisted script for Users: $s`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
     $xml += "      <Conditions><FilePathCondition Path=`"$conditionPath`"/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
 }
@@ -242,7 +243,7 @@ $xml += "    </FilePathRule>`n"
 Add-Users-Path-RulesToXml -collectionName "Dll"
 
 # Allow Users Microsoft-signed DLLs (system-critical)
-$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - Microsoft Signed DLLs`" Description=`"Allow Microsoft-signed DLLs for Users`" UserOrGroupSid=`"$UsersSid`" Action=`"Allow`">`n"
+$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - Microsoft Signed DLLs`" Description=`"Allow Microsoft-signed DLLs for Users`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions>`n"
 $xml += "        <FilePublisherCondition PublisherName=`"O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US`" ProductName=`"*`" BinaryName=`"*`">`n"
 $xml += "          <BinaryVersionRange LowSection=`"0.0.0.0`" HighSection=`"65535.65535.65535.65535`" />`n"
@@ -265,7 +266,7 @@ Add-Users-Path-RulesToXml -collectionName "Msi"
 
 # Allow Users specifically whitelisted MSI filenames
 foreach ($app in $WhitelistedApps) {
-    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - MSI - $app`" Description=`"Allow MSI filename/pattern for Users: $app`" UserOrGroupSid=`"$UsersSid`" Action=`"Allow`">`n"
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - MSI - $app`" Description=`"Allow MSI filename/pattern for Users: $app`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
     $xml += "      <Conditions><FilePathCondition Path=`"*\$app`"/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
 }
@@ -281,7 +282,7 @@ $xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 # Allow Users signed Appx packages (store apps)
-$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - Signed Appx`" Description=`"Allow signed Appx packages for Users`" UserOrGroupSid=`"$UsersSid`" Action=`"Allow`">`n"
+$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Users - Signed Appx`" Description=`"Allow signed Appx packages for Users`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions>`n"
 $xml += "        <FilePublisherCondition PublisherName=`"*`" ProductName=`"*`" BinaryName=`"*`">`n"
 $xml += "          <BinaryVersionRange LowSection=`"0.0.0.0`" HighSection=`"65535.65535.65535.65535`" />`n"
