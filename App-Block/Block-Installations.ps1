@@ -310,6 +310,12 @@ try {
 
 # Apply policy
 try {
+	# Clear any existing AppLocker rules
+    Write-Host "`nClearing existing AppLocker policy..."
+    Set-AppLockerPolicy -XMLPolicy "<AppLockerPolicy Version=`"1`"></AppLockerPolicy>" -Merge
+    Write-Host "Existing AppLocker policy cleared."
+
+	# Apply the new one
     Write-Host "`nApplying AppLocker policy ..."
     Set-AppLockerPolicy -XmlPolicy $OutXmlPath
     gpupdate /force | Out-Null
