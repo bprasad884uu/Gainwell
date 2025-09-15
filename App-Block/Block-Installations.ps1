@@ -44,7 +44,7 @@ param (
 	),
 	
 	[string[]]$WhitelistedPublishers = @(
-	"CN=Microsoft Corporation, O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US",
+	"CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
 	"CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US",
 	"CN=Oracle America, O=Oracle America, L=Redwood City, S=California, C=US",
 	"CN=ZOHO Corporation Private Limited, O=ZOHO Corporation Private Limited, L=Chennai, S=Tamil Nadu, C=IN",
