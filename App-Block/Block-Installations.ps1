@@ -40,7 +40,8 @@ param (
 	"%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*",
 	"%OSDRIVE%\USERS\Administrator\APPDATA\LOCALLOW\ORACLE\*",
 	"%OSDRIVE%\Users\*\Appdata\Local\Packages\*",
-	"%OSDRIVE%\FG WILSON*\*"
+	"%OSDRIVE%\FG WILSON*\*",
+	"%OSDRIVE%\USERS\ANIRUDDHA\APPDATA\LOCAL\MICROSOFT\*"
 	),
 	
 	[string[]]$WhitelistedPublishers = @(
