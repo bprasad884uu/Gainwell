@@ -46,10 +46,11 @@ param (
 	
 	[string[]]$WhitelistedPublishers = @(
 	"CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+	"CN=Microsoft Windows, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
 	"CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US",
-	"CN=Oracle America, O=Oracle America, L=Redwood City, S=California, C=US",
+	'CN="Oracle America, Inc.", O="Oracle America, Inc.", L=Redwood City, S=California, C=US',
 	"CN=ZOHO Corporation Private Limited, O=ZOHO Corporation Private Limited, L=Chennai, S=Tamil Nadu, C=IN",
-	"CN=Adobe Inc., O=Adobe Inc., L=San Jose, S=ca, C=US"
+	"CN=Adobe Inc., OU=Acrobat DC, O=Adobe Inc., L=San Jose, S=ca, C=US"
 	),
 	
 	[string[]]$WhitelistedScripts = @(
