@@ -40,8 +40,7 @@ param (
 	"%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*",
 	"%OSDRIVE%\USERS\Administrator\APPDATA\LOCALLOW\ORACLE\*",
 	"%OSDRIVE%\Users\*\Appdata\Local\Packages\*",
-	"%OSDRIVE%\FG WILSON*\*",
-	"D:\jarfile\*"
+	"%OSDRIVE%\FG WILSON*\*"
 	),
 	
 	[string[]]$WhitelistedPublishers = @(
@@ -55,7 +54,8 @@ param (
 	"%OSDRIVE%\Users\*\AppData\Local\Temp\TempScript.ps1",
 	"%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\RAD*.ps1",
 	"%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\__PSSCRIPTPOLICYTEST*.ps*",
-	"%OSDRIVE%\Users\*\AppData\Local\Temp\IPW*.*"
+	"%OSDRIVE%\Users\*\AppData\Local\Temp\IPW*.*",
+	"D:\jarfile\*.jar"
 	)    # default temp script patterns included
 )
 
