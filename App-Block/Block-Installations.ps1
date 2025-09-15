@@ -312,8 +312,24 @@ try {
 try {
 	# Clear any existing AppLocker rules
     Write-Host "`nClearing existing AppLocker policy..."
-    Set-AppLockerPolicy -XMLPolicy "<AppLockerPolicy Version=`"1`"></AppLockerPolicy>" -Merge
-    Write-Host "Existing AppLocker policy cleared."
+    $resetXml = @'
+<AppLockerPolicy Version="1" />
+'@
+    $appLockerDir = Join-Path $env:ProgramData "AppLocker"
+    try {
+        if (-not (Test-Path $appLockerDir)) {
+            New-Item -Path $appLockerDir -ItemType Directory -Force | Out-Null
+            Write-Host "`nCreated AppLocker directory: $appLockerDir"
+        }
+        $resetPath = Join-Path $appLockerDir "FullReset.xml"
+        $resetXml | Out-File -FilePath $resetPath -Encoding UTF8 -Force
+        Set-AppLockerPolicy -XmlPolicy $resetPath -ErrorAction Stop
+        $restoredAny = $true
+    } catch {
+        $msg = "Failed to apply AppLocker reset: $($_.Exception.Message)"
+        Write-Warning "`n$msg"
+        $errors += $msg
+    }
 
 	# Apply the new one
     Write-Host "`nApplying AppLocker policy ..."
@@ -323,9 +339,8 @@ try {
     # ensure AppIDSvc is configured & restarted
     sc.exe config appidsvc start= auto | Out-Null
     try { Restart-Service -Name AppIDSvc -Force -ErrorAction Stop; Write-Host "`nAppIDSvc restarted." } catch { Write-Warning "`nCould not restart AppIDSvc; reboot may be required." }
-
     Write-Host "`nAppLocker policy applied. Check Event Viewer > Applications and Services Logs > Microsoft > Windows > AppLocker for events."
-} catch {
+	} catch {
     Write-Error "`nFailed to apply AppLocker policy: $_"
     exit 1
 }
