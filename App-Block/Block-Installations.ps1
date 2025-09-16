@@ -38,7 +38,8 @@ param (
 		"%OSDRIVE%\PROGRAMDATA\Mercedes-Benz\*",			#Xentry
 		"%OSDRIVE%\PROGRAMDATA\Daimler-Truck\*",			#Xentry
 		"%OSDRIVE%\PROGRAMDATA\ZenZefiT\*",					#Xentry
-		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\CHROMIUM*\*"		#Xentry
+		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\CHROMIUM*\*",		#Xentry
+		"D:\Zmysql-query-browser*\MySQL Query Browser*\*"
     ),
 
     [string[]]$WhitelistedPublishers = @(
