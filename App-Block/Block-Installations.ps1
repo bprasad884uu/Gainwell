@@ -13,42 +13,49 @@ param (
     [string]$EnforcementMode = "Enabled",    # Start with AuditOnly for testing
 
     [string[]]$WhitelistedApps = @(
-        "Diagsmart*.exe",
-        "Uninstall*.exe",
-        "ITD_EFILING_JFX*.jar"
+		"Diagsmart*.exe",
+		"Uninstall*.exe",
+		"ITD_EFILING_JFX*.jar",			
+		"%OSDRIVE%\USERS\*APPDATA\LOCAL\TEMP\*\START.BAT",			#For Xentry Software Installation
+		"Generic RBI Converter 10.0.EXE"	#for Accounts
     ),
 
     [string[]]$WhitelistedPaths = @(
-        "%OSDRIVE%\Siemens\*",
-        "%OSDRIVE%\Java\*",
-        "%OSDRIVE%\USERS\*\.SWT\*",
-        "%OSDRIVE%\USERS\*\TEAMCENTER\*",
-        "D:\ManageEngine*\*",
-        "E:\ManageEngine*\*",
-        "%OSDRIVE%\DEVSUITEHOME*\*",
-        "%OSDRIVE%\QUEST_TOAD\*",
-        "%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*",
-        "%OSDRIVE%\USERS\Administrator\APPDATA\LOCALLOW\ORACLE\*",
-        "%OSDRIVE%\Users\*\Appdata\Local\Packages\*",
-        "%OSDRIVE%\FG WILSON*\*",
-        "%OSDRIVE%\USERS\*\APPDATA\LOCAL\MICROSOFT\*"
+		"D:\ManageEngine*\*",
+		"E:\ManageEngine*\*",
+		"%OSDRIVE%\Siemens\*",
+		"%OSDRIVE%\Java\*",
+		"%OSDRIVE%\USERS\*\.SWT\*",
+		"%OSDRIVE%\USERS\*\TEAMCENTER\*",
+		"%OSDRIVE%\DEVSUITEHOME*\*",
+		"%OSDRIVE%\QUEST_TOAD\*",
+		"%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*",
+		"%OSDRIVE%\USERS\Administrator\APPDATA\LOCALLOW\ORACLE\*",
+		"%OSDRIVE%\Users\*\Appdata\Local\Packages\*",
+		"%OSDRIVE%\FG WILSON*\*",
+		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\MICROSOFT\*",
+		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\JNA*\JNA*.*",
+		"%OSDRIVE%\PROGRAMDATA\Mercedes-Benz\*",			#Xentry
+		"%OSDRIVE%\PROGRAMDATA\Daimler-Truck\*",			#Xentry
+		"%OSDRIVE%\PROGRAMDATA\ZenZefiT\*",					#Xentry
+		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\CHROMIUM*\*"		#Xentry
     ),
 
     [string[]]$WhitelistedPublishers = @(
-        "CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
-        "CN=Microsoft Windows, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
-        "CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US",
-        'CN="Oracle America, Inc.", O="Oracle America, Inc.", L=Redwood City, S=California, C=US',
-        "CN=ZOHO Corporation Private Limited, O=ZOHO Corporation Private Limited, L=Chennai, S=Tamil Nadu, C=IN",
-        "CN=Adobe Inc., OU=Acrobat DC, O=Adobe Inc., L=San Jose, S=ca, C=US"
+		"CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+		"CN=Microsoft Windows, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
+		"CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US",
+		'CN="Oracle America, Inc.", O="Oracle America, Inc.", L=Redwood City, S=California, C=US',
+		"CN=ZOHO Corporation Private Limited, O=ZOHO Corporation Private Limited, L=Chennai, S=Tamil Nadu, C=IN",
+		"CN=Adobe Inc., OU=Acrobat DC, O=Adobe Inc., L=San Jose, S=ca, C=US"
     ),
 
     [string[]]$WhitelistedScripts = @(
-        "%OSDRIVE%\Users\*\AppData\Local\Temp\TempScript.ps1",
-        "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\RAD*.ps1",
-        "%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\__PSSCRIPTPOLICYTEST*.ps*",
-        "%OSDRIVE%\Users\*\AppData\Local\Temp\IPW*.*",
-        "D:\jarfile\*.jar"
+		"%OSDRIVE%\Users\*\AppData\Local\Temp\TempScript.ps1",
+		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\RAD*.ps1",
+		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\__PSSCRIPTPOLICYTEST*.ps*",
+		"%OSDRIVE%\Users\*\AppData\Local\Temp\IPW*.*",
+		"D:\jarfile\*.jar"
     )
 )
 
