@@ -15,8 +15,7 @@ param (
     [string[]]$WhitelistedApps = @(
 		"Diagsmart*.exe",
 		"Uninstall*.exe",
-		"ITD_EFILING_JFX*.jar",			
-		"%OSDRIVE%\USERS\*APPDATA\LOCAL\TEMP\*\START.BAT",			#For Xentry Software Installation
+		"ITD_EFILING_JFX*.jar"
 		"Generic RBI Converter 10.0.EXE"	#for Accounts
     ),
 
@@ -39,7 +38,8 @@ param (
 		"%OSDRIVE%\PROGRAMDATA\Daimler-Truck\*",			#Xentry
 		"%OSDRIVE%\PROGRAMDATA\ZenZefiT\*",					#Xentry
 		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\CHROMIUM*\*",		#Xentry
-		"D:\Zmysql-query-browser*\MySQL Query Browser*\*"
+		"D:\Zmysql-query-browser*\MySQL Query Browser*\*",
+		"D:\CBT\*"
     ),
 
     [string[]]$WhitelistedPublishers = @(
@@ -56,7 +56,8 @@ param (
 		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\RAD*.ps1",
 		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\__PSSCRIPTPOLICYTEST*.ps*",
 		"%OSDRIVE%\Users\*\AppData\Local\Temp\IPW*.*",
-		"D:\jarfile\*.jar"
+		"D:\jarfile\*.jar",			
+		"%OSDRIVE%\USERS\*APPDATA\LOCAL\TEMP\*\START.BAT",			#For Xentry Software Installation
     )
 )
 
