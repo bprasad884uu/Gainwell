@@ -15,7 +15,7 @@ param (
     [string[]]$WhitelistedApps = @(
 		"Diagsmart*.exe",
 		"Uninstall*.exe",
-		"ITD_EFILING_JFX*.jar"
+		"ITD_EFILING_JFX*.jar",
 		"Generic RBI Converter 10.0.EXE"	#for Accounts
     ),
 
@@ -57,7 +57,7 @@ param (
 		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\__PSSCRIPTPOLICYTEST*.ps*",
 		"%OSDRIVE%\Users\*\AppData\Local\Temp\IPW*.*",
 		"D:\jarfile\*.jar",			
-		"%OSDRIVE%\USERS\*APPDATA\LOCAL\TEMP\*\START.BAT",			#For Xentry Software Installation
+		"%OSDRIVE%\USERS\*APPDATA\LOCAL\TEMP\*\START.BAT"			#For Xentry Software Installation
     )
 )
 
