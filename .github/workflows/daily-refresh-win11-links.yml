@@ -19,11 +19,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install PowerShell
-        uses: PowerShell/PowerShell@v1
-        with:
-          version: 'latest'
-
       - name: Download your link-generator script
         run: |
           curl -fsSL -o Win11OSLinkGenerate.ps1 https://raw.githubusercontent.com/bprasad884uu/Gainwell/refs/heads/main/Win11OSLinkGenerate.ps1
@@ -35,10 +30,8 @@ jobs:
         run: |
           # Run the generator and capture stdout
           $out = pwsh -NoProfile -ExecutionPolicy Bypass -File ./Win11OSLinkGenerate.ps1 2>&1
-          Write-Host "Generator output:"
           $out | ForEach-Object { Write-Host $_ }
 
-          # Try to extract ISO URLs (look for http(s) ... .iso optionally with query string)
           $regex = '(https?://\S+?\.iso(?:\?\S*)?)'
           $matches = [System.Text.RegularExpressions.Regex]::Matches($out -join "`n", $regex)
           $urls = $matches | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
@@ -49,13 +42,10 @@ jobs:
             exit 0
           }
 
-          # The generator runs for English International then English.
-          # We'll map first found to EN-GB (English International) and second to EN-US (English) where available.
           $enGB = $null; $enUS = $null
           if ($urls.Count -ge 1) { $enGB = $urls[0] }
           if ($urls.Count -ge 2) { $enUS = $urls[1] }
 
-          # Expose outputs
           echo "::set-output name=found::true"
           if ($enGB) { echo "::set-output name=engb::$enGB" }
           if ($enUS) { echo "::set-output name=enus::$enUS" }
