@@ -521,17 +521,17 @@ $pwshPath   = "C:\Program Files\PowerShell\7\pwsh.exe"
 # --- Get latest release info from GitHub ---
 try {
     $releasesJson = Invoke-RestMethod -Uri "https://api.github.com/repos/PowerShell/PowerShell/releases/latest" -UseBasicParsing
-    $tag          = $releasesJson.tag_name.TrimStart("v")  # e.g. "7.5.2"
+    $tag          = $releasesJson.tag_name.TrimStart("v")  # e.g. "7.5.3"
     $targetVer    = [Version]$tag
     $asset        = $releasesJson.assets | Where-Object { $_.name -like "*win-x64.msi" }
     $msiUrl       = $asset.browser_download_url
     $msiFile      = "$env:TEMP\$($asset.name)"
     Write-Info "Latest PowerShell release detected: $targetVer"
 } catch {
-    Write-Warn "Failed to fetch latest release info from GitHub. Defaulting to 7.5.2."
-    $targetVer  = [Version]"7.5.2"
-    $msiUrl     = "https://github.com/PowerShell/PowerShell/releases/download/v7.5.2/PowerShell-7.5.2-win-x64.msi"
-    $msiFile    = "$env:TEMP\PowerShell-7.5.2-win-x64.msi"
+    Write-Warn "Failed to fetch latest release info from GitHub. Defaulting to 7.5.3."
+    $targetVer  = [Version]"7.5.3"
+    $msiUrl     = "https://github.com/PowerShell/PowerShell/releases/download/v7.5.2/PowerShell-7.5.3-win-x64.msi"
+    $msiFile    = "$env:TEMP\PowerShell-7.5.3-win-x64.msi"
 }
 
 function Get-InstalledPwshVersion {
