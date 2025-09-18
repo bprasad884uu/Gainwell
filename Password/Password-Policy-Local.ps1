@@ -1,20 +1,17 @@
-try {
-    Set-ExecutionPolicy RemoteSigned -Scope LocalMachine -Force
-    Set-ExecutionPolicy Bypass -Scope Process -Force
-} catch {
-    # Do nothing; suppress the error
-}
-
 # Checking Windows Compatibility
-$OSType = (Get-WmiObject Win32_OperatingSystem).ProductType
-if ($OSType -eq 2 -or $OSType -eq 3) {
+$OSType = (Get-CimInstance Win32_OperatingSystem).ProductType
+if ($OSType -ne 1) {
     Write-Host "Incompatible Windows Version. Exiting script."
     exit
 }
 
+$AdminUser = "Administrator"
+$WinOSAdmin = "gcpladmusr"
+
 # Activate the Administrator account
-Enable-LocalUser -Name Administrator
-Set-LocalUser -Name "Administrator" -FullName "Gainwell Administrator"
+Enable-LocalUser -Name $AdminUser
+Set-LocalUser -Name "$AdminUser" -FullName "Gainwell Administrator"
+Rename-LocalUser -Name "$AdminUser" -NewName "$WinOSAdmin"
 Write-Host "Administrator Account Activated."
 
 # Prompt user for a secure password
@@ -26,9 +23,9 @@ $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($pass)
 $PlainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
 
 # Set the new password for the Administrator account
-#Set-LocalUser -Name 'Administrator' -Password '$PlainPassword'
-net user Administrator $PlainPassword
-#Set-LocalUser -Name 'Administrator' -Password '$ecure@2k24'
+#Set-LocalUser -Name '$AdminUser' -Password '$PlainPassword'
+net user $WinOSAdmin $PlainPassword
+#Set-LocalUser -Name '$AdminUser' -Password '$ecure@2k24'
 Write-Host "Password has been reset for Administrator account."
 
 $group = [ADSI]"WinNT://$env:COMPUTERNAME/Administrators,group"
@@ -38,7 +35,7 @@ $members | ForEach-Object {
     $adsPath = $_.GetType().InvokeMember("ADsPath", 'GetProperty', $null, $_, $null)
     
     # Skip the specified accounts
-    if ($name -ne "Administrator" -and $name -ne "Domain Admins" -and $name -ne "corpadmin") {
+    if ($name -ne "$AdminUser" -and $name -ne "Domain Admins" -and $name -ne "corpadmin") {
         # Get the user object
         $user = [ADSI]$adsPath
         # Remove from Administrators group
@@ -86,7 +83,7 @@ if ($originalExecutionPolicy -ne 'Bypass' -and $originalExecutionPolicy -ne 'Und
 }
 
 # Checking local users for Password. If Password is not enabled then Enables Password for the same
-Get-LocalUser | Where-Object { $_.Name -ne 'Administrator' -and $_.Name -ne 'Guest' } | ForEach-Object {
+Get-LocalUser | Where-Object { $_.Name -ne '$AdminUser' -and $_.Name -ne 'Guest' } | ForEach-Object {
     $user = $_.Name
     $passwordRequired = (Get-WmiObject Win32_UserAccount | Where-Object { $_.Name -eq $user }).PasswordRequired
 
