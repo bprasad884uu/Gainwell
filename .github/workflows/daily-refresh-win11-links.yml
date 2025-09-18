@@ -13,7 +13,6 @@ jobs:
   refresh-links:
     runs-on: windows-latest
     steps:
-
       - name: Checkout main
         uses: actions/checkout@v4
         with:
@@ -28,7 +27,6 @@ jobs:
         id: gen
         shell: pwsh
         run: |
-          # Run the generator and capture stdout
           $out = pwsh -NoProfile -ExecutionPolicy Bypass -File ./Win11OSLinkGenerate.ps1 2>&1
           $out | ForEach-Object { Write-Host $_ }
 
@@ -38,7 +36,7 @@ jobs:
 
           if ($urls.Count -eq 0) {
             Write-Host "No ISO URLs found in generator output" -ForegroundColor Yellow
-            echo "::set-output name=found::false"
+            echo "found=false" >> $GITHUB_OUTPUT
             exit 0
           }
 
@@ -47,8 +45,8 @@ jobs:
           if ($urls.Count -ge 2) { $enUS = $urls[1] }
 
           echo "found=true" >> $GITHUB_OUTPUT
-          if ($enGB) { echo "::set-output name=engb::$enGB" }
-          if ($enUS) { echo "::set-output name=enus::$enUS" }
+          if ($enGB) { echo "engb=$enGB" >> $GITHUB_OUTPUT }
+          if ($enUS) { echo "enus=$enUS" >> $GITHUB_OUTPUT }
 
       - name: Replace isoUrl entries in Windows11Upgrade.ps1
         if: steps.gen.outputs.found == 'true'
@@ -59,14 +57,10 @@ jobs:
         run: |
           $file = Join-Path $Env:GITHUB_WORKSPACE 'Windows11Upgrade.ps1'
           if (-not (Test-Path $file)) { Write-Host "Windows11Upgrade.ps1 not found"; exit 1 }
-
           $content = Get-Content -Raw -Path $file
-
           $patternENGB = '(?ms)(if\s*\(\$locale\s*-eq\s*"(?:en-GB)"\)\s*\{.*?\$isoUrl\s*=\s*)".*?"'
           $patternENUS = '(?ms)(if\s*\(\$locale\s*-eq\s*"(?:en-US)"\)\s*\{.*?\$isoUrl\s*=\s*)".*?"'
-
           $new = $content
-
           if ($Env:ENGB) {
             $escaped = [System.Text.RegularExpressions.Regex]::Escape($Env:ENGB)
             $replacement = '${1}"' + $escaped + '"'
@@ -75,7 +69,6 @@ jobs:
           } else {
             Write-Host "No en-GB URL available; skipping en-GB replacement"
           }
-
           if ($Env:ENUS) {
             $escaped = [System.Text.RegularExpressions.Regex]::Escape($Env:ENUS)
             $replacement = '${1}"' + $escaped + '"'
@@ -84,7 +77,6 @@ jobs:
           } else {
             Write-Host "No en-US URL available; skipping en-US replacement"
           }
-
           if ($content -ne $new) {
             Set-Content -Path $file -Value $new -Force
             Write-Host "Windows11Upgrade.ps1 updated"
@@ -93,19 +85,23 @@ jobs:
             exit 0
           }
 
-      
-- name: Commit and push changes
-  if: steps.gen.outputs.found == 'true'
-  run: |
-    git config user.name "github-actions[bot]"
-    git config user.email "actions@github.com"
-    git add Windows11Upgrade.ps1
+      - name: Set up Git credentials
+        if: steps.gen.outputs.found == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "actions@github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
 
-    git diff --staged --quiet
-    if ($LASTEXITCODE -eq 0) {
-      Write-Host "No changes to commit"
-    } else {
-      $date = Get-Date -Format 'yyyy-MM-dd'
-      git commit -m "Daily: refresh Windows 11 ISO URLs $date"
-      git push
-    }
+      - name: Commit and push changes
+        if: steps.gen.outputs.found == 'true'
+        shell: pwsh
+        run: |
+          git add Windows11Upgrade.ps1
+          git diff --staged --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "No changes to commit"
+          } else {
+            $date = Get-Date -Format 'yyyy-MM-dd'
+            git commit -m "Daily: refresh Windows 11 ISO URLs $date"
+            git push
+          }
