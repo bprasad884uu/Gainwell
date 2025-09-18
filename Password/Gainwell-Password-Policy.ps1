@@ -1,12 +1,31 @@
-Set-ExecutionPolicy RemoteSigned -Scope LocalMachine -Force
-Set-ExecutionPolicy Bypass -Scope Process -Force
-
 # Checking Windows Compatibility
-$OSType = (Get-WmiObject -Class Win32_OperatingSystem).OperatingSystemSKU
-if ($OSType -eq 7) {
+$OSType = (Get-CimInstance Win32_OperatingSystem).ProductType
+if ($OSType -ne 1) {
     Write-Host "Incompatible Windows Version. Exiting script."
     exit
 }
+
+# Find built-in Administrator account (RID 500)
+	$AdminUser = Get-LocalUser | Where-Object { $_.SID -like "S-1-5-21-*-500" } | Select-Object -ExpandProperty Name
+
+	# Desired admin name for client OS
+	$WinOSAdmin = "gcpladmusr"
+	#$ServerOSAdmin = "gcpladmwusr"
+
+	if ($AdminUser) {
+		try {
+			if ($AdminUser -ne $WinOSAdmin) {
+				Rename-LocalUser -Name $AdminUser -NewName "$WinOSAdmin"
+				Write-Host "Administrator account renamed!"
+			} else {
+				#Write-Host "Administrator account already named '$WinOSAdmin'. No changes made."
+			}
+		} catch {
+			Write-Host "Error: Unable to rename Administrator account. $_"
+		}
+	} else {
+		Write-Host "Administrator account not found!"
+	}
 
 $excludedUsers = @("gcpladmusr", "Domain Admins", "corpadmin")
 $administratorsGroup = [ADSI]"WinNT://$env:COMPUTERNAME/Administrators,group"
