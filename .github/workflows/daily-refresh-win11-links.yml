@@ -33,19 +33,26 @@ jobs:
           $matches = [System.Text.RegularExpressions.Regex]::Matches($out -join "`n", $regex)
           $urls = $matches | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
 
-          if ($urls.Count -eq 0) {
-            Write-Host "No ISO URLs found in generator output" -ForegroundColor Yellow
-            echo "found=false" >> $GITHUB_OUTPUT
-            exit 0
-          }
-
           $enGB = $null; $enUS = $null
           if ($urls.Count -ge 1) { $enGB = $urls[0] }
           if ($urls.Count -ge 2) { $enUS = $urls[1] }
 
-          echo "found=true" >> $GITHUB_OUTPUT
-          if ($enGB) { echo "engb=$enGB" >> $GITHUB_OUTPUT }
-          if ($enUS) { echo "enus=$enUS" >> $GITHUB_OUTPUT }
+          if ($urls.Count -eq 0) {
+            Write-Host "No ISO URLs found in generator output" -ForegroundColor Yellow
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "engb=" >> $GITHUB_OUTPUT
+            echo "enus=" >> $GITHUB_OUTPUT
+          } else {
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "engb=$enGB" >> $GITHUB_OUTPUT
+            echo "enus=$enUS" >> $GITHUB_OUTPUT
+          }
+
+      - name: Debug workflow outputs
+        run: |
+          echo "found=${{ steps.gen.outputs.found }}"
+          echo "engb=${{ steps.gen.outputs.engb }}"
+          echo "enus=${{ steps.gen.outputs.enus }}"
 
       - name: Replace isoUrl entries in Windows11Upgrade.ps1
         if: steps.gen.outputs.found == 'true'
@@ -81,8 +88,7 @@ jobs:
             Write-Host "Windows11Upgrade.ps1 updated"
           } else {
             Write-Host "No changes needed"
-            exit 0
-          }
+            # Don't exit here, let workflow continue
 
       - name: Set up Git credentials
         if: steps.gen.outputs.found == 'true'
@@ -103,4 +109,3 @@ jobs:
             $date = Get-Date -Format 'yyyy-MM-dd'
             git commit -m "Daily: refresh Windows 11 ISO URLs $date"
             git push
-          }
