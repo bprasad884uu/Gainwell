@@ -93,14 +93,15 @@ jobs:
             exit 0
           }
 
-        - name: Commit and push changes
-          run: |
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions@github.com"
-            git add Windows11Upgrade.ps1
-            if git diff --staged --quiet; then
-              echo "No changes to commit"
-            else
-              git commit -m "Daily: refresh Windows 11 ISO URLs $(date -u +'%Y-%m-%d')"
-              git push
-            fi
+      - name: Commit and push changes
+        if: steps.gen.outputs.found == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "actions@github.com"
+          git add Windows11Upgrade.ps1
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Daily: refresh Windows 11 ISO URLs $(date -u +'%Y-%m-%d')"
+            git push
+          fi
