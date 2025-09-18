@@ -79,6 +79,7 @@ $CompanyConfig = @(
     @{ Name = "GCPL"; Domains = @("gainwellindia.com");			HostnamePatterns = @("GCPL", "ASPL") },
 	@{ Name = "GTPL"; Domains = @("");       					HostnamePatterns = @("GTPL") },
     @{ Name = "GEPL"; Domains = @("gainwellengineering.com");   HostnamePatterns = @("GEPL") },
+	@{ Name = "RMSPL";	Domains = @();								HostnamePatterns = @("RMSPL") },
     @{ Name = "TIL"; Domains = @("");       					HostnamePatterns = @("TIL") }
 )
 
