@@ -1,0 +1,108 @@
+name: Daily refresh Win11 ISO links
+
+# 00:00 UTC -> 06:00 IST
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-links:
+    runs-on: windows-latest
+    steps:
+
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download your link-generator script
+        run: |
+          curl -fsSL -o Win11OSLinkGenerate.ps1 https://raw.githubusercontent.com/bprasad884uu/Gainwell/refs/heads/main/Win11OSLinkGenerate.ps1
+          echo "Downloaded Win11OSLinkGenerate.ps1"
+
+      - name: Run generator and capture output
+        id: gen
+        shell: pwsh
+        run: |
+          # Run the generator and capture stdout
+          $out = pwsh -NoProfile -ExecutionPolicy Bypass -File ./Win11OSLinkGenerate.ps1 2>&1
+          $out | ForEach-Object { Write-Host $_ }
+
+          $regex = '(https?://\S+?\.iso(?:\?\S*)?)'
+          $matches = [System.Text.RegularExpressions.Regex]::Matches($out -join "`n", $regex)
+          $urls = $matches | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
+
+          if ($urls.Count -eq 0) {
+            Write-Host "No ISO URLs found in generator output" -ForegroundColor Yellow
+            echo "::set-output name=found::false"
+            exit 0
+          }
+
+          $enGB = $null; $enUS = $null
+          if ($urls.Count -ge 1) { $enGB = $urls[0] }
+          if ($urls.Count -ge 2) { $enUS = $urls[1] }
+
+          echo "::set-output name=found::true"
+          if ($enGB) { echo "::set-output name=engb::$enGB" }
+          if ($enUS) { echo "::set-output name=enus::$enUS" }
+
+      - name: Replace isoUrl entries in Windows11Upgrade.ps1
+        if: steps.gen.outputs.found == 'true'
+        env:
+          ENGB: ${{ steps.gen.outputs.engb }}
+          ENUS: ${{ steps.gen.outputs.enus }}
+        shell: pwsh
+        run: |
+          $file = Join-Path $Env:GITHUB_WORKSPACE 'Windows11Upgrade.ps1'
+          if (-not (Test-Path $file)) { Write-Host "Windows11Upgrade.ps1 not found"; exit 1 }
+
+          $content = Get-Content -Raw -Path $file
+
+          $patternENGB = '(?ms)(if\s*\(\$locale\s*-eq\s*"(?:en-GB)"\)\s*\{.*?\$isoUrl\s*=\s*)".*?"'
+          $patternENUS = '(?ms)(if\s*\(\$locale\s*-eq\s*"(?:en-US)"\)\s*\{.*?\$isoUrl\s*=\s*)".*?"'
+
+          $new = $content
+
+          if ($Env:ENGB) {
+            $escaped = [System.Text.RegularExpressions.Regex]::Escape($Env:ENGB)
+            $replacement = '${1}"' + $escaped + '"'
+            $new = [System.Text.RegularExpressions.Regex]::Replace($new, $patternENGB, $replacement)
+            Write-Host "Prepared en-GB replacement"
+          } else {
+            Write-Host "No en-GB URL available; skipping en-GB replacement"
+          }
+
+          if ($Env:ENUS) {
+            $escaped = [System.Text.RegularExpressions.Regex]::Escape($Env:ENUS)
+            $replacement = '${1}"' + $escaped + '"'
+            $new = [System.Text.RegularExpressions.Regex]::Replace($new, $patternENUS, $replacement)
+            Write-Host "Prepared en-US replacement"
+          } else {
+            Write-Host "No en-US URL available; skipping en-US replacement"
+          }
+
+          if ($content -ne $new) {
+            Set-Content -Path $file -Value $new -Force
+            Write-Host "Windows11Upgrade.ps1 updated"
+          } else {
+            Write-Host "No changes needed"
+            exit 0
+          }
+
+      - name: Commit and push changes
+          shell: bash
+          run: |
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions@github.com"
+            git add Windows11Upgrade.ps1
+            if git diff --staged --quiet; then
+              echo "No changes to commit"
+            else
+              git commit -m "Daily: refresh Windows 11 ISO URLs $(date -u +'%Y-%m-%d')"
+              git push
+            fi
+
