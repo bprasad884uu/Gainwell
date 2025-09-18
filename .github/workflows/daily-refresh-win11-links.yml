@@ -29,14 +29,20 @@ jobs:
           $out = pwsh -NoProfile -ExecutionPolicy Bypass -File ./Win11OSLinkGenerate.ps1 2>&1
           $out | ForEach-Object { Write-Host $_ }
 
-          $regex = '(https?://\S+?\.iso(?:\?\S*)?)'
-          $matches = [System.Text.RegularExpressions.Regex]::Matches($out -join "`n", $regex)
-          $urls = $matches | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
+            $regex = '(https?://\S+?\.iso(?:\?\S*)?)'
+            $matches = [System.Text.RegularExpressions.Regex]::Matches($out -join "`n", $regex)
+            $urls = $matches | ForEach-Object { $_.Groups[1].Value } | Select-Object -Unique
 
-          $enGB = $null; $enUS = $null
-          if ($urls.Count -ge 1) { $enGB = $urls[0] }
-          if ($urls.Count -ge 2) { $enUS = $urls[1] }
+            # Filter to valid URLs
+            $urls = $urls | Where-Object { $_ -match '^https?://.*\.iso' }
 
+            # Debug print
+            $urls | ForEach-Object { Write-Host "Matched URL: $_" }
+
+            $enGB = $null; $enUS = $null
+            if ($urls.Count -ge 1) { $enGB = $urls[0] }
+            if ($urls.Count -ge 2) { $enUS = $urls[1] }
+            
           if ($urls.Count -eq 0) {
             Write-Host "No ISO URLs found in generator output" -ForegroundColor Yellow
             Add-Content -Path $env:GITHUB_OUTPUT -Value "found=false"
