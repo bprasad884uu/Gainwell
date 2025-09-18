@@ -39,7 +39,8 @@ param (
 		"%OSDRIVE%\PROGRAMDATA\ZenZefiT\*",					#Xentry
 		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\CHROMIUM*\*",		#Xentry
 		"D:\Zmysql-query-browser*\MySQL Query Browser*\*",
-		"D:\CBT\*"
+		"D:\CBT\*",
+		"%OSDRIVE%\GRADE-X_DATA\*"
     ),
 
     [string[]]$WhitelistedPublishers = @(
