@@ -65,8 +65,8 @@ function Save-Base64Image {
 # Detect Hostname and Domain
 # ==========================
 
-$hostname = (Get-CimInstance Win32_ComputerSystem).DNSHostName
 $system = Get-CimInstance Win32_ComputerSystem
+$hostname = $system.DNSHostName
 $domain = $system.Domain
 $isDomainJoined = $system.PartOfDomain
 
