@@ -93,17 +93,14 @@ jobs:
             exit 0
           }
 
-      - name: Commit and push changes
-          shell: pwsh
+        - name: Commit and push changes
           run: |
             git config user.name "github-actions[bot]"
             git config user.email "github-actions@github.com"
             git add Windows11Upgrade.ps1
-            git diff --staged --quiet
-            if ($LASTEXITCODE -eq 0) {
-              Write-Host "No changes to commit"
-            } else {
-              $date = Get-Date -Format 'yyyy-MM-dd'
-              git commit -m "Daily: refresh Windows 11 ISO URLs $date"
+            if git diff --staged --quiet; then
+              echo "No changes to commit"
+            else
+              git commit -m "Daily: refresh Windows 11 ISO URLs $(date -u +'%Y-%m-%d')"
               git push
-            }
+            fi
