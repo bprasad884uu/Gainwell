@@ -39,13 +39,13 @@ jobs:
 
           if ($urls.Count -eq 0) {
             Write-Host "No ISO URLs found in generator output" -ForegroundColor Yellow
-            echo "found=false" >> $GITHUB_OUTPUT
-            echo "engb=" >> $GITHUB_OUTPUT
-            echo "enus=" >> $GITHUB_OUTPUT
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "found=false"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "engb="
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "enus="
           } else {
-            echo "found=true" >> $GITHUB_OUTPUT
-            echo "engb=$enGB" >> $GITHUB_OUTPUT
-            echo "enus=$enUS" >> $GITHUB_OUTPUT
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "found=true"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "engb=$enGB"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "enus=$enUS"
           }
 
       - name: Debug workflow outputs
