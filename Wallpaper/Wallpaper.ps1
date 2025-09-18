@@ -139,7 +139,7 @@ $base64Image = @"
 
 if ($company -in @("GTPL", "GEPL", "TIL")) {
     # GTPL special case
-    $source = "C:\Windows\Web\Wallpaper\Windows\img19.jpg"
+    $source = "C:\Windows\Web\Screen\img103.jpg"
     $destination = "C:\Windows\Web\Wallpaper\Windows\wallpaper.jpg"
 
     if (Test-Path $source) {
