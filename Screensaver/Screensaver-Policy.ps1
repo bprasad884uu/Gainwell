@@ -15,7 +15,7 @@ $CompanyConfig = @(
 	@{ Name = "RMSPL";	Domains = @();								HostnamePatterns = @("RMSPL") },
 	@{ Name = "GTPL";	Domains = @();								HostnamePatterns = @("GTPL") },
 	@{ Name = "ASPL";	Domains = @();								HostnamePatterns = @("ASPL") },
-	@{ Name = "TIL";	Domains = @();								HostnamePatterns = @("TIL") }
+	@{ Name = "TIL";	Domains = @("TIPLINDIA", "TILWKG", "TILINDIA", "TILINDIA");								HostnamePatterns = @("TIL") }
 )
 
 # Company detection logic
