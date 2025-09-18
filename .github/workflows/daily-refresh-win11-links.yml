@@ -89,7 +89,7 @@ jobs:
           } else {
             Write-Host "No changes needed"
             # Don't exit here, let workflow continue
-
+            }
       - name: Set up Git credentials
         if: steps.gen.outputs.found == 'true'
         run: |
@@ -109,3 +109,4 @@ jobs:
             $date = Get-Date -Format 'yyyy-MM-dd'
             git commit -m "Daily: refresh Windows 11 ISO URLs $date"
             git push
+            }
