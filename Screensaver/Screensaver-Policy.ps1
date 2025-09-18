@@ -1,16 +1,17 @@
 # Detect company from hostname or domain
-$hostname = $env:COMPUTERNAME
 $system = Get-CimInstance Win32_ComputerSystem
+$hostname = $system.DNSHostName
 $domain = $system.Domain
 $isDomainJoined = $system.PartOfDomain
 
 # Dynamic company config
 $CompanyConfig = @(
-	@{ Name = "GCPL"; Domains = @("gainwellindia.com");			HostnamePatterns = @("GCPL") },
-	@{ Name = "GEPL"; Domains = @("gainwellengineering.com");	HostnamePatterns = @("GEPL") },
-	@{ Name = "RMSPL"; Domains = @();							HostnamePatterns = @("RMSPL") },
-	@{ Name = "ASPL"; Domains = @();							HostnamePatterns = @("ASPL") },
-	@{ Name = "GTPL"; Domains = @();							HostnamePatterns = @("GTPL") }
+	@{ Name = "GCPL";	Domains = @("gainwellindia.com");			HostnamePatterns = @("GCPL") },
+	@{ Name = "GEPL";	Domains = @("gainwellengineering.com");		HostnamePatterns = @("GEPL") },
+	@{ Name = "RMSPL";	Domains = @();								HostnamePatterns = @("RMSPL") },
+	@{ Name = "GTPL";	Domains = @();								HostnamePatterns = @("GTPL") },
+	@{ Name = "ASPL";	Domains = @();								HostnamePatterns = @("ASPL") },
+	@{ Name = "TIL";	Domains = @();								HostnamePatterns = @("TIL") }
 )
 
 # Company detection logic
