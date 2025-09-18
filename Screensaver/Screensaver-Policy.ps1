@@ -1,6 +1,6 @@
 # Detect company from hostname or domain
 $system = Get-CimInstance Win32_ComputerSystem
-$hostname = $system.DNSHostName
+$hostname = ([System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties()).HostName
 $domain = $system.Domain
 $isDomainJoined = $system.PartOfDomain
 
