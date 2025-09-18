@@ -65,10 +65,14 @@ function Save-Base64Image {
 # Detect Hostname and Domain
 # ==========================
 
-$system = Get-CimInstance Win32_ComputerSystem
-$hostname = ([System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties()).HostName
-$domain = $system.Domain
-$isDomainJoined = $system.PartOfDomain
+$system = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties()
+$hostname = $system.HostName
+$domain = $system.DomainName
+if ([string]::IsNullOrWhiteSpace($domain)) {
+    $isDomainJoined = $false
+} else {
+    $isDomainJoined = $true
+}
 
 # ==========================
 # Dynamic Company Config
