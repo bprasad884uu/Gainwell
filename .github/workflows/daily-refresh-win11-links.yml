@@ -68,16 +68,14 @@ jobs:
           $patternENUS = '(?ms)(if\s*\(\$locale\s*-eq\s*"(?:en-US)"\)\s*\{.*?\$isoUrl\s*=\s*)".*?"'
           $new = $content
           if ($Env:ENGB) {
-            $escaped = [System.Text.RegularExpressions.Regex]::Escape($Env:ENGB)
-            $replacement = '${1}"' + $escaped + '"'
+            $replacement = '${1}"' + $Env:ENGB + '"'
             $new = [System.Text.RegularExpressions.Regex]::Replace($new, $patternENGB, $replacement)
             Write-Host "Prepared en-GB replacement"
           } else {
             Write-Host "No en-GB URL available; skipping en-GB replacement"
           }
           if ($Env:ENUS) {
-            $escaped = [System.Text.RegularExpressions.Regex]::Escape($Env:ENUS)
-            $replacement = '${1}"' + $escaped + '"'
+            $replacement = '${1}"' + $Env:ENUS + '"'
             $new = [System.Text.RegularExpressions.Regex]::Replace($new, $patternENUS, $replacement)
             Write-Host "Prepared en-US replacement"
           } else {
