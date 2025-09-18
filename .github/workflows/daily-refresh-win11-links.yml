@@ -1,6 +1,5 @@
 name: Daily refresh Win11 ISO links
 
-# 00:00 UTC -> 06:00 IST
 on:
   schedule:
     - cron: '0 0 * * *'
