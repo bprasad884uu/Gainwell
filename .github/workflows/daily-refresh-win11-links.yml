@@ -96,7 +96,6 @@ jobs:
       
 - name: Commit and push changes
   if: steps.gen.outputs.found == 'true'
-  shell: pwsh
   run: |
     git config user.name "github-actions[bot]"
     git config user.email "actions@github.com"
