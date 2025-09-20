@@ -72,10 +72,10 @@ Write-Host "Using temp root: $TempRoot"
 
 # Set Download URL & Destination Based on Locale (destination now inside $TempRoot)
 if ($locale -eq "en-GB") {
-    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_EnglishInternational_x64.iso?t=cfc345fd-d096-4315-8575-ab2b62942f62&P1=1758328880&P2=601&P3=2&P4=E6eHC0jFVjkkG0OyA%2f3K44iqoSFhT4NJuSnH1e2ttirTahkkCdMBDgJZy0X2VciGVpncxKhxZvKj8enn82HLLPvYsUJhXjE7bJqEar05tciMmvu2%2faHQ3xucppJ6RgBwp2Zpjv5JPZv1%2foNCgTzQ65P47F%2bbr9OMYXYyxELGBGAPSqn5VrwqrD2g6lOlpiPKCb%2fbo5s3wTqh%2bYBAYXydXZ3%2bv536S7Q6IaPzhm1JiJCHJ87fQQGHxVX0T5ZBEugRTQ%2fZ7QxiCUa99zhQAgA2I%2ba5yyYWP90fS%2fVv9pIfT3rdBFkR0A8mN0XVeLn5LErpmKr5NaRJz2PA52BoshlGiQ%3d%3d"
+    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_EnglishInternational_x64.iso?t=01431903-3474-4bbe-94de-9a43279e0d87&P1=1758415131&P2=601&P3=2&P4=CAo1QLfvnmGnFUzIbWplT6lpijemw6ulk4%2bG2gomkumpPD6%2bvVmKg4mqUZ00NR6myxvDd4Tb5m5nu9BMlCUBdQ7rVOluYgBvcPU6i0XfG6R3C%2b8piVx5mjC0%2bvUXHWiSJa28ANnvM6o2c67r%2fc8A%2f%2bx0Fab2Zc0iwDAtTZNxfy7La0wz86t0ZAtpIsige3VrMqd393oEq1a%2fUIh8U9XhIIMJTF%2fDqrFZ%2b3kAuW%2brTnvDrRNI1ODTv7QjoEcweOf5nP3S8fPDxYwr%2fpxveDVsyDNC6mlt5NYHHuVQQYqMyC24EKb9hpG8yOIRc%2fPjLzHpqZlVhF1L0xnOTEozP4eoDw%3d%3d"
     $destination = Join-Path -Path $TempRoot -ChildPath "Win11_24H2_ENGB.iso"
 } elseif ($locale -eq "en-US") {
-    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=6a9d1d4d-2bc7-48fd-81bc-5f755db6e899&P1=1758328887&P2=601&P3=2&P4=zco6SPB6k8vMaHIj45I0HsvJgvkVBfNWO8C2udhNNpF0F%2bsdk32HkLXdZ2YZ%2bjtmM1yBDfgIvhpYXNJry3RVZSdoVXSUEHWyLtBjleiC76xRAfyUzUf925%2b6cqgm0IQH4gSaj%2fiUDZnObBl6D%2bPD7%2f4gx8LknmLZJz1QkAyG7LI%2flswMpQfIuP4oR9Izw3qIOTiVdqLq8G4Mhqm3P%2bmnsGS0L3eztS90mMKKMT%2fLZ%2b36h9SyE70p1gwobI2ULPxdC7MJmMnjHa%2fqAUAH2lj5q%2ftQLaLMNz5Lfr%2bVx%2b24powQuml1lh1pG%2bd6A7WWSuMO%2fZc%2bVcek633HNMkUvD2ZNQ%3d%3d"
+    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=e2d58691-85b5-4ed5-a067-f2e8b2a230e4&P1=1758415140&P2=601&P3=2&P4=TTPKnD%2fGGbTlf%2bNnFu%2bEuMVe9tFyfU%2beeEVuVh7eJAalndZKTFpjHRrDWRmWxKMXMQdToT6JcgnDZodmVPLXOJbiVoX22FOuO4vu9OeFyhcgSHrfcZjrkqcl3Y7xRfrNSAwmR%2fjondSxAAX5poYoowhz2Ib2hL%2f1A4hw%2bLjlqvr%2bDvJyzRSYQXPLNF%2bJa0GirE%2fHBMQzEuUlyuvqWeUc3YyNQ7iqATxTNdj0mVPTOYg1XHyBqgXB5hGoAvbPFkYDAS8%2bZ0Bl99K%2bRDCS3C5lJ2rccMKGuLP%2b8y6Ta6UCG%2f0rEfmJ9NlChQbjkIxT00m1AyLfj%2fAWnB9BynJuXkyfzw%3d%3d"
     $destination = Join-Path -Path $TempRoot -ChildPath "Win11_24H2_ENUS.iso"
 } else {
     Write-Host "Unsupported Language. No ISO available." -ForegroundColor Red
@@ -516,6 +516,7 @@ Write-Host "`nWindows 11 upgrade process complete."
 
 Write-Host "`nRebooting System..."
 #Restart-Computer -Force
+
 
 
 
