@@ -41,7 +41,8 @@ param (
 		"D:\Zmysql-query-browser*\MySQL Query Browser*\*",
 		"D:\CBT\*",
 		"%OSDRIVE%\GRADE-X_DATA\*",
-		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\APPS\*"
+		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\APPS\*",
+		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\Programs\Naukri Launcher\*"
     ),
 
     [string[]]$WhitelistedPublishers = @(
