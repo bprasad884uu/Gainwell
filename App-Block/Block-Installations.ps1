@@ -42,7 +42,8 @@ param (
 		"D:\CBT\*",
 		"%OSDRIVE%\GRADE-X_DATA\*",
 		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\APPS\*",
-		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\Programs\Naukri Launcher\*"
+		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\Programs\Naukri Launcher\*",
+		"%OSDRIVE%\IREPSSigner"
     ),
 
     [string[]]$WhitelistedPublishers = @(
