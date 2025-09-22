@@ -17,40 +17,48 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Determine whether to run now (gate by next_run_epoch)
-        id: gate
-        shell: pwsh
-        run: |
-          $epochFile = Join-Path $env:GITHUB_WORKSPACE '.github/next_run_epoch'
-          $intervalSeconds = 87300   # 24h 15m
+        - name: Determine whether to run now (gate by next_run file)
+          id: gate
+          shell: pwsh
+          run: |
+            $epochFile = Join-Path $env:GITHUB_WORKSPACE '.github/next_run_epoch'
+            $intervalSeconds = 87300   # 24h 15m drift
 
-          $nowEpoch = [int][Math]::Floor((Get-Date).ToUniversalTime() - (Get-Date "1970-01-01")).TotalSeconds
-          Write-Host "Now (UTC epoch): $nowEpoch"
+            $unixEpochStart = (Get-Date "1970-01-01T00:00:00Z").ToUniversalTime()
+            $now = (Get-Date).ToUniversalTime()
+            $nowEpoch = [int][Math]::Floor(($now - $unixEpochStart).TotalSeconds)
+            Write-Host "Now (UTC epoch): $nowEpoch"
 
-          if (Test-Path $epochFile) {
-            $nextEpoch = [int](Get-Content $epochFile -Raw)
-          } else {
-            $nextEpoch = 0
-          }
-          Write-Host "Next scheduled epoch: $nextEpoch"
-
-          if ($nowEpoch -ge $nextEpoch) {
-            Write-Host "=== It's time to run ==="
-            if ($nextEpoch -eq 0) {
-              $newNext = $nowEpoch + $intervalSeconds
-            } else {
-              $newNext = $nextEpoch
-              while ($newNext -le $nowEpoch) {
-                $newNext += $intervalSeconds
+            if (Test-Path $epochFile) {
+              $existing = (Get-Content $epochFile -Raw).Trim()
+              if ($existing -match '^\d+$') {
+                $nextEpoch = [int]$existing
+              } else {
+                $nextEpoch = 0
               }
+            } else {
+              $nextEpoch = 0
             }
-            "should_run=true"  >> $env:GITHUB_OUTPUT
-            "next_epoch=$newNext" >> $env:GITHUB_OUTPUT
-          } else {
-            Write-Host "Not time yet — skipping."
-            "should_run=false" >> $env:GITHUB_OUTPUT
-            "next_epoch=$nextEpoch" >> $env:GITHUB_OUTPUT
-          }
+
+            Write-Host "Next scheduled epoch: $nextEpoch"
+
+            if ($nowEpoch -ge $nextEpoch) {
+              Write-Host "=== It's time to run ==="
+              if ($nextEpoch -eq 0) {
+                $newNext = $nowEpoch + $intervalSeconds
+              } else {
+                $newNext = $nextEpoch
+                while ($newNext -le $nowEpoch) {
+                  $newNext += $intervalSeconds
+                }
+              }
+              Add-Content -Path $env:GITHUB_OUTPUT -Value "should_run=true"
+              Add-Content -Path $env:GITHUB_OUTPUT -Value "next_epoch=$newNext"
+            } else {
+              Write-Host "Not time yet — skipping."
+              Add-Content -Path $env:GITHUB_OUTPUT -Value "should_run=false"
+              Add-Content -Path $env:GITHUB_OUTPUT -Value "next_epoch=$nextEpoch"
+            }
 
       - name: Download link-generator script
         if: steps.gate.outputs.should_run == 'true'
