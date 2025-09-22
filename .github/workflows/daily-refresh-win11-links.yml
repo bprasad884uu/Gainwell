@@ -63,6 +63,7 @@ jobs:
 
       - name: Download link-generator script
         if: steps.gate.outputs.should_run == 'true'
+        shell: pwsh
         run: |
           curl -fsSL -o Win11OSLinkGenerate.ps1 https://raw.githubusercontent.com/bprasad884uu/Gainwell/refs/heads/main/Win11OSLinkGenerate.ps1
           Write-Host "Downloaded Win11OSLinkGenerate.ps1"
@@ -88,14 +89,31 @@ jobs:
           if ($urls.Count -ge 1) { $enGB = $urls[0] }
           if ($urls.Count -ge 2) { $enUS = $urls[1] }
 
-          # Sanitize (remove any stray newlines)
+          # Sanitize (remove stray CR/LF)
           if ($enGB) { $enGB = ($enGB -replace '[\r\n]+','') }
           if ($enUS) { $enUS = ($enUS -replace '[\r\n]+','') }
 
-          # Write outputs safely (single-line)
+          # Write outputs safely using heredoc-style blocks for URLs
+          # found (simple boolean)
           Add-Content -Path $env:GITHUB_OUTPUT -Value ("found=" + ($urls.Count -gt 0))
-          Add-Content -Path $env:GITHUB_OUTPUT -Value ("engb=" + ($enGB -ne $null ? $enGB : ""))
-          Add-Content -Path $env:GITHUB_OUTPUT -Value ("enus=" + ($enUS -ne $null ? $enUS : ""))
+
+          # en-GB
+          if ($enGB) {
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "engb<<EOF"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value $enGB
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "EOF"
+          } else {
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "engb="
+          }
+
+          # en-US
+          if ($enUS) {
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "enus<<EOF"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value $enUS
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "EOF"
+          } else {
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "enus="
+          }
 
       - name: Debug workflow outputs
         shell: pwsh
