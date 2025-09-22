@@ -68,47 +68,55 @@ jobs:
           curl -fsSL -o Win11OSLinkGenerate.ps1 https://raw.githubusercontent.com/bprasad884uu/Gainwell/refs/heads/main/Win11OSLinkGenerate.ps1
           Write-Host "Downloaded Win11OSLinkGenerate.ps1"
 
-      - name: Run generator and capture output
-        if: steps.gate.outputs.should_run == 'true'
-        id: gen
-        shell: pwsh
-        run: |
-          # Run generator and capture stdout lines
-          $out = pwsh -NoProfile -ExecutionPolicy Bypass -File ./Win11OSLinkGenerate.ps1 2>&1
-          $out | ForEach-Object { Write-Host $_ }
+- name: Run generator and capture output
+  if: steps.gate.outputs.should_run == 'true'
+  id: gen
+  shell: pwsh
+  run: |
+    # Run generator and capture stdout lines
+    $out = pwsh -NoProfile -ExecutionPolicy Bypass -File ./Win11OSLinkGenerate.ps1 2>&1
+    $out | ForEach-Object { Write-Host $_ }
 
-          # Capture exact lines that start with http(s) (full URL lines)
-          $lines = $out | ForEach-Object { $_.Trim() }
-          $urls = $lines | Where-Object { $_ -match '^(https?://)' } | ForEach-Object { $_.Trim() }
+    # Capture exact lines that start with http(s) (full URL lines)
+    $lines = $out | ForEach-Object { $_.Trim() }
+    $urls = $lines | Where-Object { $_ -match '^(https?://)' } | ForEach-Object { $_.Trim() }
 
-          Write-Host "=== Extracted URLs ==="
-          $urls | ForEach-Object { Write-Host "  $_" }
+    Write-Host "=== Extracted URLs ==="
+    $urls | ForEach-Object { Write-Host "  $_" }
 
-          # Map first to en-GB, second to en-US if present
-          $enGB = $null; $enUS = $null
-          if ($urls.Count -ge 1) { $enGB = $urls[0] }
-          if ($urls.Count -ge 2) { $enUS = $urls[1] }
+    # Map first to en-GB, second to en-US if present
+    $enGB = $null; $enUS = $null
+    if ($urls.Count -ge 1) { $enGB = $urls[0] }
+    if ($urls.Count -ge 2) { $enUS = $urls[1] }
 
-          # Sanitize (remove stray CR/LF)
-          if ($enGB) { $enGB = ($enGB -replace '[\r\n]+','') }
-          if ($enUS) { $enUS = ($enUS -replace '[\r\n]+','') }
+    # Sanitize (remove stray CR/LF)
+    if ($enGB) { $enGB = ($enGB -replace '[\r\n]+','') }
+    if ($enUS) { $enUS = ($enUS -replace '[\r\n]+','') }
 
-          # Write outputs safely using single-string heredoc blocks written in one call
-          Add-Content -Path $env:GITHUB_OUTPUT -Value ("found=" + ($urls.Count -gt 0)) -Encoding utf8
+    # --- Write outputs atomically using AppendAllText with UTF8 ---
+    $utf8 = [System.Text.Encoding]::UTF8
 
-          if ($enGB) {
-            $block = "engb<<EOF`n$enGB`nEOF"
-            Add-Content -Path $env:GITHUB_OUTPUT -Value $block -Encoding utf8
-          } else {
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "engb=" -Encoding utf8
-          }
+    # found boolean
+    [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "found=$($urls.Count -gt 0)`n", $utf8)
 
-          if ($enUS) {
-            $block = "enus<<EOF`n$enUS`nEOF"
-            Add-Content -Path $env:GITHUB_OUTPUT -Value $block -Encoding utf8
-          } else {
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "enus=" -Encoding utf8
-          }
+    # en-GB block (single atomic write)
+    if ($enGB) {
+      $block = "engb<<EOF`n$enGB`nEOF`n"
+      [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, $block, $utf8)
+    } else {
+      [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "engb=`n", $utf8)
+    }
+
+    # en-US block (single atomic write)
+    if ($enUS) {
+      $block = "enus<<EOF`n$enUS`nEOF`n"
+      [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, $block, $utf8)
+    } else {
+      [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "enus=`n", $utf8)
+    }
+
+    # Debug print of what we wrote (optional)
+    Write-Host "Wrote outputs to GITHUB_OUTPUT (found, engb, enus)."
 
       - name: Debug workflow outputs
         shell: pwsh
