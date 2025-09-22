@@ -17,54 +17,54 @@ jobs:
         with:
           fetch-depth: 0
 
-        - name: Determine whether to run now (gate by next_run file)
-          id: gate
-          shell: pwsh
-          run: |
-            $epochFile = Join-Path $env:GITHUB_WORKSPACE '.github/next_run_epoch'
-            $intervalSeconds = 87300   # 24h 15m drift
+      - name: Determine whether to run now (gate by next_run file)
+        id: gate
+        shell: pwsh
+        run: |
+          $epochFile = Join-Path $env:GITHUB_WORKSPACE '.github/next_run_epoch'
+          $intervalSeconds = 87300   # 24h 15m
 
-            $unixEpochStart = (Get-Date "1970-01-01T00:00:00Z").ToUniversalTime()
-            $now = (Get-Date).ToUniversalTime()
-            $nowEpoch = [int][Math]::Floor(($now - $unixEpochStart).TotalSeconds)
-            Write-Host "Now (UTC epoch): $nowEpoch"
+          $unixEpochStart = (Get-Date "1970-01-01T00:00:00Z").ToUniversalTime()
+          $now = (Get-Date).ToUniversalTime()
+          $nowEpoch = [int][Math]::Floor(($now - $unixEpochStart).TotalSeconds)
+          Write-Host "Now (UTC epoch): $nowEpoch"
 
-            if (Test-Path $epochFile) {
-              $existing = (Get-Content $epochFile -Raw).Trim()
-              if ($existing -match '^\d+$') {
-                $nextEpoch = [int]$existing
-              } else {
-                $nextEpoch = 0
-              }
+          if (Test-Path $epochFile) {
+            $existing = (Get-Content $epochFile -Raw).Trim()
+            if ($existing -match '^\d+$') {
+              $nextEpoch = [int]$existing
             } else {
               $nextEpoch = 0
             }
+          } else {
+            $nextEpoch = 0
+          }
 
-            Write-Host "Next scheduled epoch: $nextEpoch"
+          Write-Host "Next scheduled epoch: $nextEpoch"
 
-            if ($nowEpoch -ge $nextEpoch) {
-              Write-Host "=== It's time to run ==="
-              if ($nextEpoch -eq 0) {
-                $newNext = $nowEpoch + $intervalSeconds
-              } else {
-                $newNext = $nextEpoch
-                while ($newNext -le $nowEpoch) {
-                  $newNext += $intervalSeconds
-                }
-              }
-              Add-Content -Path $env:GITHUB_OUTPUT -Value "should_run=true"
-              Add-Content -Path $env:GITHUB_OUTPUT -Value "next_epoch=$newNext"
+          if ($nowEpoch -ge $nextEpoch) {
+            Write-Host "=== It's time to run ==="
+            if ($nextEpoch -eq 0) {
+              $newNext = $nowEpoch + $intervalSeconds
             } else {
-              Write-Host "Not time yet — skipping."
-              Add-Content -Path $env:GITHUB_OUTPUT -Value "should_run=false"
-              Add-Content -Path $env:GITHUB_OUTPUT -Value "next_epoch=$nextEpoch"
+              $newNext = $nextEpoch
+              while ($newNext -le $nowEpoch) {
+                $newNext += $intervalSeconds
+              }
             }
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "should_run=true"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "next_epoch=$newNext"
+          } else {
+            Write-Host "Not time yet — skipping."
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "should_run=false"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "next_epoch=$nextEpoch"
+          }
 
       - name: Download link-generator script
         if: steps.gate.outputs.should_run == 'true'
         run: |
           curl -fsSL -o Win11OSLinkGenerate.ps1 https://raw.githubusercontent.com/bprasad884uu/Gainwell/refs/heads/main/Win11OSLinkGenerate.ps1
-          echo "Downloaded Win11OSLinkGenerate.ps1"
+          Write-Host "Downloaded Win11OSLinkGenerate.ps1"
 
       - name: Run generator and capture output
         if: steps.gate.outputs.should_run == 'true'
@@ -74,17 +74,17 @@ jobs:
           $out = pwsh -NoProfile -ExecutionPolicy Bypass -File ./Win11OSLinkGenerate.ps1 2>&1
           $out | ForEach-Object { Write-Host $_ }
 
-          $urls = $out | Where-Object { $_ -match '^(https?://)' }
+          # Capture lines that start with http/https (exact URL lines)
+          $urls = $out | Where-Object { $_ -match '^(https?://)' } | ForEach-Object { $_.Trim() }
 
           Write-Host "=== Extracted URLs ==="
           $urls | ForEach-Object { Write-Host $_ }
 
           $enGB = $null; $enUS = $null
-          if ($urls.Count -ge 1) { $enGB = $urls[0].Trim() }
-          if ($urls.Count -ge 2) { $enUS = $urls[1].Trim() }
+          if ($urls.Count -ge 1) { $enGB = $urls[0] }
+          if ($urls.Count -ge 2) { $enUS = $urls[1] }
 
           if ($urls.Count -eq 0) {
-            Write-Host "No ISO URLs found in generator output" -ForegroundColor Yellow
             Add-Content -Path $env:GITHUB_OUTPUT -Value "found=false"
             Add-Content -Path $env:GITHUB_OUTPUT -Value "engb="
             Add-Content -Path $env:GITHUB_OUTPUT -Value "enus="
@@ -101,6 +101,7 @@ jobs:
           echo "found=${{ steps.gen.outputs.found }}"
           echo "engb=${{ steps.gen.outputs.engb }}"
           echo "enus=${{ steps.gen.outputs.enus }}"
+        shell: pwsh
 
       - name: Replace isoUrl entries in Windows11Upgrade.ps1
         if: steps.gate.outputs.should_run == 'true' && steps.gen.outputs.found == 'true'
@@ -119,14 +120,15 @@ jobs:
           $new = $content
           if ($Env:ENGB) {
             $replacement = '${1}"' + $Env:ENGB + '"'
-            $new = [Regex]::Replace($new, $patternENGB, $replacement)
+            $new = [System.Text.RegularExpressions.Regex]::Replace($new, $patternENGB, $replacement)
             Write-Host "Prepared en-GB replacement"
           } else {
             Write-Host "No en-GB URL available; skipping en-GB replacement"
           }
+
           if ($Env:ENUS) {
             $replacement = '${1}"' + $Env:ENUS + '"'
-            $new = [Regex]::Replace($new, $patternENUS, $replacement)
+            $new = [System.Text.RegularExpressions.Regex]::Replace($new, $patternENUS, $replacement)
             Write-Host "Prepared en-US replacement"
           } else {
             Write-Host "No en-US URL available; skipping en-US replacement"
@@ -145,6 +147,7 @@ jobs:
         run: |
           $epochFile = Join-Path $env:GITHUB_WORKSPACE '.github/next_run_epoch'
           $nextEpoch = [int]${{ steps.gate.outputs.next_epoch }}
+          if (-not (Test-Path (Split-Path $epochFile))) { New-Item -ItemType Directory -Path (Split-Path $epochFile) -Force | Out-Null }
           Set-Content -Path $epochFile -Value $nextEpoch -Encoding utf8
 
           git config user.name "github-actions[bot]"
