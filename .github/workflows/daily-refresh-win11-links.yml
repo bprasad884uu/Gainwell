@@ -166,25 +166,58 @@ jobs:
           }
 
       - name: Commit and push changes (only when updated)
-        if: steps.replace.outputs.updated == 'true'
-        shell: pwsh
-        run: |
-          $epochFile = Join-Path $env:GITHUB_WORKSPACE '.github/next_run_epoch'
-          $nextEpoch = [int]${{ steps.gate.outputs.next_epoch }}
+          if: steps.replace.outputs.updated == 'true'
+          shell: pwsh
+          run: |
+            $epochFile = Join-Path $env:GITHUB_WORKSPACE '.github/next_run_epoch'
+            $nextEpoch = [int]${{ steps.gate.outputs.next_epoch }}
 
-          if (-not (Test-Path (Split-Path $epochFile))) { New-Item -ItemType Directory -Path (Split-Path $epochFile) -Force | Out-Null }
-          Set-Content -Path $epochFile -Value $nextEpoch -Encoding utf8
+            if (-not (Test-Path (Split-Path $epochFile))) { New-Item -ItemType Directory -Path (Split-Path $epochFile) -Force | Out-Null }
+            Set-Content -Path $epochFile -Value $nextEpoch -Encoding utf8
 
-          git config user.name "github-actions[bot]"
-          git config user.email "actions@github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+            git config user.name "github-actions[bot]"
+            git config user.email "actions@github.com"
 
-          git add Windows11Upgrade.ps1 .github/next_run_epoch
-          git diff --staged --quiet
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "No changes to commit"
-          } else {
-            $date = Get-Date -Format 'yyyy-MM-dd HH:mm'
-            git commit -m "Refresh Win11 ISO links (next: $nextEpoch) $date"
-            git push
-          }
+            # Ensure origin uses the token (you already set this earlier; this is safe to repeat)
+            git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+
+            # Fetch latest remote main
+            git fetch origin main
+
+            # Try to rebase local staged changes onto latest origin/main
+            # If there are no local commits yet, this will be a no-op.
+            try {
+              # create a temporary local branch from current HEAD to preserve work
+              $tmp = "tmp-action-$(Get-Random)"
+              git branch $tmp
+
+              # Make sure we have any staged changes in an explicit commit (so rebase works)
+              git add Windows11Upgrade.ps1 .github/next_run_epoch || $true
+              $hasStaged = $false
+              git diff --cached --quiet
+              if ($LASTEXITCODE -ne 0) { $hasStaged = $true }
+
+              if ($hasStaged) {
+                git commit -m "Refresh Win11 ISO links (next: $nextEpoch) $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
+              } else {
+                Write-Host "Nothing staged to commit (unexpected because 'updated' was true)."
+              }
+
+              # Rebase onto origin/main
+              git rebase origin/main
+
+              # Push the rebased commits
+              git push origin HEAD:main
+
+              # cleanup temp branch
+              git branch -D $tmp
+            } catch {
+              Write-Host "Rebase or push failed. Attempting to abort rebase and restore state."
+              # try to abort rebase if in progress
+              git rebase --abort 2>$null
+              # restore branch from temp (if exists)
+              try { git checkout -f $tmp; git branch -D $tmp } catch {}
+              Write-Error "Failed to rebase/push: $($_.Exception.Message)"
+              exit 1
+            }
+
