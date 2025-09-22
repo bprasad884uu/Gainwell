@@ -72,7 +72,7 @@ Write-Host "Using temp root: $TempRoot"
 
 # Set Download URL & Destination Based on Locale (destination now inside $TempRoot)
 if ($locale -eq "en-GB") {
-    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_EnglishInternational_x64.iso?t=cbb33882-a0a5-4158-a61f-6dc2d9a4b944&P1=1758627429&P2=601&P3=2&P4=ZaB4FRTv899ooabCH9IKSM3sQKhpBeNADYSN1wMZMgswDzSONp%2fN%2bbtFeUsuq46YVpGUoQmIWet3rtU%2f6LKBuleOynZgRM5xmf0KwTUvb6g9vDNThZg5vPtgiI3YqYvpFVpm0L33svoKeQ9%2fBQilqD%2frPpvMh4UzeHhoQ1hF2MurE5iCGbDHKjzsLsqaCyTMXbz9sYyaqDFQaleqNEeEtYY166r2NvuX%2fHrb1VISZXZ7MO9T5VXCejPph9oMon7bjGc%2fye7asfCpHhLvWROSt9Vk54znf8YTox3yd5FX9HZJyxRQ12vMuSAOthMm6N52kci5myd0VNdYuyyrarOhTg%3d%3d"
+    $isoUrl = "h"
     $destination = Join-Path -Path $TempRoot -ChildPath "Win11_24H2_ENGB.iso"
 } elseif ($locale -eq "en-US") {
     $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=e824052b-1c5b-4e63-b44b-b29a9490e2e4&P1=1758627436&P2=601&P3=2&P4=BSc%2ffoNwJ%2b9GdkMyAMm5twKglpCSfIwtMGpIbIfEIg8c5hdmPpvLx6O%2fox2e5b%2fEsxvRz%2fjrxI0htV%2bjsggFl7fHNLpbsHhuW5LmPyc0aCsUjn1rjBgRWTGknXzDXaxcvSibZLMHyQF0LBDBStvsaoeId4f69CGW4YAPazcNXAsIGePsRpyEeg9FJNYv6TA%2fRoMVa610UFY0C5XdYEr%2b28uEYjJ3SYQU7YVVtF7suBECFzKu6OvrPEiRMD8%2frWl%2f%2bcDm0MSNTysnLJ8utSQ9i1ayCSuo6xPRaRIy0nhloVzfY4m16mVfbpVD1OPROLvs0%2bDL224rJAoKypKs0pMR%2fQ%3d%3d"
@@ -516,6 +516,7 @@ Write-Host "`nWindows 11 upgrade process complete."
 
 Write-Host "`nRebooting System..."
 #Restart-Computer -Force
+
 
 
 
