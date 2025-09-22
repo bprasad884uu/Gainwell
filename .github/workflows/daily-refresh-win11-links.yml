@@ -93,32 +93,24 @@ jobs:
           if ($enGB) { $enGB = ($enGB -replace '[\r\n]+','') }
           if ($enUS) { $enUS = ($enUS -replace '[\r\n]+','') }
 
-          # Write outputs safely using heredoc-style blocks for URLs.
-          # IMPORTANT: write the heredoc block as a single Out-File write so GitHub parses correctly.
-
+          # Write outputs safely using single-string heredoc blocks written in one call
           # found (boolean)
-          "found=$($urls.Count -gt 0)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Add-Content -Path $env:GITHUB_OUTPUT -Value ("found=" + ($urls.Count -gt 0)) -Encoding utf8
 
           # en-GB
           if ($enGB) {
-            @"
-engb<<EOF
-$enGB
-EOF
-"@ | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            $block = "engb<<EOF`n$enGB`nEOF"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value $block -Encoding utf8
           } else {
-            "engb=" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "engb=" -Encoding utf8
           }
 
           # en-US
           if ($enUS) {
-            @"
-enus<<EOF
-$enUS
-EOF
-"@ | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            $block = "enus<<EOF`n$enUS`nEOF"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value $block -Encoding utf8
           } else {
-            "enus=" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "enus=" -Encoding utf8
           }
 
       - name: Debug workflow outputs
