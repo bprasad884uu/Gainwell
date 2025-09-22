@@ -72,10 +72,10 @@ Write-Host "Using temp root: $TempRoot"
 
 # Set Download URL & Destination Based on Locale (destination now inside $TempRoot)
 if ($locale -eq "en-GB") {
-    $isoUrl = "h"
+    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_EnglishInternational_x64.iso?t=685124cc-f19f-48cf-bff3-7bd1538156b1&P1=1758632749&P2=601&P3=2&P4=n5gJHeB966SnCdQ%2be7wbMTq9s%2f2v7fB2wIbT1saMTccesD7CBlSj9KD%2bZqUotL9eNTDw6qigV2nL2oU7JGPnfxJ3WBBpvDcEhMqOHbyXhVWK0UUXw6BYORR9JY2yZkwTaNNigaRBaw%2b0xEXHRLwi4DHjd1ioxaKuqs4k9BGu5QvxKVDMz0NBrFckTmUdo8SKib6u3uLB7ygU3Zx6slhj%2fsnrQ3RZRR7K80yno7l2mDyOmFcvSHPngs2xSqcfoYTe7nGEpcWsZpFxvvkRgx2sjJv6D3XFuWXv%2fjxuSGObcE%2fdnVwOlRU3MAGiuEBGFYR2SvX%2fhtchcYo2tzAz6Tk2Pw%3d%3d"
     $destination = Join-Path -Path $TempRoot -ChildPath "Win11_24H2_ENGB.iso"
 } elseif ($locale -eq "en-US") {
-    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=e824052b-1c5b-4e63-b44b-b29a9490e2e4&P1=1758627436&P2=601&P3=2&P4=BSc%2ffoNwJ%2b9GdkMyAMm5twKglpCSfIwtMGpIbIfEIg8c5hdmPpvLx6O%2fox2e5b%2fEsxvRz%2fjrxI0htV%2bjsggFl7fHNLpbsHhuW5LmPyc0aCsUjn1rjBgRWTGknXzDXaxcvSibZLMHyQF0LBDBStvsaoeId4f69CGW4YAPazcNXAsIGePsRpyEeg9FJNYv6TA%2fRoMVa610UFY0C5XdYEr%2b28uEYjJ3SYQU7YVVtF7suBECFzKu6OvrPEiRMD8%2frWl%2f%2bcDm0MSNTysnLJ8utSQ9i1ayCSuo6xPRaRIy0nhloVzfY4m16mVfbpVD1OPROLvs0%2bDL224rJAoKypKs0pMR%2fQ%3d%3d"
+    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=54cc9eeb-f7c5-47f7-9658-afcc9a6592a0&P1=1758632759&P2=601&P3=2&P4=kEp6JF85lt1j%2b6Sz5RV5JHBh83R5sdc3uhcC%2bjZs8Fz5nM303RCsyaoXGeLvi5gwv1WoHMgcABDGw8eMkLHyAhtWIHv2sH3SAGbshDIZQBZmKfNazj7fxlb3EDOW%2fNyR9Bv4rMOw%2f4QUeBlEjWDIUPs4ULvG47N%2bgl1uKLi3lUlKpbSuZCwXR4ZLK4VPiZjYgxfO6%2bUdGbm0kqVD4rKDsfVLXFkuvMrfdIwwwfl%2bF5QIRFRuLOysMcLHLSd60mztU%2fS6pPGraYqVep4sC8ShSHyZg3Pd9phjspLJYHrKFdXOO2Gv0QZuLe2LNrcipuVV5qK0EZMPzYbzjdS%2f5Lj32A%3d%3d"
     $destination = Join-Path -Path $TempRoot -ChildPath "Win11_24H2_ENUS.iso"
 } else {
     Write-Host "Unsupported Language. No ISO available." -ForegroundColor Red
@@ -516,6 +516,7 @@ Write-Host "`nWindows 11 upgrade process complete."
 
 Write-Host "`nRebooting System..."
 #Restart-Computer -Force
+
 
 
 
