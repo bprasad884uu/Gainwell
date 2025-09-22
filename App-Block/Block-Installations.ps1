@@ -43,7 +43,8 @@ param (
 		"%OSDRIVE%\GRADE-X_DATA\*",
 		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\APPS\*",
 		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\Programs\Naukri Launcher\*",
-		"%OSDRIVE%\IREPSSigner"
+		"%OSDRIVE%\IREPSSigner",
+		"%OSDRIVE%\Users\*\AppData\Roaming\Polycom\*"
     ),
 
     [string[]]$WhitelistedPublishers = @(
