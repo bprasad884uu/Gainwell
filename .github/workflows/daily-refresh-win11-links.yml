@@ -1,8 +1,8 @@
-name: Daily refresh Win11 ISO links
+name: Refresh Win11 ISO links (24h15m drift)
 
 on:
   schedule:
-    - cron: '0 0 * * *'   # run once daily at 00:00 UTC (06:00 IST)
+    - cron: '*/30 * * * *'   # poll every 30 minutes
   workflow_dispatch: {}
 
 permissions:
@@ -17,31 +17,64 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download your link-generator script
+      - name: Determine whether to run now (gate by next_run_epoch)
+        id: gate
+        shell: pwsh
+        run: |
+          $epochFile = Join-Path $env:GITHUB_WORKSPACE '.github/next_run_epoch'
+          $intervalSeconds = 87300   # 24h 15m
+
+          $nowEpoch = [int][Math]::Floor((Get-Date).ToUniversalTime() - (Get-Date "1970-01-01")).TotalSeconds
+          Write-Host "Now (UTC epoch): $nowEpoch"
+
+          if (Test-Path $epochFile) {
+            $nextEpoch = [int](Get-Content $epochFile -Raw)
+          } else {
+            $nextEpoch = 0
+          }
+          Write-Host "Next scheduled epoch: $nextEpoch"
+
+          if ($nowEpoch -ge $nextEpoch) {
+            Write-Host "=== It's time to run ==="
+            if ($nextEpoch -eq 0) {
+              $newNext = $nowEpoch + $intervalSeconds
+            } else {
+              $newNext = $nextEpoch
+              while ($newNext -le $nowEpoch) {
+                $newNext += $intervalSeconds
+              }
+            }
+            "should_run=true"  >> $env:GITHUB_OUTPUT
+            "next_epoch=$newNext" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "Not time yet — skipping."
+            "should_run=false" >> $env:GITHUB_OUTPUT
+            "next_epoch=$nextEpoch" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Download link-generator script
+        if: steps.gate.outputs.should_run == 'true'
         run: |
           curl -fsSL -o Win11OSLinkGenerate.ps1 https://raw.githubusercontent.com/bprasad884uu/Gainwell/refs/heads/main/Win11OSLinkGenerate.ps1
           echo "Downloaded Win11OSLinkGenerate.ps1"
 
       - name: Run generator and capture output
+        if: steps.gate.outputs.should_run == 'true'
         id: gen
         shell: pwsh
         run: |
-          # Run generator
           $out = pwsh -NoProfile -ExecutionPolicy Bypass -File ./Win11OSLinkGenerate.ps1 2>&1
           $out | ForEach-Object { Write-Host $_ }
 
-          # Capture any line that starts with http(s)
           $urls = $out | Where-Object { $_ -match '^(https?://)' }
 
           Write-Host "=== Extracted URLs ==="
           $urls | ForEach-Object { Write-Host $_ }
 
-          # Assign first to en-GB, second to en-US
           $enGB = $null; $enUS = $null
           if ($urls.Count -ge 1) { $enGB = $urls[0].Trim() }
           if ($urls.Count -ge 2) { $enUS = $urls[1].Trim() }
 
-          # Export outputs
           if ($urls.Count -eq 0) {
             Write-Host "No ISO URLs found in generator output" -ForegroundColor Yellow
             Add-Content -Path $env:GITHUB_OUTPUT -Value "found=false"
@@ -55,12 +88,14 @@ jobs:
 
       - name: Debug workflow outputs
         run: |
+          echo "should_run=${{ steps.gate.outputs.should_run }}"
+          echo "next_epoch=${{ steps.gate.outputs.next_epoch }}"
           echo "found=${{ steps.gen.outputs.found }}"
           echo "engb=${{ steps.gen.outputs.engb }}"
           echo "enus=${{ steps.gen.outputs.enus }}"
 
       - name: Replace isoUrl entries in Windows11Upgrade.ps1
-        if: steps.gen.outputs.found == 'true'
+        if: steps.gate.outputs.should_run == 'true' && steps.gen.outputs.found == 'true'
         env:
           ENGB: ${{ steps.gen.outputs.engb }}
           ENUS: ${{ steps.gen.outputs.enus }}
@@ -74,18 +109,16 @@ jobs:
           $patternENUS = '(?ms)(if\s*\(\$locale\s*-eq\s*"en-US"\)\s*\{.*?\$isoUrl\s*=\s*)".*?"'
 
           $new = $content
-
           if ($Env:ENGB) {
             $replacement = '${1}"' + $Env:ENGB + '"'
-            $new = [System.Text.RegularExpressions.Regex]::Replace($new, $patternENGB, $replacement)
+            $new = [Regex]::Replace($new, $patternENGB, $replacement)
             Write-Host "Prepared en-GB replacement"
           } else {
             Write-Host "No en-GB URL available; skipping en-GB replacement"
           }
-
           if ($Env:ENUS) {
             $replacement = '${1}"' + $Env:ENUS + '"'
-            $new = [System.Text.RegularExpressions.Regex]::Replace($new, $patternENUS, $replacement)
+            $new = [Regex]::Replace($new, $patternENUS, $replacement)
             Write-Host "Prepared en-US replacement"
           } else {
             Write-Host "No en-US URL available; skipping en-US replacement"
@@ -98,23 +131,24 @@ jobs:
             Write-Host "No changes needed"
           }
 
-      - name: Set up Git credentials
-        if: steps.gen.outputs.found == 'true'
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "actions@github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-
       - name: Commit and push changes
-        if: steps.gen.outputs.found == 'true'
+        if: steps.gate.outputs.should_run == 'true'
         shell: pwsh
         run: |
-          git add Windows11Upgrade.ps1
+          $epochFile = Join-Path $env:GITHUB_WORKSPACE '.github/next_run_epoch'
+          $nextEpoch = [int]${{ steps.gate.outputs.next_epoch }}
+          Set-Content -Path $epochFile -Value $nextEpoch -Encoding utf8
+
+          git config user.name "github-actions[bot]"
+          git config user.email "actions@github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+
+          git add Windows11Upgrade.ps1 .github/next_run_epoch
           git diff --staged --quiet
           if ($LASTEXITCODE -eq 0) {
             Write-Host "No changes to commit"
           } else {
-            $date = Get-Date -Format 'yyyy-MM-dd'
-            git commit -m "Daily: refresh Windows 11 ISO URLs $date"
+            $date = Get-Date -Format 'yyyy-MM-dd HH:mm'
+            git commit -m "Refresh Win11 ISO links (next: $nextEpoch) $date"
             git push
           }
