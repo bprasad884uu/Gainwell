@@ -12,6 +12,7 @@ jobs:
   refresh-links:
     runs-on: windows-latest
     steps:
+
       - name: Checkout main
         uses: actions/checkout@v4
         with:
@@ -71,82 +72,90 @@ jobs:
         id: gen
         shell: pwsh
         run: |
+          # Run generator and capture stdout lines
           $out = pwsh -NoProfile -ExecutionPolicy Bypass -File ./Win11OSLinkGenerate.ps1 2>&1
           $out | ForEach-Object { Write-Host $_ }
 
-          # Capture lines that start with http/https (exact URL lines)
-          $urls = $out | Where-Object { $_ -match '^(https?://)' } | ForEach-Object { $_.Trim() }
+          # Capture exact lines that start with http(s) (full URL lines)
+          $lines = $out | ForEach-Object { $_.Trim() }
+          $urls = $lines | Where-Object { $_ -match '^(https?://)' } | ForEach-Object { $_.Trim() }
 
           Write-Host "=== Extracted URLs ==="
-          $urls | ForEach-Object { Write-Host $_ }
+          $urls | ForEach-Object { Write-Host "  $_" }
 
+          # Map first to en-GB, second to en-US if present
           $enGB = $null; $enUS = $null
           if ($urls.Count -ge 1) { $enGB = $urls[0] }
           if ($urls.Count -ge 2) { $enUS = $urls[1] }
 
-          if ($urls.Count -eq 0) {
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "found=false"
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "engb="
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "enus="
-          } else {
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "found=true"
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "engb=$enGB"
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "enus=$enUS"
-          }
+          # Sanitize (remove any stray newlines)
+          if ($enGB) { $enGB = ($enGB -replace '[\r\n]+','') }
+          if ($enUS) { $enUS = ($enUS -replace '[\r\n]+','') }
+
+          # Write outputs safely (single-line)
+          Add-Content -Path $env:GITHUB_OUTPUT -Value ("found=" + ($urls.Count -gt 0))
+          Add-Content -Path $env:GITHUB_OUTPUT -Value ("engb=" + ($enGB -ne $null ? $enGB : ""))
+          Add-Content -Path $env:GITHUB_OUTPUT -Value ("enus=" + ($enUS -ne $null ? $enUS : ""))
 
       - name: Debug workflow outputs
-        run: |
-          echo "should_run=${{ steps.gate.outputs.should_run }}"
-          echo "next_epoch=${{ steps.gate.outputs.next_epoch }}"
-          echo "found=${{ steps.gen.outputs.found }}"
-          echo "engb=${{ steps.gen.outputs.engb }}"
-          echo "enus=${{ steps.gen.outputs.enus }}"
         shell: pwsh
+        run: |
+          Write-Host "should_run=${{ steps.gate.outputs.should_run }}"
+          Write-Host "next_epoch=${{ steps.gate.outputs.next_epoch }}"
+          Write-Host "found=${{ steps.gen.outputs.found }}"
+          Write-Host "engb=${{ steps.gen.outputs.engb }}"
+          Write-Host "enus=${{ steps.gen.outputs.enus }}"
 
       - name: Replace isoUrl entries in Windows11Upgrade.ps1
+        id: replace
         if: steps.gate.outputs.should_run == 'true' && steps.gen.outputs.found == 'true'
+        shell: pwsh
         env:
           ENGB: ${{ steps.gen.outputs.engb }}
           ENUS: ${{ steps.gen.outputs.enus }}
-        shell: pwsh
         run: |
           $file = Join-Path $Env:GITHUB_WORKSPACE 'Windows11Upgrade.ps1'
-          if (-not (Test-Path $file)) { Write-Host "Windows11Upgrade.ps1 not found"; exit 1 }
+          if (-not (Test-Path $file)) { Write-Host "Windows11Upgrade.ps1 not found"; Add-Content -Path $env:GITHUB_OUTPUT -Value "updated=false"; exit 0 }
           $content = Get-Content -Raw -Path $file
 
           $patternENGB = '(?ms)(if\s*\(\$locale\s*-eq\s*"en-GB"\)\s*\{.*?\$isoUrl\s*=\s*)".*?"'
           $patternENUS = '(?ms)(if\s*\(\$locale\s*-eq\s*"en-US"\)\s*\{.*?\$isoUrl\s*=\s*)".*?"'
 
           $new = $content
-          if ($Env:ENGB) {
+          $updated = $false
+
+          if ($Env:ENGB -and $Env:ENGB.Trim()) {
             $replacement = '${1}"' + $Env:ENGB + '"'
-            $new = [System.Text.RegularExpressions.Regex]::Replace($new, $patternENGB, $replacement)
-            Write-Host "Prepared en-GB replacement"
+            $attempt = [System.Text.RegularExpressions.Regex]::Replace($new, $patternENGB, $replacement)
+            if ($attempt -ne $new) { $new = $attempt; $updated = $true; Write-Host "Inserted en-GB URL" } else { Write-Host "en-GB pattern not found; skipping en-GB" }
           } else {
-            Write-Host "No en-GB URL available; skipping en-GB replacement"
+            Write-Host "No en-GB URL provided; skipping en-GB replacement"
           }
 
-          if ($Env:ENUS) {
+          if ($Env:ENUS -and $Env:ENUS.Trim()) {
             $replacement = '${1}"' + $Env:ENUS + '"'
-            $new = [System.Text.RegularExpressions.Regex]::Replace($new, $patternENUS, $replacement)
-            Write-Host "Prepared en-US replacement"
+            $attempt = [System.Text.RegularExpressions.Regex]::Replace($new, $patternENUS, $replacement)
+            if ($attempt -ne $new) { $new = $attempt; $updated = $true; Write-Host "Inserted en-US URL" } else { Write-Host "en-US pattern not found; skipping en-US" }
           } else {
-            Write-Host "No en-US URL available; skipping en-US replacement"
+            Write-Host "No en-US URL provided; skipping en-US replacement"
           }
 
-          if ($content -ne $new) {
+          if ($updated) {
             Set-Content -Path $file -Value $new -Force
             Write-Host "Windows11Upgrade.ps1 updated"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "updated=true"
           } else {
-            Write-Host "No changes needed"
+            Write-Host "No replacements applied"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "updated=false"
           }
 
-      - name: Commit and push changes
-        if: steps.gate.outputs.should_run == 'true'
+      - name: Commit and push changes (only when updated)
+        if: steps.replace.outputs.updated == 'true'
         shell: pwsh
         run: |
           $epochFile = Join-Path $env:GITHUB_WORKSPACE '.github/next_run_epoch'
           $nextEpoch = [int]${{ steps.gate.outputs.next_epoch }}
+
           if (-not (Test-Path (Split-Path $epochFile))) { New-Item -ItemType Directory -Path (Split-Path $epochFile) -Force | Out-Null }
           Set-Content -Path $epochFile -Value $nextEpoch -Encoding utf8
 
