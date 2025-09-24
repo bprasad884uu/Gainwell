@@ -13,11 +13,12 @@ param (
     [string]$EnforcementMode = "Enabled",    # Start with AuditOnly for testing
 
     [string[]]$WhitelistedApps = @(
-		"Diagsmart*.exe",
+		"Diagsmart.exe",
 		"Uninstall*.exe",
 		"ITD_EFILING_JFX*.jar",
-		"Generic RBI Converter 10.0.EXE",	#for Accounts
-		"On-premises data gateway (personal mode).exe"
+		"Generic RBI Converter*.EXE",	#for Accounts
+		"On-premises data gateway*.exe",
+		"DataMovement.PersonalGatewayComponents.msi"
     ),
 
     [string[]]$WhitelistedPaths = @(
@@ -46,7 +47,8 @@ param (
 		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\Programs\Naukri Launcher\*",
 		"%OSDRIVE%\IREPSSigner",
 		"%OSDRIVE%\Users\*\AppData\Roaming\Polycom\*",
-		"%OSDRIVE%\Users\*\AppData\Local\Package Cache"
+		"%OSDRIVE%\Users\*\AppData\Local\Package Cache\*",
+		"D:\weichai\*"
     ),
 
     [string[]]$WhitelistedPublishers = @(
