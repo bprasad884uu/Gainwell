@@ -72,10 +72,10 @@ Write-Host "Using temp root: $TempRoot"
 
 # Set Download URL & Destination Based on Locale (destination now inside $TempRoot)
 if ($locale -eq "en-GB") {
-    $isoUrl = "h"
+    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_EnglishInternational_x64.iso?t=466629f2-6285-4c1f-80fe-79ec1c0d8fc8&P1=1758862534&P2=601&P3=2&P4=j3rA0Vp32r%2fle7i5m02U4Q3UgAVLiDuPhz8mw%2bIIvgBZ7PkrejTcZG8vVlo%2bpwm7QN3yx4ZeLZN9U2g0oG%2f0gsAEzIQiHAvc08AhfOozjWKuycqe6TL0QEMXAamAfGcOwKUlCtg31u%2flw%2bwjI5W8IFNFYC%2btCQ1bT0A1QTiDmxrbWeoSAOzrNLDrZ%2ftnsNon8kqeY7L98hlQtnqwHEj5%2fxwCICk2VtiOOAnKVuMYUISyfebVC1bOC%2fHIG5zsUgnz2pinJ42hNHqruhIjXbPRi2%2bbTWT5xB%2bBiShA6XjD5rsk5oj4jLhBxEOYbv0A5NEo26960KmA3s7Dc5upcI7eLQ%3d%3d"
     $destination = Join-Path -Path $TempRoot -ChildPath "Win11_24H2_ENGB.iso"
 } elseif ($locale -eq "en-US") {
-    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=bed7282e-df3b-4302-9ed2-f03ff13d2e30&P1=1758720782&P2=601&P3=2&P4=vRBkWtUkcInyMlMm2IdJt7UzNR5GR2lB31%2b9YJVavRrncRPx3tEWzNSd5ziMXBnlnVbNIUDQ%2baFA%2bH2%2fJtkKBn4iJLWfZvJ5Q3besbAKw5d7AK3DijoCWictnlO7rCCuU7UTHyMgGtc5bCArkcACA4YAnsMFNBL0YSjhdbEGfmIaDjgtz2CA7nyxsxjBaEZ0KphNOpPtuXOigIUMkCWAkGMnIuL%2fYP4nFemK55EqIzpiu1AIJMonxtYWDi9Gt1NNATs6lNl1IYm2iGhbsvLkLhiVj3SuWpXpBaQ9Eo6y7HCqO2MHKxuwc%2fHS%2fuKhf4Kct4bcryQndA7%2fZgbnmqz7Pw%3d%3d"
+    $isoUrl = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=77d72a78-1567-4164-951d-c651388a4887&P1=1758862545&P2=601&P3=2&P4=H4ww94z2vugT5C6myIfbLJR85ua0SChsuPUnsJfsveuVRSZcJYh7hfAv4Rgg0BmGxb3mRucQ0dc7lu1Q4uUGb5a4bQI%2bBtAcbQRJBRwiPl86pAbiMnglhLJNOPbaTo2kjPsp2yb8W9dG7zMXNI3TdRJ3%2bPErnbTSiJ4cmRBAvu7kB8JwIGRuff6oeSrT7UQqSfXNou1PWS4MBsTrJOajq%2f3VSuzMAh%2b6vmUgNCDle7TqrQ4ZQJbfpfOSo9idqhfrcgJYUtYQtTeYKPApZUCkTVOtuSe%2fb89zXRuonB4TCUDMI6Tqsh23bYzkTUiVb7uHk5e%2blS1EhWXVBI7mP7OFyg%3d%3d"
     $destination = Join-Path -Path $TempRoot -ChildPath "Win11_24H2_ENUS.iso"
 } else {
     Write-Host "Unsupported Language. No ISO available." -ForegroundColor Red
