@@ -48,7 +48,7 @@ param (
 		"%OSDRIVE%\IREPSSigner",
 		"%OSDRIVE%\Users\*\AppData\Roaming\Polycom\*",
 		"%OSDRIVE%\Users\*\AppData\Local\Package Cache\*",
-		"D:\weichai\*"
+		"D:\WEICHAI\*"
     ),
 
     [string[]]$WhitelistedPublishers = @(
