@@ -87,6 +87,7 @@ if (-not $restoredAny) {
 $msiKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer"
 if (Test-Path $msiKey) {
     Remove-ItemProperty -Path $msiKey -Name "AlwaysInstallElevated" -ErrorAction SilentlyContinue
+	Set-ItemProperty -Path $msiKey -Name "DisableMSI" -Value 0 -ErrorAction SilentlyContinue
 }
 $uacKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
 if (Test-Path $uacKey) {
