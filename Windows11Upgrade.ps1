@@ -164,8 +164,8 @@ if (Test-Path $destination) {
     Write-Host "`nFile already exists: $destination"
     Write-Host "Attempting to mount to verify integrity..."
     try {
-        $img = Mount-DiskImage -ImagePath $destination -ErrorAction Stop -PassThru
-        Dismount-DiskImage -ImagePath $destination -ErrorAction SilentlyContinue
+        $null = Mount-DiskImage -ImagePath $destination -ErrorAction Stop -PassThru
+        $null = Dismount-DiskImage -ImagePath $destination -ErrorAction SilentlyContinue
         Write-Host "ISO mounted and dismounted successfully. Integrity OK."
         $downloadSuccess = $true
     } catch {
@@ -209,7 +209,7 @@ if (-not $isoPath) { Write-Host "`nNo ISO file found in Temp Folder ($TempRoot).
 
 Write-Host "`nISO found: $isoPath"
 try {
-    $mount = Mount-DiskImage -ImagePath $isoPath -ErrorAction Stop -PassThru
+    $null = Mount-DiskImage -ImagePath $isoPath -ErrorAction Stop -PassThru
     Start-Sleep -Seconds 2
     $vol = Get-DiskImage -ImagePath $isoPath | Get-Volume -ErrorAction SilentlyContinue
     if ($vol -and $vol.DriveLetter) {
@@ -450,7 +450,7 @@ while ($true) {
 
 # Cleanup: unmount ISO
 Write-Host "`nUnmounting ISO..."
-try { Dismount-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContinue } catch { Write-Warning "Failed to dismount ISO: $_" }
+try { $null = Dismount-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContinue } catch { Write-Warning "Failed to dismount ISO: $_" }
 
 Write-Host "`nWindows 11 upgrade process finished..."
 #Write-Host "`nRebooting System..."

@@ -89,9 +89,9 @@ if (Test-Path $destinationISO) {
     Write-Host "`nChecking file integrity by attempting to mount..."
 
     try {
-        Mount-DiskImage -ImagePath $destinationISO -ErrorAction Stop
+        $null = Mount-DiskImage -ImagePath $destinationISO -ErrorAction Stop
         Write-Host "`nISO mounted successfully. File integrity confirmed."
-        Dismount-DiskImage -ImagePath $destinationISO
+        $null = Dismount-DiskImage -ImagePath $destinationISO
         $downloadSuccess = $true
     } catch {
         Write-Warning "`nFailed to mount ISO. File may be corrupted. Re-copying..."
@@ -179,7 +179,7 @@ foreach ($volume in $volumes) {
     try {
         $devicePath = "\\.\$($volume.DriveLetter):"
         Write-Host "`nAttempting to dismount image mounted at: $devicePath"
-        Dismount-DiskImage -DevicePath $devicePath -ErrorAction Stop
+        $null = Dismount-DiskImage -DevicePath $devicePath -ErrorAction Stop
         Write-Host "`nSuccessfully dismounted: $devicePath"
     } catch {
         Write-Warning "`nFailed to dismount: $devicePath. Error: $_"
@@ -200,7 +200,7 @@ Write-Host "`nISO found: $isoPath"
 # Mount ISO
 Write-Host "`nMounting ISO..."
 try {
-    Mount-DiskImage -ImagePath $isoPath -ErrorAction Stop
+    $null = Mount-DiskImage -ImagePath $isoPath -ErrorAction Stop
     Write-Host "`nISO Mounted Successfully." -ForegroundColor Green
 } catch {
     Write-Host "`nFailed to mount ISO: $_" -ForegroundColor Red
@@ -493,7 +493,7 @@ while ($true) {
 # Unmount ISO
 Write-Host "`nUnmounting ISO..."
 try {
-    Dismount-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContinue
+    $null = Dismount-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContinue
 } catch {
     Write-Warning "Failed to dismount ISO: $_"
 }

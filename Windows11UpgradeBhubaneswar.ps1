@@ -36,9 +36,9 @@ if (Test-Path $destinationISO) {
     Write-Host "`nChecking file integrity by attempting to mount..."
 
     try {
-        Mount-DiskImage -ImagePath $destinationISO -ErrorAction Stop
+        $null = Mount-DiskImage -ImagePath $destinationISO -ErrorAction Stop
         Write-Host "`nISO mounted successfully. File integrity confirmed."
-        Dismount-DiskImage -ImagePath $destinationISO
+        $null = Dismount-DiskImage -ImagePath $destinationISO
         $downloadSuccess = $true
     } catch {
         Write-Warning "`nFailed to mount ISO. File may be corrupted. Re-copying..."
@@ -131,7 +131,7 @@ foreach ($volume in $volumes) {
 
         # Try to dismount using the drive letter
         Write-Host "`nAttempting to dismount image mounted at: $devicePath"
-        Dismount-DiskImage -DevicePath $devicePath -ErrorAction Stop
+        $null = Dismount-DiskImage -DevicePath $devicePath -ErrorAction Stop
         Write-Host "`nSuccessfully dismounted: $devicePath"
     } catch {
         Write-Warning "`nFailed to dismount: $devicePath. Error: $_"
@@ -446,7 +446,7 @@ while ($true) {
 Write-Host "`nUnmounting ISO..."
 
 # Unmount the ISO after installation
-Dismount-DiskImage -ImagePath $isoPath
+$null = Dismount-DiskImage -ImagePath $isoPath
 Write-Host "`nWindows 11 upgrade process complete."
 
 Write-Host "`nRebooting System..."
