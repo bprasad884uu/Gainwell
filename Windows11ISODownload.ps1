@@ -66,7 +66,7 @@ foreach ($iso in $isos) {
         try {
             $mount = Mount-DiskImage -ImagePath $destination -ErrorAction Stop
             Start-Sleep -Seconds 1
-            Dismount-DiskImage -ImagePath $destination -ErrorAction SilentlyContinue
+            $null = Dismount-DiskImage -ImagePath $destination -ErrorAction SilentlyContinue
             Write-Host "Mount successful. Skipping download for $locale."
             $downloadSuccess = $true
         } catch {
@@ -153,7 +153,7 @@ foreach ($iso in $isos) {
             try {
                 $null = Mount-DiskImage -ImagePath $destination -ErrorAction Stop
                 Start-Sleep -Seconds 1
-                Dismount-DiskImage -ImagePath $destination -ErrorAction SilentlyContinue
+                $null = Dismount-DiskImage -ImagePath $destination -ErrorAction SilentlyContinue
                 Write-Host "Post-download mount verification succeeded for $locale."
                 $downloadSuccess = $true
             } catch {
