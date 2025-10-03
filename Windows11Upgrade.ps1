@@ -455,7 +455,7 @@ while ($true) {
         if (-not $folderExists -and -not $setupRunning) {
             Write-Host "`nNeither setup folder nor upgrade process found. Exiting..." -ForegroundColor Yellow
         }
-        break
+        Return
     }
     Start-Sleep -Seconds 1
 }
@@ -516,21 +516,3 @@ Write-Host "`nWindows 11 upgrade process complete."
 
 Write-Host "`nRebooting System..."
 #Restart-Computer -Force
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
