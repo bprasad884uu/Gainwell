@@ -18,7 +18,9 @@ param (
 		"ITD_EFILING_JFX*.jar",
 		"Generic RBI Converter*.EXE",	#for Accounts
 		"On-premises data gateway*.exe",
-		"DataMovement.PersonalGatewayComponents.msi"
+		"DataMovement.PersonalGatewayComponents.msi",
+		"SQLITE.INTEROP.DLL",
+		"D:\WEICHAI\3.7.1\DEBUG\10940_X86\SQLITE.INTEROP.DLL"
     ),
 
     [string[]]$WhitelistedPaths = @(
