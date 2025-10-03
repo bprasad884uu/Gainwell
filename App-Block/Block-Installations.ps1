@@ -104,7 +104,7 @@ function New-RuleGuid { return [guid]::NewGuid().ToString() }
 
 $ErrorActionPreference = 'Stop'
 
-# backup location
+<# backup location
 $backupRoot = "C:\PolicyBackup"
 if (-not (Test-Path $backupRoot)) { New-Item -Path $backupRoot -ItemType Directory -Force | Out-Null }
 $tsFolder = Get-Date -Format "MMyyyyddHHmmss"
@@ -153,7 +153,7 @@ try {
 } catch { Write-Warning "`nWDAC backup step failed: $_" }
 
 Write-Host "`n=== Backup complete. Building AppLocker XML... ==="
-
+#>
 # start building XML
 $xml = @"
 <?xml version="1.0" encoding="utf-8"?>
