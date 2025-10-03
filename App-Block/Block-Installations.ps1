@@ -18,9 +18,7 @@ param (
 		"ITD_EFILING_JFX*.jar",
 		"Generic RBI Converter*.EXE",	#for Accounts
 		"On-premises data gateway*.exe",
-		"DataMovement.PersonalGatewayComponents.msi",
-		"SQLITE.INTEROP.DLL",
-		"D:\WEICHAI\*\DEBUG\10940_X86\SQLITE.INTEROP.DLL"
+		"DataMovement.PersonalGatewayComponents.msi"
     ),
 
     [string[]]$WhitelistedPaths = @(
@@ -283,38 +281,10 @@ $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admi
 $xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
-# Allow all signed DLLs (Everyone)
-$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - All Signed DLLs`" Description=`"Allow all digitally signed DLLs`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
-$xml += "      <Conditions>`n"
-$xml += "        <FilePublisherCondition PublisherName=`"*`" ProductName=`"*`" BinaryName=`"*`">`n"
-$xml += "          <BinaryVersionRange LowSection=`"0.0.0.0`" HighSection=`"65535.65535.65535.65535`" />`n"
-$xml += "        </FilePublisherCondition>`n"
-$xml += "      </Conditions>`n"
-$xml += "    </FilePublisherRule>`n"
-
-# System DLL paths + whitelisted DLL paths
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Windows DLLs`" Description=`"Allow DLLs from Windows`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
-$xml += "      <Conditions><FilePathCondition Path=`"%WINDIR%\*`"/></Conditions>`n"
+# >>> PERMISSIVE: allow all DLLs everywhere (very permissive - use with caution)
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - All DLLs - Global`" Description=`"Allow all DLL loads from any path (very permissive)`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
-
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL - ProgramFiles`" Description=`"Allow DLLs from Program Files`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
-$xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES%\*`"/></Conditions>`n"
-$xml += "    </FilePathRule>`n"
-
-$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL - ProgramFiles (x86)`" Description=`"Allow DLLs from Program Files (x86)`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
-$xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES(x86)%\*`"/></Conditions>`n"
-$xml += "    </FilePathRule>`n"
-
-foreach ($p in $WhitelistedPaths) {
-    if ([string]::IsNullOrWhiteSpace($p)) { continue }
-    $path = $p
-    if ($path -notmatch '[*?]') {
-        if ($path -match '\\$') { $path = $path + '*' } else { $path = $path + '\*' }
-    }
-    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - DLL Path - $path`" Description=`"Allow DLLs from $path`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
-    $xml += "      <Conditions><FilePathCondition Path=`"$path`"/></Conditions>`n"
-    $xml += "    </FilePathRule>`n"
-}
 
 $xml += "  </RuleCollection>`n"
 
