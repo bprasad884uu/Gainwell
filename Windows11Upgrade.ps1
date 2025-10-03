@@ -1,12 +1,12 @@
-<## Ensure PowerShell Runs as Administrator
+﻿<## Ensure PowerShell Runs as Administrator
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
     exit
 }#>
 
 # ---------- Config (fill these) ----------
-$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=6707b187-2ad1-4d03-9110-50772b50b6c6&P1=1759599178&P2=601&P3=2&P4=dd2YwkTWPuaYEEF7xLEOf6Oo1kfAsghTtI%2bS3wnwR89sQcOWaw2p%2bO5OBCwHvRLnvpbh0%2bcq1uHrp1I%2bpLaffIiyQzcTJwqIXBmZ%2fSB5pNYVuzXvrUw9JphnCUjA%2f7yxZ5G0SAzs1L5nwbGv6ELT%2b7x2phca2Z5uvIAXGFjYT2fnChYbim1IA9siV4cF1jRYcwHYGeBLGQKElPUcEnEYgiQ7s1PI2Fd8ZKPXj1yalA9Z%2fLlW1JzY6v79mYPEVA8Ri0taa6Akk95VriP66VZVa1uinixQDDWA6wxWT5qGFrJokHaZZ12aDPmG8DE6AAupKpc9mkAyxckIJaJ4SSUfOQ%3d%3d"
-$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=3c95186b-bc4a-4937-aa55-dad855596b60&P1=1759599168&P2=601&P3=2&P4=COqCBGqvourgp5JtP4wBDNebeKxWgljKiNxNgSKOiGNTxk1S43Uan0ku8KvBChUTePRjhw%2f%2b%2fVLqR4DWh%2fqxsnD5sKeW%2bDzVCLX3kr9BiMwqf0O%2f0LjqiZJ8pfr0sbLYQCXqTu3kiZFIOnPQRLxXnzQxsQtLoM0IcbPH8d8J9l0qFlmltOdglH886nEYIy0kjDzOQn58fPLWeWZVwJTyTnlyy55TeSxlJb7fn3YtAIEfE9rTFFmKaN3yz1Qcn8A9sWb1lwYja5MU%2bR9zJ2CgbLNzrqdMbJ47QakP8Lz0KI0FpSwk6IY%2bySvuUfKSP5cLz319OZwv6m1nwT2TCZGQtw%3d%3d"
+$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=49bc1e21-229a-4d13-938f-ce1228bd0221&P1=1759599910&P2=601&P3=2&P4=ZM1EGR90ndsJZfuuMiywYiGiXTCvHy3%2bMkgs60YFUzCFjU9KVsGUiKqn9wPzew8VqIrwCClHlCbUsX4kS2r4ENoeR1nowxq08LHheK4YCVJDhYL5wsonsylK3%2bpQ9aNAZgigZ3WRtOW1M%2bw8S4ZHVrDF0tGb4BAH6QNIx4Sal8Q8a%2fjHktvntqkCQ%2fb4cl3DNp9e6TkWtqMGsJ3fuRafgzSJTWpBaTJxTVs2AFk5tIYCjbOgSQmw%2fy45BRlIlkOIRSRnnFfXsRmAnshrGBNd1XvZvIvlZsmZZUZ2S6n%2bYuwYf55FVZeWRnrlwCb6KM39sxotRB9V4%2btn5JD1%2f7wbJQ%3d%3d"
+$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=6a1a0fe6-3811-4547-90d6-eb8b9f480fb0&P1=1759599900&P2=601&P3=2&P4=KP9R2Hki4lvfivX3WTulRZbMaBCCXNHbzgfHvP87pcoRzcf2Er7Z9A3%2fZzXE%2bO1m0S5oaPVM4I%2bhgU1z5ImwHNS%2bWXiyEVEL36kmt3S6UoHXvl6j%2f5VlUHMeFa3KN92b66Jj9sXrJDC0D6xvtS1mPYmV6KuqB70XR6%2be%2fKKXv87cKpQx1zYzqxJJrP2CQ3OrNKDxLZv9XI1DscOLl8qCFjpFUni1YlNbJPTXk42mAjmLwqhMy2auEyy6s1t1YBApf5Bj1WtIox6QFCCs7B2PxcV0yhLU3RuZConeLSPEacB5bDqTqXvP%2fc%2bgom1GJ2FFuw8bGNLDSac3GgdyQQSJwQ%3d%3d"
 
 # Provide either a SHA256 hex string or a URL that returns the hash. Leave empty ("") to skip verification.
 $Checksum = ""
