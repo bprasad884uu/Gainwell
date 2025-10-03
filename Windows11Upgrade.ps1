@@ -5,8 +5,8 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 }#>
 
 # ---------- Config (fill these) ----------
-$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=3ee7ee35-10b2-48ce-a351-236595f2b5ed&P1=1759574708&P2=601&P3=2&P4=WLqJZ3hn2QNQx4rHkPCFINnGDnffLooljCtq9fv3BA8zyTQpWwGd7a3Ob8lk%2batNdISaa%2fKL4cDum%2bBCnTgAHXfN3emOVCwfZm32pfeQdScuOp31%2bb276OnKeIO0gscyNcXM7t8J%2bsV9MdBfETkGiWTAvFlzfz9buRnNYW7EAzSUiL9Yt9egA4RUv29e7DuLt8OmvF5J0b3cgT1NJ6k1P9FcvKwwsyZ4MgVXld8usTHrvZIGUk%2fiEq%2bEFzuk0M%2bEkJsTNUbk03gCpPdOEQ8VUC%2f7Rhm%2fYI4C6gRiv%2fT%2bfd3iuCZowENxdq1SddM80x4bd4Yk41PPp44iNBYioviXBg%3d%3d"
-$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=95caafc2-e00e-4c59-8743-5e7100d809df&P1=1759574695&P2=601&P3=2&P4=1OCb9b%2bIYanJaBXcyFCdAInlobAb2VIYhjtrNpTCp5JvVwmbzyurV6B4r%2fF6pCogu2nc2ZuBQ0jaT1uFpgeFgkOqwxl3CD2XVPKTR%2fKc7wK0qzRZJP46x5s53PT3UX9ykV5l3yaPuM1RKSueO9vj%2f%2bFnHctjDSpzYHHTg988pRWt1D0l7pTZNccy8SmwpC4BgIQAAkBhmfSdxKqeua10Qi3EZuFm%2fQZ3Xbj8C0pFA9MUzqsk6kAbYoofaX15pmo3TE87O8VsNUdJT1spv94J1kC8EcOW6Fweh57CduOoFVVPqTZLnVW4LGXdpSN8%2f7FLgciV9l%2fMMCHwetsIsoI1KQ%3d%3d"
+$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=6707b187-2ad1-4d03-9110-50772b50b6c6&P1=1759599178&P2=601&P3=2&P4=dd2YwkTWPuaYEEF7xLEOf6Oo1kfAsghTtI%2bS3wnwR89sQcOWaw2p%2bO5OBCwHvRLnvpbh0%2bcq1uHrp1I%2bpLaffIiyQzcTJwqIXBmZ%2fSB5pNYVuzXvrUw9JphnCUjA%2f7yxZ5G0SAzs1L5nwbGv6ELT%2b7x2phca2Z5uvIAXGFjYT2fnChYbim1IA9siV4cF1jRYcwHYGeBLGQKElPUcEnEYgiQ7s1PI2Fd8ZKPXj1yalA9Z%2fLlW1JzY6v79mYPEVA8Ri0taa6Akk95VriP66VZVa1uinixQDDWA6wxWT5qGFrJokHaZZ12aDPmG8DE6AAupKpc9mkAyxckIJaJ4SSUfOQ%3d%3d"
+$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=3c95186b-bc4a-4937-aa55-dad855596b60&P1=1759599168&P2=601&P3=2&P4=COqCBGqvourgp5JtP4wBDNebeKxWgljKiNxNgSKOiGNTxk1S43Uan0ku8KvBChUTePRjhw%2f%2b%2fVLqR4DWh%2fqxsnD5sKeW%2bDzVCLX3kr9BiMwqf0O%2f0LjqiZJ8pfr0sbLYQCXqTu3kiZFIOnPQRLxXnzQxsQtLoM0IcbPH8d8J9l0qFlmltOdglH886nEYIy0kjDzOQn58fPLWeWZVwJTyTnlyy55TeSxlJb7fn3YtAIEfE9rTFFmKaN3yz1Qcn8A9sWb1lwYja5MU%2bR9zJ2CgbLNzrqdMbJ47QakP8Lz0KI0FpSwk6IY%2bySvuUfKSP5cLz319OZwv6m1nwT2TCZGQtw%3d%3d"
 
 # Provide either a SHA256 hex string or a URL that returns the hash. Leave empty ("") to skip verification.
 $Checksum = ""
@@ -455,3 +455,4 @@ try { Dismount-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContinue } cat
 Write-Host "`nWindows 11 upgrade process finished..."
 #Write-Host "`nRebooting System..."
 # Restart-Computer -Force
+
