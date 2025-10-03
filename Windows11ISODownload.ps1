@@ -12,12 +12,12 @@ $isos = @(
     @{
         Locale = "en-GB"
         Url    = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=6a1a0fe6-3811-4547-90d6-eb8b9f480fb0&P1=1759599900&P2=601&P3=2&P4=KP9R2Hki4lvfivX3WTulRZbMaBCCXNHbzgfHvP87pcoRzcf2Er7Z9A3%2fZzXE%2bO1m0S5oaPVM4I%2bhgU1z5ImwHNS%2bWXiyEVEL36kmt3S6UoHXvl6j%2f5VlUHMeFa3KN92b66Jj9sXrJDC0D6xvtS1mPYmV6KuqB70XR6%2be%2fKKXv87cKpQx1zYzqxJJrP2CQ3OrNKDxLZv9XI1DscOLl8qCFjpFUni1YlNbJPTXk42mAjmLwqhMy2auEyy6s1t1YBApf5Bj1WtIox6QFCCs7B2PxcV0yhLU3RuZConeLSPEacB5bDqTqXvP%2fc%2bgom1GJ2FFuw8bGNLDSac3GgdyQQSJwQ%3d%3d"
-        File   = Join-Path $targetFolder "Win11_24H2_ENGB.iso"
+        File   = Join-Path $targetFolder "Win11_25H2_ENGB.iso"
     },
     @{
         Locale = "en-US"
         Url    = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=49bc1e21-229a-4d13-938f-ce1228bd0221&P1=1759599910&P2=601&P3=2&P4=ZM1EGR90ndsJZfuuMiywYiGiXTCvHy3%2bMkgs60YFUzCFjU9KVsGUiKqn9wPzew8VqIrwCClHlCbUsX4kS2r4ENoeR1nowxq08LHheK4YCVJDhYL5wsonsylK3%2bpQ9aNAZgigZ3WRtOW1M%2bw8S4ZHVrDF0tGb4BAH6QNIx4Sal8Q8a%2fjHktvntqkCQ%2fb4cl3DNp9e6TkWtqMGsJ3fuRafgzSJTWpBaTJxTVs2AFk5tIYCjbOgSQmw%2fy45BRlIlkOIRSRnnFfXsRmAnshrGBNd1XvZvIvlZsmZZUZ2S6n%2bYuwYf55FVZeWRnrlwCb6KM39sxotRB9V4%2btn5JD1%2f7wbJQ%3d%3d"
-        File   = Join-Path $targetFolder "Win11_24H2_ENUS.iso"
+        File   = Join-Path $targetFolder "Win11_25H2_ENUS.iso"
     }
 )
 
