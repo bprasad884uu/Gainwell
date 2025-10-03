@@ -126,7 +126,7 @@ jobs:
           Write-Host "engb=${{ steps.gen.outputs.engb }}"
           Write-Host "enus=${{ steps.gen.outputs.enus }}"
 
-      - name: Replace isoUrl entries in Windows11Upgrade.ps1
+      - name: Replace isoUrl entries in Windows11Upgrade.ps1 (preserve original EOF newline)
         id: replace
         if: steps.gate.outputs.should_run == 'true' && steps.gen.outputs.found == 'true'
         shell: pwsh
@@ -135,8 +135,24 @@ jobs:
           ENUS: ${{ steps.gen.outputs.enus }}
         run: |
           $file = Join-Path $Env:GITHUB_WORKSPACE 'Windows11Upgrade.ps1'
-          if (-not (Test-Path $file)) { Write-Host "Windows11Upgrade.ps1 not found"; Add-Content -Path $env:GITHUB_OUTPUT -Value "updated=false"; exit 0 }
+          if (-not (Test-Path $file)) {
+            Write-Host "Windows11Upgrade.ps1 not found"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "updated=false"
+            exit 0
+          }
+
+          # Read original file as raw text (preserves trailing newline if any)
           $content = Get-Content -Raw -Path $file
+
+          # Detect original trailing-newline style (CRLF, LF, or none)
+          $origTrailing = ""
+          if ($content.EndsWith("`r`n")) {
+            $origTrailing = "`r`n"
+          } elseif ($content.EndsWith("`n")) {
+            $origTrailing = "`n"
+          } else {
+            $origTrailing = ""
+          }
 
           # New patterns: replace the top-level $isoUrl_EN_GB and $isoUrl_EN_US assignments
           $patternENGB = '(?ms)(\$isoUrl_EN_GB\s*=\s*)".*?"'
@@ -162,8 +178,14 @@ jobs:
           }
 
           if ($updated) {
-            Set-Content -Path $file -Value $new -Force -Encoding utf8
-            Write-Host "Windows11Upgrade.ps1 updated"
+            # Remove any trailing CR/LF from the new content, then re-append the original suffix (which may be empty)
+            $trimmed = $new.TrimEnd("`r", "`n")
+            $final = $trimmed + $origTrailing
+
+            # Write deterministically with exact content (preserve original EOF newline behavior)
+            [System.IO.File]::WriteAllText($file, $final, [System.Text.Encoding]::UTF8)
+
+            Write-Host "Windows11Upgrade.ps1 updated (preserved original trailing-newline behavior)"
             Add-Content -Path $env:GITHUB_OUTPUT -Value "updated=true"
           } else {
             Write-Host "No replacements applied"
