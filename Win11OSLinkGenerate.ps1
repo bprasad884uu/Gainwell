@@ -17,7 +17,7 @@ if ($response.IsSuccessStatusCode) {
 # Define common download options
 $commonArgs = @(
     "-Win", "11",
-    "-Rel", "24H2",
+    "-Rel", "Latest",
     "-Ed", "Pro",
     "-Arch", "x64",
     "-GetUrl"
