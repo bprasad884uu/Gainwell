@@ -138,8 +138,9 @@ jobs:
           if (-not (Test-Path $file)) { Write-Host "Windows11Upgrade.ps1 not found"; Add-Content -Path $env:GITHUB_OUTPUT -Value "updated=false"; exit 0 }
           $content = Get-Content -Raw -Path $file
 
-          $patternENGB = '(?ms)(if\s*\(\$locale\s*-eq\s*"en-GB"\)\s*\{.*?\$isoUrl\s*=\s*)".*?"'
-          $patternENUS = '(?ms)(if\s*\(\$locale\s*-eq\s*"en-US"\)\s*\{.*?\$isoUrl\s*=\s*)".*?"'
+          # New patterns: replace the top-level $isoUrl_EN_GB and $isoUrl_EN_US assignments
+          $patternENGB = '(?ms)(\$isoUrl_EN_GB\s*=\s*)".*?"'
+          $patternENUS = '(?ms)(\$isoUrl_EN_US\s*=\s*)".*?"'
 
           $new = $content
           $updated = $false
@@ -161,7 +162,7 @@ jobs:
           }
 
           if ($updated) {
-            Set-Content -Path $file -Value $new -Force
+            Set-Content -Path $file -Value $new -Force -Encoding utf8
             Write-Host "Windows11Upgrade.ps1 updated"
             Add-Content -Path $env:GITHUB_OUTPUT -Value "updated=true"
           } else {

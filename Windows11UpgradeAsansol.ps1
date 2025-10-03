@@ -6,8 +6,8 @@ $sourceFolder = "\\10.131.126.12\Softwares"
 
 # Define source ISO based on system locale (sourceISO defined early to avoid null errors later)
 switch ($systemLocale) {
-    "en-US" { $sourceISO = Join-Path $sourceFolder "Win11_24H2_ENUS.iso" }
-    "en-GB" { $sourceISO = Join-Path $sourceFolder "Win11_24H2_ENGB.iso" }
+    "en-US" { $sourceISO = Join-Path $sourceFolder "Win11_25H2_ENUS.iso" }
+    "en-GB" { $sourceISO = Join-Path $sourceFolder "Win11_25H2_ENGB.iso" }
     default {
         Write-Output "`nNo matching ISO found for system locale: $systemLocale"
         exit 1
