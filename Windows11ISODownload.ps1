@@ -2,7 +2,7 @@
 # Run as Administrator for Mount-DiskImage verification.
 
 # Ensure destination folder exists
-$targetFolder = "D:\WINOS"
+$targetFolder = "F:\OS\RAW"
 if (-not (Test-Path $targetFolder)) {
     New-Item -ItemType Directory -Path $targetFolder | Out-Null
 }
@@ -11,12 +11,12 @@ if (-not (Test-Path $targetFolder)) {
 $isos = @(
     @{
         Locale = "en-GB"
-        Url    = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_EnglishInternational_x64.iso?t=949f3b52-4fec-4e79-948d-dc867ec0e0b2&P1=1757396282&P2=601&P3=2&P4=hbln8pdQLqN%2b2wY9vR494xAbrK9NlMmNhAK8ECgHyKVSxOa9RQ3CSMFFM4jUtw%2fqx16PH4lv5kS2%2ft1KBFIxcALLLqDDiUnd3Fd200vdkRVWZygwTl39KclN7PUrR26kvuoVYuo%2bTmlkQ03pne%2ftMYM1hMNxfoVtj6%2byTY7pXn%2fjIRC%2bZ9Bu2SSazrbolhWO%2f4Mv9X8UPtttCOs8raDP%2fq2ula9KrfrN%2fkYlVw8e7PX7XZB7mk0gjReMfj7r4nUOXmEUY3Y3FuySmAHOYQ05yaK6REFaGTTKlrn9n1irZqiwyk4a%2fAU4pCYUtkER1n8cRUlFL4ald9qXjMbo5V9Ajg%3d%3d"
+        Url    = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=6a1a0fe6-3811-4547-90d6-eb8b9f480fb0&P1=1759599900&P2=601&P3=2&P4=KP9R2Hki4lvfivX3WTulRZbMaBCCXNHbzgfHvP87pcoRzcf2Er7Z9A3%2fZzXE%2bO1m0S5oaPVM4I%2bhgU1z5ImwHNS%2bWXiyEVEL36kmt3S6UoHXvl6j%2f5VlUHMeFa3KN92b66Jj9sXrJDC0D6xvtS1mPYmV6KuqB70XR6%2be%2fKKXv87cKpQx1zYzqxJJrP2CQ3OrNKDxLZv9XI1DscOLl8qCFjpFUni1YlNbJPTXk42mAjmLwqhMy2auEyy6s1t1YBApf5Bj1WtIox6QFCCs7B2PxcV0yhLU3RuZConeLSPEacB5bDqTqXvP%2fc%2bgom1GJ2FFuw8bGNLDSac3GgdyQQSJwQ%3d%3d"
         File   = Join-Path $targetFolder "Win11_24H2_ENGB.iso"
     },
     @{
         Locale = "en-US"
-        Url    = "https://software.download.prss.microsoft.com/dbazure/Win11_24H2_English_x64.iso?t=fc01eb3d-8381-4320-a964-e4d64ad4bb5a&P1=1757396303&P2=601&P3=2&P4=dT9HnICUdIvrOyUtME7dKbpLUiNX5ADOkYvtWLWgDFMwlo1KKVOTbpoCg92r7IjmRFxQftUGvDJEqIiK8klJLZ1ononhNnp1c4F7fABTXTgFsqsS5B0chsTI45ldj0DYN17mKCO0l4BxKO7n4jeaXz3FzK67X1kltJBuwJDThhXFjAvhnKMbwVhnEiGwxWrdMms2w%2fRGeJOKqO28bZp03c%2bg6VCv86czoyElRP%2bCWohpquCSgI6ucg02QoMOawjGs7dVyZN1L9f%2bctE1AX5Bihwy0%2brdjE6MP1MDJ1vbSAddO4pfk7uqnUvhVrDuptcGcOnO%2bQFr%2fJbCnoh%2b%2fFBpww%3d%3d"
+        Url    = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=49bc1e21-229a-4d13-938f-ce1228bd0221&P1=1759599910&P2=601&P3=2&P4=ZM1EGR90ndsJZfuuMiywYiGiXTCvHy3%2bMkgs60YFUzCFjU9KVsGUiKqn9wPzew8VqIrwCClHlCbUsX4kS2r4ENoeR1nowxq08LHheK4YCVJDhYL5wsonsylK3%2bpQ9aNAZgigZ3WRtOW1M%2bw8S4ZHVrDF0tGb4BAH6QNIx4Sal8Q8a%2fjHktvntqkCQ%2fb4cl3DNp9e6TkWtqMGsJ3fuRafgzSJTWpBaTJxTVs2AFk5tIYCjbOgSQmw%2fy45BRlIlkOIRSRnnFfXsRmAnshrGBNd1XvZvIvlZsmZZUZ2S6n%2bYuwYf55FVZeWRnrlwCb6KM39sxotRB9V4%2btn5JD1%2f7wbJQ%3d%3d"
         File   = Join-Path $targetFolder "Win11_24H2_ENUS.iso"
     }
 )
