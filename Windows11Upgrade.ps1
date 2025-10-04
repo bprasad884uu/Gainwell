@@ -225,7 +225,7 @@ function Download-WithResume {
         }
 
         # SEGMENTED PARALLEL DOWNLOAD (runspace pool)
-        Write-Host "`nServer supports ranges. Using segmented parallel download. Size: $(Format-Size $remoteLength). MaxParallel: $MaxParallel"
+        Write-Host "`nServer supports ranges. Using segmented parallel download. Size: $(Format-Size $remoteLength). MaxParallel: $MaxParallel`n"
 
         # Remove or rename existing final file if mismatched
         if (Test-Path $OutFile) {
