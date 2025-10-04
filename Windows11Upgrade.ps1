@@ -26,30 +26,76 @@ Write-Host "Detected Language: $languageName - Selected ISO URL: $($isoUrl -repl
 # --- Choose Temp location: prefer C: if it has >= MinimumBytes, otherwise find another drive ---
 function Select-TempRoot {
     param([long]$MinimumBytes = (20 * 1024 * 1024 * 1024))
-    try {
-        $envTempRoot = [System.IO.Path]::GetPathRoot($env:TEMP)
-        if ($envTempRoot) {
-            $deviceId = $envTempRoot.TrimEnd('\')
-            $logical = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID = '$deviceId'" -ErrorAction SilentlyContinue
-            if ($logical -and $logical.FreeSpace -ge $MinimumBytes) { return $env:TEMP.TrimEnd('\') }
-        }
-    } catch { }
 
-    $drives = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 } | Sort-Object -Property DeviceID
-    foreach ($d in $drives) {
-        if ($d.FreeSpace -ge $MinimumBytes) {
-            $root = "$($d.DeviceID)\"
-            $candidateTemp = Join-Path -Path $root -ChildPath "Temp"
-            try {
-                if (-not (Test-Path $candidateTemp)) { New-Item -Path $candidateTemp -ItemType Directory -Force | Out-Null }
-                $testFile = Join-Path $candidateTemp ".__writetest.tmp"
-                Set-Content -Path $testFile -Value "ok" -ErrorAction Stop
-                Remove-Item -Path $testFile -Force -ErrorAction SilentlyContinue
-                return $candidateTemp.TrimEnd('\')
-            } catch { continue }
+    # 1) Prefer C: drive explicitly
+    try {
+        $cRoot = "C:\"
+        if (Test-Path $cRoot) {
+            $cLogical = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID = 'C:'" -ErrorAction SilentlyContinue
+            if ($cLogical -and $cLogical.DriveType -eq 3 -and $cLogical.FreeSpace -ge $MinimumBytes) {
+                # Use existing user temp on C: if exists and usable, otherwise create Temp under C: if necessary
+                try {
+                    $userTemp = $env:TEMP
+                    if ($userTemp -and ([System.IO.Path]::GetPathRoot($userTemp) -ieq "C:\") -and (Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID = 'C:'" -ErrorAction SilentlyContinue).FreeSpace -ge $MinimumBytes) {
+                        return $env:TEMP.TrimEnd('\')
+                    } else {
+                        $candidate = Join-Path -Path $cRoot -ChildPath "Temp"
+                        if (-not (Test-Path $candidate)) { New-Item -Path $candidate -ItemType Directory -Force | Out-Null }
+                        # quick write test
+                        $testFile = Join-Path $candidate ".__writetest.tmp"
+                        Set-Content -Path $testFile -Value "ok" -ErrorAction Stop
+                        Remove-Item -Path $testFile -Force -ErrorAction SilentlyContinue
+                        return $candidate.TrimEnd('\')
+                    }
+                } catch {
+                    # fall through to scanning other drives if any error
+                }
+            }
         }
+    } catch {
+        # ignore and continue to next step
     }
-    return $env:TEMP.TrimEnd('\')
+
+    # 2) Fallback: scan other local fixed drives for free space (DriveType 3)
+    try {
+        $drives = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 } | Sort-Object -Property DeviceID
+        foreach ($d in $drives) {
+            # Skip C: since we already tried it
+            if ($d.DeviceID -ieq "C:") { continue }
+            if ($d.FreeSpace -ge $MinimumBytes) {
+                $root = "$($d.DeviceID)\"
+                $candidateTemp = Join-Path -Path $root -ChildPath "Temp"
+                try {
+                    if (-not (Test-Path $candidateTemp)) { New-Item -Path $candidateTemp -ItemType Directory -Force | Out-Null }
+                    # quick write test
+                    $testFile = Join-Path $candidateTemp ".__writetest.tmp"
+                    Set-Content -Path $testFile -Value "ok" -ErrorAction Stop
+                    Remove-Item -Path $testFile -Force -ErrorAction SilentlyContinue
+                    return $candidateTemp.TrimEnd('\')
+                } catch {
+                    # can't create/write on this drive — skip to next
+                    continue
+                }
+            }
+        }
+    } catch {
+        # ignore and fallback to env:TEMP
+    }
+
+    # 3) Final fallback: use $env:TEMP even if it may be on another drive or has less space
+    try {
+        if ($env:TEMP) { return $env:TEMP.TrimEnd('\') }
+    } catch {}
+
+    # 4) If all else fails, return C:\Temp (attempt to create)
+    try {
+        $final = "C:\Temp"
+        if (-not (Test-Path $final)) { New-Item -Path $final -ItemType Directory -Force | Out-Null }
+        return $final.TrimEnd('\')
+    } catch {
+        # Last resort
+        return "C:\"
+    }
 }
 
 $TempRoot = Select-TempRoot -MinimumBytes $MinimumTempBytes
@@ -102,60 +148,453 @@ function Verify-FileSHA256 { param($filePath, $expectedHex)
     if ($computed -eq $expected) { Write-Host "SHA256 verification passed."; return $true } else { Write-Warning "SHA256 mismatch! Expected: $expected`nActual:   $computed"; return $false }
 }
 
-# ---------- Download with resume support (ETA aware) ----------
-function Download-WithResume { param([Parameter(Mandatory=$true)][string]$Url, [Parameter(Mandatory=$true)][string]$OutFile)
-    if (-not ("System.Net.Http.HttpClient" -as [type])) { Add-Type -Path "$([Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll" -ErrorAction SilentlyContinue }
-    $start = 0
-    if (Test-Path $OutFile) { try { $start = (Get-Item $OutFile).Length } catch { $start = 0 } if ($start -gt 0) { Write-Host "Partial file detected. Size: $(Format-Size $start). Attempting resume..." } }
-    $client = New-Object System.Net.Http.HttpClient
-    try {
-        $request = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $Url)
-        if ($start -gt 0) { $request.Headers.Range = [System.Net.Http.Headers.RangeHeaderValue]::new($start, $null) }
-        $response = $client.SendAsync($request, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+# ---------- Probe helper: pick best parallel part count ----------
+function Probe-ChooseParts {
+    param(
+        [Parameter(Mandatory=$true)][string]$Url,
+        [int]$MaxCandidate = 16,
+        [int[]]$Candidates = @(4,8,12),
+        [int]$SampleBytes = 64 * 1024,   # 64 KB per probe job
+        [int]$TimeoutSeconds = 6
+    )
 
-        if ($response.StatusCode -eq [System.Net.HttpStatusCode]::OK -and $start -gt 0) {
-            Write-Warning "Server did not return Partial Content. Restarting full download (overwriting partial file)."
-            try { Remove-Item $OutFile -Force -ErrorAction SilentlyContinue } catch {}
-            $start = 0; $response.Dispose()
-            $request = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $Url)
-            $response = $client.SendAsync($request, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
-            if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK) { throw "Download failed: $($response.StatusCode)" }
-        } elseif ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK -and $response.StatusCode -ne [System.Net.HttpStatusCode]::PartialContent) {
-            throw "Download failed: $($response.StatusCode) $($response.ReasonPhrase)"
+    if (-not ("System.Net.Http.HttpClient" -as [type])) {
+        Add-Type -Path "$([Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll" -ErrorAction SilentlyContinue
+    }
+
+    # Quick HEAD to check Accept-Ranges and remote size
+    try {
+        $handler = New-Object System.Net.Http.HttpClientHandler
+        try { $handler.MaxConnectionsPerServer = 16 } catch {}
+        $hc = New-Object System.Net.Http.HttpClient($handler)
+        $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Head, $Url)
+        $resp = $hc.SendAsync($req).Result
+    } catch {
+        try { $resp = $hc.GetAsync($Url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result } catch { if ($hc) { $hc.Dispose() }; return 1 }
+    }
+
+    if ($resp.StatusCode -ge [System.Net.HttpStatusCode]::BadRequest) { if ($hc) { $hc.Dispose() }; return 1 }
+
+    $acceptRanges = $false
+    if ($resp.Headers.Contains("Accept-Ranges")) {
+        $vals = $resp.Headers.GetValues("Accept-Ranges") -join ","
+        if ($vals -match "bytes") { $acceptRanges = $true }
+    }
+    $remoteLength = $null
+    if ($resp.Content.Headers.ContentLength -ne $null) { $remoteLength = [long]$resp.Content.Headers.ContentLength }
+
+    # if no ranges or tiny remote, don't probe
+    if (-not $acceptRanges -or -not $remoteLength -or $remoteLength -le $SampleBytes * 4) {
+        if ($hc) { $hc.Dispose() }
+        return 1
+    }
+
+    $candidates = $Candidates | Where-Object { $_ -le $MaxCandidate } | Sort-Object
+    if (-not $candidates) { $candidates = @(4) }
+
+    $results = @()
+
+    foreach ($cand in $candidates) {
+        if ($cand * $SampleBytes -gt $remoteLength) {
+            $actualCand = [math]::Max(1, [math]::Floor($remoteLength / $SampleBytes))
+        } else {
+            $actualCand = $cand
         }
 
-        $content = $response.Content
-        $remoteLength = $content.Headers.ContentLength
-        $totalLength = if ($remoteLength -ne $null) { $start + [long]$remoteLength } else { -1 }
+        $tmpParts = for ($i=0; $i -lt $actualCand; $i++) { Join-Path -Path $env:TEMP -ChildPath ("probe_part_{0}_{1}.tmp" -f $cand, $i) }
 
-        if ($start -eq 0) { $fs = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None) }
-        else { $fs = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None); $fs.Seek($start, 'Begin') | Out-Null }
+        $jobs = @()
+        $startTime = Get-Date
+        for ($i=0; $i -lt $actualCand; $i++) {
+            $maxStart = [math]::Max(0, $remoteLength - $SampleBytes - 1)
+            $offset = Get-Random -Minimum 0 -Maximum ([int]$maxStart)
+            $end = $offset + $SampleBytes - 1
 
-        $stream = $content.ReadAsStreamAsync().Result
-        $bufferSize = 10 * 1024 * 1024; $buffer = New-Object byte[] $bufferSize
-        $downloadedThisSession = 0; $sessionStart = Get-Date
+            $script = {
+                param($Url, $start, $end, $outPath, $timeoutSec)
+                if (-not ("System.Net.Http.HttpClient" -as [type])) { Add-Type -Path "$([Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll" -ErrorAction SilentlyContinue }
+                $handler = New-Object System.Net.Http.HttpClientHandler
+                try { $handler.MaxConnectionsPerServer = [int]8 } catch {}
+                $client = New-Object System.Net.Http.HttpClient($handler)
+                $client.Timeout = [System.TimeSpan]::FromSeconds($timeoutSec)
+                try {
+                    $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $Url)
+                    $req.Headers.Range = [System.Net.Http.Headers.RangeHeaderValue]::new($start, $end)
+                    $resp = $client.SendAsync($req, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+                    if ($resp.StatusCode -eq [System.Net.HttpStatusCode]::PartialContent -or $resp.StatusCode -eq [System.Net.HttpStatusCode]::OK) {
+                        $stream = $resp.Content.ReadAsStreamAsync().Result
+                        $fs = [System.IO.File]::Open($outPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+                        $buffer = New-Object byte[] 8192
+                        $total = 0
+                        while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                            $fs.Write($buffer, 0, $read)
+                            $total += $read
+                        }
+                        $fs.Close(); $stream.Close(); $resp.Dispose()
+                        $client.Dispose()
+                        return @{ Status='OK'; Bytes=$total }
+                    } else {
+                        $resp.Dispose()
+                        $client.Dispose()
+                        return @{ Status='Error'; Bytes=0 }
+                    }
+                } catch {
+                    try { $client.Dispose() } catch {}
+                    return @{ Status='Error'; Bytes=0 }
+                }
+            }
 
-        while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
-            $fs.Write($buffer, 0, $bytesRead)
-            $downloadedThisSession += $bytesRead
-            $downloadedTotal = $start + $downloadedThisSession
-            $elapsed = (Get-Date) - $sessionStart
-            $speed = if ($elapsed.TotalSeconds -gt 0) { $downloadedThisSession / $elapsed.TotalSeconds } else { 0 }
+            $job = Start-ThreadJob -ArgumentList $Url, $offset, $end, $tmpParts[$i], $TimeoutSeconds -ScriptBlock $script
+            $jobs += @{ Job=$job; Path=$tmpParts[$i] }
+        }
 
-            if ($totalLength -gt 0 -and $speed -gt 0) {
-                $remaining = $totalLength - $downloadedTotal
-                $etaSeconds = $remaining / $speed
-                $progress = ($downloadedTotal / $totalLength) * 100
-                $etaFormatted = Format-ETA $etaSeconds
-                Write-Host -NoNewline "`rDownloaded: $(Format-Size $downloadedTotal) / $(Format-Size $totalLength) ($([math]::Round($progress,2))%) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted   "
-            } else {
-                $etaFormatted = "Unknown"
-                Write-Host -NoNewline "`rDownloaded: $(Format-Size $downloadedTotal) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted   "
+        $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+        while ((Get-Date) -lt $deadline) {
+            $allDone = $true
+            foreach ($j in $jobs) { if ($j.Job.State -eq 'Running') { $allDone = $false; break } }
+            if ($allDone) { break }
+            Start-Sleep -Milliseconds 100
+        }
+
+        $totalBytes = 0
+        foreach ($j in $jobs) {
+            try {
+                $res = Receive-Job -Job $j.Job -Keep -ErrorAction SilentlyContinue
+                if ($res -and $res.Bytes) { $totalBytes += [int]$res.Bytes }
+            } catch {}
+            try { if (Test-Path $j.Path) { Remove-Item -Path $j.Path -Force -ErrorAction SilentlyContinue } } catch {}
+            try { if ($j.Job.State -eq 'Running') { Stop-Job -Job $j.Job -Force -ErrorAction SilentlyContinue } } catch {}
+            try { Remove-Job -Job $j.Job -Force -ErrorAction SilentlyContinue } catch {}
+        }
+
+        $elapsed = (Get-Date) - $startTime
+        $seconds = [math]::Max(0.001, $elapsed.TotalSeconds)
+        $speed = $totalBytes / $seconds  # bytes/sec
+
+        $results += @{ Candidate = $cand; Actual = $actualCand; Bytes = $totalBytes; Sec = $seconds; Speed = $speed }
+    }
+
+    if ($hc) { $hc.Dispose() }
+
+    if (-not $results) { return 1 }
+
+    $best = $results | Sort-Object -Property Speed -Descending | Select-Object -First 1
+    $chosen = [int]$best.Candidate
+
+    if ($chosen -lt 1) { $chosen = 1 }
+    if ($chosen -gt $MaxCandidate) { $chosen = $MaxCandidate }
+
+    return $chosen
+}
+
+# ---------- Single-connection resume fallback function used by the parallel downloader.
+function Download-WithResumeSingle {
+    param([string]$Url, [string]$OutFile, [int]$BufferSize = 4 * 1024 * 1024)
+
+    if (-not ("System.Net.Http.HttpClient" -as [type])) {
+        Add-Type -Path "$([Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll" -ErrorAction SilentlyContinue
+    }
+    $handler = New-Object System.Net.Http.HttpClientHandler
+    try { $handler.MaxConnectionsPerServer = 16 } catch {}
+    $client = New-Object System.Net.Http.HttpClient($handler)
+
+    $start = 0
+    if (Test-Path $OutFile) {
+        try { $start = (Get-Item $OutFile).Length } catch { $start = 0 }
+        if ($start -gt 0) { Write-Host "Partial file detected. Size: $(Format-Size $start). Attempting resume..." }
+    }
+
+    $request = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $Url)
+    if ($start -gt 0) { $request.Headers.Range = [System.Net.Http.Headers.RangeHeaderValue]::new($start, $null) }
+
+    $response = $client.SendAsync($request, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+    if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK -and $response.StatusCode -ne [System.Net.HttpStatusCode]::PartialContent) {
+        throw "Download failed: $($response.StatusCode) $($response.ReasonPhrase)"
+    }
+
+    $remoteLength = $response.Content.Headers.ContentLength
+    $totalLength = if ($remoteLength -ne $null) { $start + [long]$remoteLength } else { -1 }
+
+    if ($start -eq 0) {
+        $fs = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    } else {
+        $fs = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+        $fs.Seek($start, 'Begin') | Out-Null
+    }
+
+    $stream = $response.Content.ReadAsStreamAsync().Result
+    $buffer = New-Object byte[] $BufferSize
+    $downloadedThisSession = 0
+    $sessionStart = Get-Date
+    while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+        $fs.Write($buffer, 0, $bytesRead)
+        $downloadedThisSession += $bytesRead
+        $downloadedTotal = $start + $downloadedThisSession
+
+        $elapsed = (Get-Date) - $sessionStart
+        $speed = if ($elapsed.TotalSeconds -gt 0) { $downloadedThisSession / $elapsed.TotalSeconds } else { 0 }
+
+        if ($totalLength -gt 0 -and $speed -gt 0) {
+            $remaining = $totalLength - $downloadedTotal
+            $etaSeconds = $remaining / $speed
+            $progress = ($downloadedTotal / $totalLength) * 100
+            $etaFormatted = Format-ETA $etaSeconds
+            Write-Host -NoNewline "`rDownloaded: $(Format-Size $downloadedTotal) / $(Format-Size $totalLength) ($([math]::Round($progress,2))%) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted   "
+        } else {
+            Write-Host -NoNewline "`rDownloaded: $(Format-Size $downloadedTotal) | Speed: $(Format-Speed $speed) | ETA: Unknown   "
+        }
+    }
+
+    $stream.Close(); $fs.Close(); $response.Dispose(); $client.Dispose()
+    Write-Host "`nDownload finished: $OutFile"
+    return $true
+}
+
+# ---------- Download-WithResume (parallel ranged downloader with probe + fallbacks) ----------
+function Download-WithResume {
+    param(
+        [Parameter(Mandatory=$true)][string]$Url,
+        [Parameter(Mandatory=$true)][string]$OutFile,
+        [int]$Parts = 0,                 # 0 = auto-probe and choose
+        [int]$BufferSize = 4 * 1024 * 1024,  # per-download buffer (4 MiB)
+        [int]$MaxRetriesPerPart = 3
+    )
+
+    # If caller asked for auto-probe (Parts=0), run probe to choose parts
+    if ($Parts -le 0) {
+        try {
+            $probeMax = 16
+            $candidates = @(4,8,12)
+            $recommended = Probe-ChooseParts -Url $Url -MaxCandidate $probeMax -Candidates $candidates
+            if ($recommended -and $recommended -gt 0) { $Parts = $recommended } else { $Parts = 4 }
+            Write-Host "Auto-probe selected $Parts parallel parts."
+        } catch {
+            $Parts = 4
+            Write-Warning "Probe failed; falling back to $Parts parts."
+        }
+    }
+
+    # Prepare temp part files directory
+    $outDir = Split-Path -Parent $OutFile
+    if (-not (Test-Path $outDir)) { New-Item -Path $outDir -ItemType Directory -Force | Out-Null }
+
+    $partPrefix = "$OutFile.part"
+    $globalStartTime = Get-Date
+
+    # Query headers to verify ranges supported and get content length
+    try {
+        if (-not ("System.Net.Http.HttpClient" -as [type])) {
+            Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll" -ErrorAction SilentlyContinue
+        }
+        $handler = New-Object System.Net.Http.HttpClientHandler
+        try { $handler.MaxConnectionsPerServer = [int]16 } catch {}
+        $hc = New-Object System.Net.Http.HttpClient($handler)
+        $headReq = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Head, $Url)
+        $headResp = $hc.SendAsync($headReq).Result
+    } catch {
+        try { $headResp = $hc.SendAsync((New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $Url))).Result } catch { throw "Failed to obtain remote headers: $_" }
+    }
+
+    if ($headResp.StatusCode -ge [System.Net.HttpStatusCode]::BadRequest) {
+        throw "Failed to reach URL: $($headResp.StatusCode) $($headResp.ReasonPhrase)"
+    }
+
+    $acceptRanges = $false
+    if ($headResp.Headers.Contains("Accept-Ranges")) {
+        $vals = $headResp.Headers.GetValues("Accept-Ranges") -join ","
+        if ($vals -match "bytes") { $acceptRanges = $true }
+    }
+    $contentLength = $null
+    if ($headResp.Content.Headers.ContentLength -ne $null) { $contentLength = [long]$headResp.Content.Headers.ContentLength }
+
+    if (-not $contentLength) {
+        try {
+            $resp = $hc.GetAsync($Url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+            if ($resp.Content.Headers.ContentLength -ne $null) { $contentLength = [long]$resp.Content.Headers.ContentLength }
+            if (-not $acceptRanges -and $resp.Headers.Contains("Accept-Ranges")) {
+                $vals = $resp.Headers.GetValues("Accept-Ranges") -join ","
+                if ($vals -match "bytes") { $acceptRanges = $true }
+            }
+            $resp.Dispose()
+        } catch {}
+    }
+
+    # If we don't have content length or ranges are not supported, throw so caller can fallback to BITS/single
+    if (-not $contentLength -or -not $acceptRanges) {
+        if ($hc) { $hc.Dispose() }
+        throw "Server does not support ranged downloads (or length unknown)."
+    }
+
+    Write-Host "Remote file size: $(Format-Size $contentLength). Using $Parts parallel parts."
+
+    # Build ranges
+    $partSize = [math]::Floor($contentLength / $Parts)
+    $ranges = @()
+    for ($i = 0; $i -lt $Parts; $i++) {
+        $start = $i * $partSize
+        if ($i -eq ($Parts - 1)) { $end = $contentLength - 1 } else { $end = ($start + $partSize - 1) }
+        $ranges += @{ Index = $i; Start = [long]$start; End = [long]$end; Path = "$partPrefix$i" }
+    }
+
+    # For each part, if a part file exists, determine bytes already present and adjust start
+    foreach ($p in $ranges) {
+        if (Test-Path $p.Path) {
+            try {
+                $len = (Get-Item $p.Path).Length
+                $fullLen = $p.End - $p.Start + 1
+                if ($len -ge $fullLen) {
+                    Write-Host "Part $($p.Index) already complete (skipping)."
+                    $p.State = 'Complete'; $p.Current = $len; continue
+                } elseif ($len -gt 0) {
+                    $p.Current = $len
+                    $p.Start = $p.Start + $len
+                    Write-Host "Resuming part $($p.Index): already have $(Format-Size $len). New range: $($p.Start)-$($p.End)"
+                } else {
+                    $p.Current = 0
+                }
+            } catch { $p.Current = 0 }
+        } else {
+            $p.Current = 0
+        }
+        $p.State = 'Pending'
+    }
+
+    # Start thread-jobs to download parts concurrently
+    $jobs = @()
+    foreach ($p in $ranges) {
+        if ($p.State -eq 'Complete') { continue }
+        $script = {
+            param($Url, $start, $end, $outPath, $bufferSize, $maxRetries, $index)
+
+            if (-not ("System.Net.Http.HttpClient" -as [type])) {
+                Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll" -ErrorAction SilentlyContinue
+            }
+            $handler = New-Object System.Net.Http.HttpClientHandler
+            try { $handler.MaxConnectionsPerServer = [int]8 } catch {}
+            $client = New-Object System.Net.Http.HttpClient($handler)
+            $attempt = 0
+            $succeeded = $false
+
+            while (-not $succeeded -and $attempt -lt $maxRetries) {
+                $attempt++
+                try {
+                    # Prepare request with Range header
+                    $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $Url)
+                    $rangeHeader = [System.Net.Http.Headers.RangeHeaderValue]::new($start, $end)
+                    $req.Headers.Range = $rangeHeader
+
+                    $resp = $client.SendAsync($req, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+                    if ($resp.StatusCode -eq [System.Net.HttpStatusCode]::PartialContent -or $resp.StatusCode -eq [System.Net.HttpStatusCode]::OK) {
+                        $stream = $resp.Content.ReadAsStreamAsync().Result
+                        # Open file for append (create if needed)
+                        $fs = [System.IO.File]::Open($outPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+                        $fs.Seek(0, 'End') | Out-Null
+
+                        $buffer = New-Object byte[] $bufferSize
+                        while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                            $fs.Write($buffer, 0, $read)
+                        }
+
+                        $fs.Close(); $stream.Close(); $resp.Dispose()
+                        $succeeded = $true
+                        $client.Dispose()
+                        return @{ Index = $index; Status = 'OK' }
+                    } else {
+                        $resp.Dispose()
+                        throw "Unexpected status code: $($resp.StatusCode)"
+                    }
+                } catch {
+                    Start-Sleep -Seconds (2 * $attempt)
+                    # retry
+                }
+            }
+
+            $client.Dispose()
+            return @{ Index = $index; Status = 'Failed' }
+        }
+
+        $job = Start-ThreadJob -ArgumentList $Url, $p.Start, $p.End, $p.Path, $BufferSize, $MaxRetriesPerPart, $p.Index -ScriptBlock $script
+        $jobs += @{ Job = $job; Part = $p }
+    }
+
+    # Monitor progress by polling part sizes and compute ETA
+    $sessionStart = Get-Date
+    while ($true) {
+        # Gather sizes
+        $downloaded = 0
+        foreach ($p in $ranges) {
+            if (Test-Path $p.Path) {
+                try { $downloaded += (Get-Item $p.Path).Length } catch {}
             }
         }
-        Write-Host "`nDownload finished: $OutFile"
-        $stream.Close(); $stream.Dispose(); $fs.Close(); $fs.Dispose(); $response.Dispose()
-    } catch { throw "Download error: $_" } finally { if ($client) { $client.Dispose() } }
+        $elapsed = (Get-Date) - $sessionStart
+        $speedSession = if ($elapsed.TotalSeconds -gt 0) { $downloaded / $elapsed.TotalSeconds } else { 0 }
+        $progress = ($downloaded / $contentLength) * 100
+        $remaining = $contentLength - $downloaded
+        $eta = if ($speedSession -gt 0) { [math]::Round($remaining / $speedSession) } else { -1 }
+        $etaFormatted = if ($eta -ge 0) { (if ($eta -ge 3600) { '{0}h {1}m {2}s' -f ([math]::Floor($eta/3600)), ([math]::Floor(($eta%3600)/60)), ($eta%60) } elseif ($eta -ge 60) { '{0}m {1}s' -f ([math]::Floor($eta/60)), ($eta%60) } else { '{0}s' -f $eta }) } else { "Unknown" }
+
+        Write-Host -NoNewline "`rProgress: $([math]::Round($progress,2))% | Downloaded: $(Format-Size $downloaded) / $(Format-Size $contentLength) | Speed(sess): $(Format-Speed $speedSession) | ETA: $etaFormatted     "
+
+        # Check jobs: collect results and mark completed
+        $allDone = $true
+        foreach ($entry in $jobs) {
+            $j = $entry.Job
+            if ($j.State -eq 'Completed' -or $j.State -eq 'Failed' -or $j.State -eq 'Stopped') {
+                if (-not $entry.Collected) {
+                    $res = Receive-Job -Job $j -Keep -ErrorAction SilentlyContinue
+                    if ($res) {
+                        if ($res.Status -ne 'OK') {
+                            Write-Host "`nPart $($entry.Part.Index) failed to complete."
+                            foreach ($rem in $jobs) { if ($rem.Job.State -eq 'Running') { Stop-Job -Job $rem.Job -Force -ErrorAction SilentlyContinue } }
+                            throw "One or more part downloads failed. Aborting."
+                        } else {
+                            $entry.Collected = $true
+                        }
+                    } else {
+                        try {
+                            $wantLen = ($entry.Part.End - $entry.Part.Start + 1) + $entry.Part.Current
+                            $actual = (Get-Item $entry.Part.Path).Length
+                            if ($actual -ge $wantLen) { $entry.Collected = $true } else { Write-Host "`nPart $($entry.Part.Index) might be incomplete." }
+                        } catch {}
+                    }
+                }
+            } else {
+                $allDone = $false
+            }
+        }
+
+        if ($allDone) { break }
+        Start-Sleep -Seconds 1
+    }
+
+    # Merge parts
+    Write-Host "`nMerging parts..."
+    try {
+        $outFs = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+        foreach ($p in $ranges | Sort-Object Index) {
+            $partPath = $p.Path
+            if (-not (Test-Path $partPath)) { throw "Missing part file: $partPath" }
+            $fsPart = [System.IO.File]::OpenRead($partPath)
+            $buffer = New-Object byte[] (4 * 1024 * 1024)
+            while (($read = $fsPart.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                $outFs.Write($buffer, 0, $read)
+            }
+            $fsPart.Close()
+        }
+        $outFs.Close()
+    } catch {
+        throw "Failed to merge parts: $_"
+    }
+
+    foreach ($p in $ranges) { try { Remove-Item -Path $p.Path -Force -ErrorAction SilentlyContinue } catch {} }
+
+    $totalElapsed = (Get-Date) - $globalStartTime
+    $avgSpeed = if ($totalElapsed.TotalSeconds -gt 0) { (Get-Item $OutFile).Length / $totalElapsed.TotalSeconds } else { 0 }
+    Write-Host "`nDownload complete: $OutFile | Avg speed: $(Format-Speed $avgSpeed) | Time: $([math]::Round($totalElapsed.TotalSeconds))s"
+
+    if ($hc) { $hc.Dispose() }
+    return $true
 }
 
 # ---------- Step 0: If file exists, try mount to verify; otherwise download with resume & verify ----------
@@ -176,8 +615,40 @@ if (Test-Path $destination) {
 
 if (-not $downloadSuccess) {
     try {
-        Write-Host "`nStarting download (with resume support) to: $destination"
-        Download-WithResume -Url $isoUrl -OutFile $destination
+        Write-Host "`nAttempting parallel ranged download (preferred)..."
+        try {
+            Download-WithResume -Url $isoUrl -OutFile $destination -Parts 0
+            $usedMethod = "parallel"
+        } catch {
+            Write-Warning "Parallel ranged downloader failed: $_"
+            Write-Host "Attempting Windows BITS transfer as a fallback..."
+            try {
+                if (-not (Get-Command -Name Start-BitsTransfer -ErrorAction SilentlyContinue)) {
+                    throw "BITS not available in this environment."
+                }
+                try { if (Test-Path $destination) { Remove-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue } } catch {}
+                Start-BitsTransfer -Source $isoUrl -Destination $destination -TransferType Download -Description "Win11 ISO download via BITS" -Priority Foreground
+                $usedMethod = "bits"
+                Write-Host "BITS transfer completed."
+            } catch {
+                Write-Warning "BITS transfer failed: $_"
+                Write-Host "Falling back to single-connection resume downloader..."
+                try {
+                    Download-WithResumeSingle -Url $isoUrl -OutFile $destination
+                    $usedMethod = "single"
+                } catch {
+                    Write-Error "All download methods failed: $_"
+                    throw "Download failed via parallel, BITS, and single methods."
+                }
+            }
+        }
+
+        if (-not (Test-Path $destination)) {
+            Write-Error "Download completed but destination file not found: $destination"
+            exit 1
+        }
+
+        Write-Host "Download completed using method: $usedMethod"
 
         $expected = Resolve-ChecksumString -checksumOrUrl $Checksum
         if ($expected) {
