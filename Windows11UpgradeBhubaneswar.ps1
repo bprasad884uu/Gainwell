@@ -359,7 +359,7 @@ function Is-SetupRunning {
     return $false
 }
 
-Write-Host "`nYour PC will restart several times. This might take a while." -ForegroundColor Green
+Write-Host "`nYour PC will restart several times. This might take a while.`n" -ForegroundColor Green
 $spinner = ('\','|','/','-'); $spinnerIndex = 0; $currentPercent = 0
 
 while ($true) {
@@ -369,7 +369,7 @@ while ($true) {
     $logExists = Test-Path $logPath
 
     if (-not $logExists -and -not $folderExists -and -not $setupRunning) {
-        Write-Host "`nNo setup activity detected. Exiting monitor." -ForegroundColor Yellow
+        Write-Host "`nNo setup activity detected. Exiting..." -ForegroundColor Yellow
         break
     }
 
