@@ -151,7 +151,7 @@ Write-Host "`nISO found: $isoPath"
 # Mount ISO
 Write-Host "`nMounting ISO..."
 try {
-    Mount-DiskImage -ImagePath $isoPath -ErrorAction Stop
+    $null = Mount-DiskImage -ImagePath $isoPath -ErrorAction Stop
     Write-Host "`nISO Mounted Successfully." -ForegroundColor Green
 } catch {
     Write-Host "`nFailed to mount ISO: $_" -ForegroundColor Red
