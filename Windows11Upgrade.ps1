@@ -110,8 +110,8 @@ function Download-WithResume {
     param(
         [Parameter(Mandatory=$true)][string]$Url,
         [Parameter(Mandatory=$true)][string]$OutFile,
-        [int]$MaxParallel = 8,
-        [long]$SegmentMinBytes = (50 * 1024 * 1024),
+        [int]$MaxParallel = 32,
+        [long]$SegmentMinBytes = (200 * 1024 * 1024),
         [int]$AttemptsPerPart = 3
     )
 
@@ -239,27 +239,32 @@ function Download-WithResume {
             }
         }
 
-        # compute segment count and sizes
-        $segmentCount = [math]::Min($MaxParallel, [int]([math]::Ceiling($remoteLength / $SegmentMinBytes)))
-        if ($segmentCount -lt 1) { $segmentCount = 1 }
-        $segmentCount = [math]::Min($segmentCount, $MaxParallel)
-        $segmentSize = [math]::Floor($remoteLength / $segmentCount)
+        # compute segment count and sizes safely (avoid int overflow)
+        $segmentsNeeded = [math]::Ceiling(([double]$remoteLength) / ([double]$SegmentMinBytes))
+        if ($segmentsNeeded -gt $MaxParallel) {
+            $segmentCount = [int]$MaxParallel
+        } else {
+            $segmentCount = [int]$segmentsNeeded
+            if ($segmentCount -lt 1) { $segmentCount = 1 }
+        }
+
+        $segmentSize = [long][math]::Floor(([double]$remoteLength) / ([double]$segmentCount))
 
         $partFiles = for ($i=0; $i -lt $segmentCount; $i++) { "$OutFile.part$i" }
 
-        # create runspace pool
+        # create runspace pool (use safe conversion to int)
         $minThreads = 1
-        $maxThreads = [math]::Max(1, $MaxParallel)
+        $maxThreads = [int]([System.Math]::Max([double]1, [double]$MaxParallel))
         $rsp = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspacePool($minThreads, $maxThreads)
         $rsp.ThreadOptions = "ReuseThread"
         $rsp.Open()
 
         $powershellList = @()
         for ($i = 0; $i -lt $segmentCount; $i++) {
-            $startByte = $i * $segmentSize
-            if ($i -eq ($segmentCount - 1)) { $endByte = $remoteLength - 1 } else { $endByte = (($i + 1) * $segmentSize) - 1 }
+            $startByte = [long]($i * $segmentSize)
+            if ($i -eq ($segmentCount - 1)) { $endByte = [long]($remoteLength - 1) } else { $endByte = [long]((($i + 1) * $segmentSize) - 1) }
             $partFile = $partFiles[$i]
-            $expectedPartSize = $endByte - $startByte + 1
+            $expectedPartSize = [long]($endByte - $startByte + 1)
 
             # Skip if part file already present with expected size
             if ((Test-Path $partFile) -and ((Get-Item $partFile).Length -eq $expectedPartSize)) {
@@ -339,7 +344,8 @@ function Download-WithResume {
             $avgSpeed = ($avgSpeedSamples | Measure-Object -Average).Average
             if (-not $avgSpeed) { $avgSpeed = 0 }
 
-            $remainingBytes = [math]::Max(0, $remoteLength - $totalDownloaded)
+            # Use double for Math.Max to avoid Int32 overload selection
+            $remainingBytes = [System.Math]::Max([double]0, [double]($remoteLength - $totalDownloaded))
             $eta = if ($avgSpeed -gt 0 -and $remainingBytes -gt 0) { Format-ETA ($remainingBytes / $avgSpeed) } else { "Unknown" }
 
             $progressPct = if ($remoteLength -gt 0) { [math]::Round(($totalDownloaded / $remoteLength) * 100, 2) } else { 0 }
@@ -431,7 +437,7 @@ if (Test-Path $destination) {
 if (-not $downloadSuccess) {
     try {
         Write-Host "`nStarting download (with resume support) to: $destination"
-        Download-WithResume -Url $isoUrl -OutFile $destination -MaxParallel 8 -SegmentMinBytes (50MB)
+        Download-WithResume -Url $isoUrl -OutFile $destination -MaxParallel 32 -SegmentMinBytes (200MB)
 
         $expected = Resolve-ChecksumString -checksumOrUrl $Checksum
         if ($expected) {
@@ -451,11 +457,20 @@ if (-not $downloadSuccess) {
 }
 
 # ---------- Step 2: Mount ISO (clean unmount first) ----------
+# Get all volumes that are mounted from ISO files
 Write-Host "`nUnmounting any ISO images previously mounted..."
-try {
-    $mounted = Get-DiskImage | Where-Object { $_.ImagePath -ne $null }
-    foreach ($mi in $mounted) { try { Dismount-DiskImage -ImagePath $mi.ImagePath -ErrorAction SilentlyContinue } catch {} }
-} catch {}
+$volumes = Get-Volume | Where-Object { $_.DriveType -eq 'CD-ROM' }
+
+foreach ($volume in $volumes) {
+    try {
+        $devicePath = "\\.\$($volume.DriveLetter):"
+        Write-Host "`nAttempting to dismount image mounted at: $devicePath"
+        $null = Dismount-DiskImage -DevicePath $devicePath -ErrorAction Stop
+        Write-Host "`nSuccessfully dismounted: $devicePath"
+    } catch {
+        Write-Warning "`nFailed to dismount: $devicePath. Error: $_"
+    }
+}
 
 $isoPath = Get-ChildItem -Path ($TempRoot + '\') -Filter "Win11*.iso" -File -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName -First 1
 if (-not $isoPath -and (Test-Path $destination)) { $isoPath = $destination }
@@ -478,6 +493,7 @@ $setupPath = "$driveLetter`:\setup.exe"
 if (-not (Test-Path $setupPath)) { Write-Error "setup.exe not found on ISO. Exiting."; exit 1 }
 
 # ---------- Step 3: Windows 11 upgrade (Silent Install) ----------
+# Get Manufacturer
 $manufacturer = (Get-WmiObject -Class Win32_ComputerSystem).Manufacturer
 Write-Host "`nDetected System Manufacturer: $manufacturer"
 
@@ -563,18 +579,51 @@ function Get-SecureBootStatus {
     } catch {}
     return $false
 }
+# Get Secure Boot Status
 $secureBootEnabled = Get-SecureBootStatus
+
+# Check TPM 2.0 Support
 $tpmCompatible = Check-TPM
 
 # Display results
 Write-Host "`nWindows 11 Compatibility Check" -ForegroundColor Cyan
 Write-Host "-----------------------------------"
 Write-Host "`nProcessor: $rawCpuName"
-Write-Host "`n64-bit CPU: " + (if ($cpu64Bit) { "Yes" } else { "No" })
-Write-Host "CPU Speed: $cpuSpeedGHz GHz"
-Write-Host "Secure Boot Enabled: " + (if ($secureBootEnabled) { "Yes" } else { "No" })
-Write-Host "TPM 2.0 Support: " + (if ($tpmCompatible) { "Yes" } else { "No" })
-Write-Host "CPU Support (known-list): " + (if ($cpuSupported) { "Yes" } else { "No" })
+
+# Architecture Check
+if ($cpu64Bit) {
+    Write-Host "`n64-bit CPU: Compatible" -ForegroundColor Green
+} else {
+    Write-Host "`n64-bit CPU: Not Compatible" -ForegroundColor Red
+}
+
+# CPU Speed Check
+if ($cpuSpeedCompatible) {
+    Write-Host "`nCPU Speed: $cpuSpeedGHz GHz (Compatible)" -ForegroundColor Green
+} else {
+    Write-Host "`nCPU Speed: $cpuSpeedGHz GHz (Not Compatible)" -ForegroundColor Red
+}
+
+# Secure Boot Check
+if ($secureBootEnabled) {
+    Write-Host "`nSecure Boot Enabled: Yes" -ForegroundColor Green
+} else {
+    Write-Host "`nSecure Boot Enabled: No" -ForegroundColor Red
+}
+
+# TPM 2.0 Check
+if ($tpmCompatible) {
+    Write-Host "`nTPM 2.0 Support: Yes" -ForegroundColor Green
+} else {
+    Write-Host "`nTPM 2.0 Support: No" -ForegroundColor Red
+}
+
+# CPU Support Check
+if ($cpuSupported) {
+    Write-Host "`nCPU Compatibility: $rawCpuName is supported" -ForegroundColor Green
+} else {
+    Write-Host "`nCPU Compatibility: $rawCpuName is NOT supported" -ForegroundColor Red
+}
 
 # Collect incompatibilities
 $incompatibilityReasons = @()
