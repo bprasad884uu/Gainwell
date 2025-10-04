@@ -3,6 +3,9 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
     exit
 }#>
+# Increase simultaneous connections and reduce Expect:100-continue overhead
+[System.Net.ServicePointManager]::DefaultConnectionLimit = 1000
+[System.Net.ServicePointManager]::Expect100Continue = $false
 
 # ---------- Config (fill these) ----------
 $isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=49bc1e21-229a-4d13-938f-ce1228bd0221&P1=1759599910&P2=601&P3=2&P4=ZM1EGR90ndsJZfuuMiywYiGiXTCvHy3%2bMkgs60YFUzCFjU9KVsGUiKqn9wPzew8VqIrwCClHlCbUsX4kS2r4ENoeR1nowxq08LHheK4YCVJDhYL5wsonsylK3%2bpQ9aNAZgigZ3WRtOW1M%2bw8S4ZHVrDF0tGb4BAH6QNIx4Sal8Q8a%2fjHktvntqkCQ%2fb4cl3DNp9e6TkWtqMGsJ3fuRafgzSJTWpBaTJxTVs2AFk5tIYCjbOgSQmw%2fy45BRlIlkOIRSRnnFfXsRmAnshrGBNd1XvZvIvlZsmZZUZ2S6n%2bYuwYf55FVZeWRnrlwCb6KM39sxotRB9V4%2btn5JD1%2f7wbJQ%3d%3d"
@@ -102,71 +105,308 @@ function Verify-FileSHA256 { param($filePath, $expectedHex)
     if ($computed -eq $expected) { Write-Host "SHA256 verification passed."; return $true } else { Write-Warning "SHA256 mismatch! Expected: $expected`nActual:   $computed"; return $false }
 }
 
-# ---------- Download with resume support (ETA aware) ----------
-function Download-WithResume { param([Parameter(Mandatory=$true)][string]$Url, [Parameter(Mandatory=$true)][string]$OutFile)
-    if (-not ("System.Net.Http.HttpClient" -as [type])) { Add-Type -Path "$([Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll" -ErrorAction SilentlyContinue }
-    $start = 0
-    if (Test-Path $OutFile) { try { $start = (Get-Item $OutFile).Length } catch { $start = 0 } if ($start -gt 0) { Write-Host "Partial file detected. Size: $(Format-Size $start). Attempting resume..." } }
-    $client = New-Object System.Net.Http.HttpClient
-    try {
-        $request = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $Url)
-        if ($start -gt 0) { $request.Headers.Range = [System.Net.Http.Headers.RangeHeaderValue]::new($start, $null) }
-        $response = $client.SendAsync($request, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+# ---------- Download with resume support (runspace-based segmented downloader) ----------
+function Download-WithResume {
+    param(
+        [Parameter(Mandatory=$true)][string]$Url,
+        [Parameter(Mandatory=$true)][string]$OutFile,
+        [int]$MaxParallel = 8,
+        [long]$SegmentMinBytes = 50MB
+    )
 
-        if ($response.StatusCode -eq [System.Net.HttpStatusCode]::OK -and $start -gt 0) {
-            Write-Warning "Server did not return Partial Content. Restarting full download (overwriting partial file)."
-            try { Remove-Item $OutFile -Force -ErrorAction SilentlyContinue } catch {}
-            $start = 0; $response.Dispose()
-            $request = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $Url)
-            $response = $client.SendAsync($request, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
-            if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK) { throw "Download failed: $($response.StatusCode)" }
-        } elseif ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK -and $response.StatusCode -ne [System.Net.HttpStatusCode]::PartialContent) {
-            throw "Download failed: $($response.StatusCode) $($response.ReasonPhrase)"
+    if (-not ("System.Net.Http.HttpClient" -as [type])) {
+        Add-Type -Path "$([Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll" -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "`nPreparing download:`n"
+    $tmpFolder = [System.IO.Path]::GetDirectoryName($OutFile)
+    if (-not (Test-Path $tmpFolder)) { New-Item -Path $tmpFolder -ItemType Directory -Force | Out-Null }
+
+    $client = New-Object System.Net.Http.HttpClient
+    $client.Timeout = [System.TimeSpan]::FromHours(4)
+
+    try {
+        # HEAD probe (fallback to ranged zero-length GET if HEAD rejected)
+        $req = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Head, $Url)
+        $resp = $client.SendAsync($req, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+        if (-not $resp.IsSuccessStatusCode) {
+            $req.Dispose()
+            $req = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Get, $Url)
+            $req.Headers.Range = [System.Net.Http.Headers.RangeHeaderValue]::new(0,0)
+            $resp = $client.SendAsync($req, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
         }
 
-        $content = $response.Content
-        $remoteLength = $content.Headers.ContentLength
-        $totalLength = if ($remoteLength -ne $null) { $start + [long]$remoteLength } else { -1 }
+        $acceptRanges = $false
+        if ($resp.Headers.Contains("Accept-Ranges")) {
+            $val = ($resp.Headers.GetValues("Accept-Ranges") | Select-Object -First 1)
+            if ($val -match "bytes") { $acceptRanges = $true }
+        } elseif ($resp.Content.Headers.ContentRange -ne $null -and $resp.Content.Headers.ContentRange.Unit -eq "bytes") {
+            $acceptRanges = $true
+        }
 
-        if ($start -eq 0) { $fs = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None) }
-        else { $fs = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None); $fs.Seek($start, 'Begin') | Out-Null }
+        $remoteLength = $null
+        if ($resp.Content.Headers.ContentLength -ne $null) { $remoteLength = [long]$resp.Content.Headers.ContentLength }
+        elseif ($resp.Content.Headers.ContentRange -ne $null -and $resp.Content.Headers.ContentRange.Length -ne $null) {
+            $remoteLength = [long]$resp.Content.Headers.ContentRange.Length
+        }
 
-        $stream = $content.ReadAsStreamAsync().Result
-        $bufferSize = 10 * 1024 * 1024; $buffer = New-Object byte[] $bufferSize
-        $downloadedThisSession = 0; $sessionStart = Get-Date
+        $resp.Dispose()
 
-        while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
-            $fs.Write($buffer, 0, $bytesRead)
-            $downloadedThisSession += $bytesRead
-            $downloadedTotal = $start + $downloadedThisSession
-            $elapsed = (Get-Date) - $sessionStart
-            $speed = if ($elapsed.TotalSeconds -gt 0) { $downloadedThisSession / $elapsed.TotalSeconds } else { 0 }
+        # If remoteLength unknown but ranges supported, attempt a small GET to find length
+        if (($remoteLength -eq $null) -and $acceptRanges) {
+            $probe = $client.SendAsync([System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Get, $Url), [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+            if ($probe.Content.Headers.ContentLength -ne $null) { $remoteLength = [long]$probe.Content.Headers.ContentLength }
+            $probe.Dispose()
+        }
 
-            if ($totalLength -gt 0 -and $speed -gt 0) {
-                $remaining = $totalLength - $downloadedTotal
-                $etaSeconds = $remaining / $speed
-                $progress = ($downloadedTotal / $totalLength) * 100
-                $etaFormatted = Format-ETA $etaSeconds
-                Write-Host -NoNewline "`rDownloaded: $(Format-Size $downloadedTotal) / $(Format-Size $totalLength) ($([math]::Round($progress,2))%) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted   "
+        # Single-stream fallback if no ranges or unknown length
+        if (-not $acceptRanges -or -not $remoteLength -or $remoteLength -le 0) {
+            Write-Host "`nServer does not support ranged requests or remote length unknown — using single-stream resume with larger buffer."
+            $start = 0
+            if (Test-Path $OutFile) {
+                try { $start = (Get-Item $OutFile).Length } catch { $start = 0 }
+                if ($start -gt 0) { Write-Host "Partial file detected: $(Format-Size $start). Resuming..." }
+            }
+
+            $request = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $Url)
+            if ($start -gt 0) { $request.Headers.Range = [System.Net.Http.Headers.RangeHeaderValue]::new($start, $null) }
+
+            $response = $client.SendAsync($request, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+            if ($response.StatusCode -eq [System.Net.HttpStatusCode]::RequestedRangeNotSatisfiable) {
+                Write-Warning "`nServer says requested range not satisfiable. Removing partial and retrying full download."
+                Remove-Item $OutFile -Force -ErrorAction SilentlyContinue
+                $start = 0
+                $request = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $Url)
+                $response = $client.SendAsync($request, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+            }
+            if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK -and $response.StatusCode -ne [System.Net.HttpStatusCode]::PartialContent) {
+                throw "Download failed: $($response.StatusCode) $($response.ReasonPhrase)"
+            }
+
+            $content = $response.Content
+            $stream = $content.ReadAsStreamAsync().Result
+            if ($start -eq 0) {
+                $fs = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
             } else {
-                $etaFormatted = "Unknown"
-                Write-Host -NoNewline "`rDownloaded: $(Format-Size $downloadedTotal) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted   "
+                $fs = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+                $fs.Seek($start, 'Begin') | Out-Null
+            }
+
+            $bufferSize = 20 * 1024 * 1024  # 20MB buffer for high throughput
+            $buffer = New-Object byte[] $bufferSize
+            $downloadedThisSession = 0
+            $sessionStart = Get-Date
+
+            while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                $fs.Write($buffer, 0, $bytesRead)
+                $downloadedThisSession += $bytesRead
+                $downloadedTotal = $start + $downloadedThisSession
+                $elapsed = (Get-Date) - $sessionStart
+                $speed = if ($elapsed.TotalSeconds -gt 0) { $downloadedThisSession / $elapsed.TotalSeconds } else { 0 }
+
+                if ($remoteLength -gt 0 -and $speed -gt 0) {
+                    $remaining = $remoteLength - $downloadedTotal
+                    $etaSeconds = $remaining / $speed
+                    $progress = ($downloadedTotal / $remoteLength) * 100
+                    $etaFormatted = Format-ETA $etaSeconds
+                    Write-Host -NoNewline "`rDownloaded: $(Format-Size $downloadedTotal) / $(Format-Size $remoteLength) ($([math]::Round($progress,2))%) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted   "
+                } else {
+                    $etaFormatted = "Unknown"
+                    Write-Host -NoNewline "`rDownloaded: $(Format-Size $downloadedTotal) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted   "
+                }
+            }
+
+            Write-Host "`nDownload finished: $OutFile"
+            $stream.Close(); $content.Dispose(); $fs.Close(); $response.Dispose()
+            return
+        }
+
+        # --- SEGMENTED PARALLEL DOWNLOAD USING RUNSPACE POOL ---
+        Write-Host "`nServer supports ranges. Using segmented parallel download. Size: $(Format-Size $remoteLength). MaxParallel: $MaxParallel"
+        if (Test-Path $OutFile) {
+            $existingLength = (Get-Item $OutFile).Length
+            if ($existingLength -eq $remoteLength) {
+                Write-Host "`nFile already present and size matches remote. Skipping download."
+                return
+            } elseif ($existingLength -lt $remoteLength) {
+                Write-Host "`nPartial file exists but doesn't match remote length. Removing and using segmented download."
+                Remove-Item $OutFile -Force -ErrorAction SilentlyContinue
+            } else {
+                Write-Warning "`nLocal file larger than remote. Removing and re-downloading."
+                Remove-Item $OutFile -Force -ErrorAction SilentlyContinue
             }
         }
-        Write-Host "`nDownload finished: $OutFile"
-        $stream.Close(); $stream.Dispose(); $fs.Close(); $fs.Dispose(); $response.Dispose()
-    } catch { throw "Download error: $_" } finally { if ($client) { $client.Dispose() } }
+
+        # Calculate segment count
+        $segmentCount = [math]::Min($MaxParallel, [int]([math]::Ceiling($remoteLength / $SegmentMinBytes)))
+        if ($segmentCount -lt 1) { $segmentCount = 1 }
+        $segmentCount = [math]::Min($segmentCount, $MaxParallel)
+        $segmentSize = [math]::Floor($remoteLength / $segmentCount)
+
+        $partFiles = for ($i=0; $i -lt $segmentCount; $i++) {
+            "$OutFile.part$i"
+        }
+
+        # Build runspace pool
+        $minThreads = 1
+        $maxThreads = [math]::Max(1, $MaxParallel)
+        $rsp = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspacePool($minThreads, $maxThreads)
+        $rsp.ThreadOptions = "ReuseThread"
+        $rsp.Open()
+
+        $powershellList = @()
+        for ($i = 0; $i -lt $segmentCount; $i++) {
+            $startByte = $i * $segmentSize
+            if ($i -eq ($segmentCount - 1)) { $endByte = $remoteLength - 1 } else { $endByte = (($i + 1) * $segmentSize) - 1 }
+            $partFile = $partFiles[$i]
+            $expectedPartSize = $endByte - $startByte + 1
+
+            # Skip if already downloaded and matches expected size
+            if ((Test-Path $partFile) -and ((Get-Item $partFile).Length -eq $expectedPartSize)) {
+                Write-Host "`nSegment $i already present ($(Format-Size $expectedPartSize)). Skipping."
+                continue
+            }
+
+            $ps = [System.Management.Automation.PowerShell]::Create()
+            $ps.RunspacePool = $rsp
+
+            # Script block to run inside runspace: download a single range to part file
+            $script = {
+                param($Url, $partFile, $startByte, $endByte)
+                try {
+                    if (-not ("System.Net.Http.HttpClient" -as [type])) { Add-Type -Path "$([Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll" -ErrorAction SilentlyContinue }
+                    $h = New-Object System.Net.Http.HttpClient
+                    $h.Timeout = [System.TimeSpan]::FromHours(4)
+                    $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $Url)
+                    $req.Headers.Range = [System.Net.Http.Headers.RangeHeaderValue]::new($startByte, $endByte)
+                    $resp = $h.SendAsync($req, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+                    if ($resp.StatusCode -ne [System.Net.HttpStatusCode]::PartialContent -and $resp.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
+                        throw "Segment request failed: $($resp.StatusCode) $($resp.ReasonPhrase)"
+                    }
+                    $stream = $resp.Content.ReadAsStreamAsync().Result
+
+                    # Write out to temp part file (overwrite)
+                    $fs = [System.IO.File]::Open($partFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+                    $buffer = New-Object byte[] (8MB)
+                    while (($r = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                        $fs.Write($buffer, 0, $r)
+                    }
+                    $fs.Close()
+                    $stream.Close(); $resp.Dispose(); $h.Dispose()
+                    return @{ Index = $null; Success = $true; Part = $partFile }
+                } catch {
+                    return @{ Index = $null; Success = $false; Error = $_.ToString(); Part = $partFile }
+                }
+            }
+
+            $ps.AddScript($script).AddArgument($Url).AddArgument($partFile).AddArgument($startByte).AddArgument($endByte) | Out-Null
+            $async = $ps.BeginInvoke()
+            $powershellList += [PSCustomObject]@{ PS = $ps; Async = $async; Index = $i; PartFile = $partFile; ExpectedSize = $expectedPartSize }
+        }
+
+        # --- Monitor runspaces with Speed and ETA ---
+        $lastTotal = 0
+        $lastTime = Get-Date
+        $avgSpeedSamples = New-Object System.Collections.Queue
+        $maxSamples = 5
+
+        while ($true) {
+            $now = Get-Date
+            $totalDownloaded = 0
+            foreach ($pf in $partFiles) {
+                if (Test-Path $pf) { $totalDownloaded += (Get-Item $pf).Length }
+            }
+
+            # Calculate instantaneous speed
+            $deltaBytes = $totalDownloaded - $lastTotal
+            $deltaTime = ($now - $lastTime).TotalSeconds
+            if ($deltaTime -gt 0) {
+                $speedBps = $deltaBytes / $deltaTime
+                $avgSpeedSamples.Enqueue($speedBps)
+                if ($avgSpeedSamples.Count -gt $maxSamples) { [void]$avgSpeedSamples.Dequeue() }
+                $avgSpeed = ($avgSpeedSamples | Measure-Object -Average).Average
+            } else { $avgSpeed = 0 }
+
+            $eta = if ($avgSpeed -gt 0 -and $remoteLength -gt $totalDownloaded) {
+                Format-ETA (($remoteLength - $totalDownloaded) / $avgSpeed)
+            } else { "Unknown" }
+
+            $progressPct = if ($remoteLength -gt 0) { [math]::Round(($totalDownloaded / $remoteLength) * 100, 2) } else { 0 }
+            $activeCount = ($powershellList | Where-Object { -not $_.Async.IsCompleted }).Count
+
+            Write-Host -NoNewline "`rActive: $activeCount | Downloaded: $(Format-Size $totalDownloaded) / $(Format-Size $remoteLength) ($progressPct%) | Speed: $(Format-Speed $avgSpeed) | ETA: $eta   "
+
+            $lastTotal = $totalDownloaded
+            $lastTime = $now
+
+            $allDone = $true
+            foreach ($entry in $powershellList) {
+                if (-not $entry.Async.IsCompleted) { $allDone = $false; break }
+            }
+            if ($allDone) { break }
+
+            Start-Sleep -Seconds 1
+        }
+        Write-Host ""
+
+        # Collect results and clean up runspaces
+        $errors = @()
+        foreach ($entry in $powershellList) {
+            try {
+                $result = $entry.PS.EndInvoke($entry.Async)
+                $entry.PS.Dispose()
+                if ($result -is [System.Array]) { $res = $result[0] } else { $res = $result }
+                if ($res -and $res.ContainsKey('Success') -and -not $res['Success']) {
+                    $errors += "Part:$($entry.PartFile) Err:$($res['Error'])"
+                } else {
+                    # Check size
+                    if ((Test-Path $entry.PartFile) -and ((Get-Item $entry.PartFile).Length -ne $entry.ExpectedSize)) {
+                        $errors += "Part size mismatch: $($entry.PartFile) - expected $(Format-Size $($entry.ExpectedSize)), actual $(Format-Size $((Get-Item $entry.PartFile).Length))"
+                    }
+                }
+            } catch {
+                $errors += "Runspace failed for part $($entry.PartFile): $_"
+            }
+        }
+
+        # Dispose runspace pool
+        try { $rsp.Close(); $rsp.Dispose() } catch {}
+
+        if ($errors.Count -gt 0) {
+            throw "One or more segment downloads failed: $($errors -join '; ')"
+        }
+
+        # Concatenate parts
+        Write-Host "`nStitching parts into final file..."
+        $outStream = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+        foreach ($pf in $partFiles) {
+            $inStream = [System.IO.File]::Open($pf, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+            $buf = New-Object byte[] (16MB)
+            while (($r = $inStream.Read($buf, 0, $buf.Length)) -gt 0) {
+                $outStream.Write($buf, 0, $r)
+            }
+            $inStream.Close(); Remove-Item $pf -Force -ErrorAction SilentlyContinue
+        }
+        $outStream.Close()
+        Write-Host "`nDownload complete: $OutFile"
+    }
+    catch {
+        throw "Download error: $_"
+    }
+    finally {
+        if ($client) { $client.Dispose() }
+    }
 }
 
 # ---------- Step 0: If file exists, try mount to verify; otherwise download with resume & verify ----------
 $downloadSuccess = $false
 if (Test-Path $destination) {
     Write-Host "`nFile already exists: $destination"
-    Write-Host "Attempting to mount to verify integrity..."
+    Write-Host "`nAttempting to mount to verify integrity..."
     try {
         $null = Mount-DiskImage -ImagePath $destination -ErrorAction Stop -PassThru
         $null = Dismount-DiskImage -ImagePath $destination -ErrorAction SilentlyContinue
-        Write-Host "ISO mounted and dismounted successfully. Integrity OK."
+        Write-Host "`nISO mounted and dismounted successfully. Integrity OK."
         $downloadSuccess = $true
     } catch {
         Write-Warning "Existing ISO failed to mount. Will re-download/resume."
@@ -177,7 +417,7 @@ if (Test-Path $destination) {
 if (-not $downloadSuccess) {
     try {
         Write-Host "`nStarting download (with resume support) to: $destination"
-        Download-WithResume -Url $isoUrl -OutFile $destination
+        Download-WithResume -Url $isoUrl -OutFile $destination -MaxParallel 8 -SegmentMinBytes (50MB)
 
         $expected = Resolve-ChecksumString -checksumOrUrl $Checksum
         if ($expected) {
