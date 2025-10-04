@@ -209,11 +209,10 @@ function Download-WithResume {
                     $etaSeconds = $remaining / $speed
                     $progress = ($downloadedTotal / $remoteLength) * 100
                     $etaFormatted = Format-ETA $etaSeconds
-                    Write-Host -NoNewline "`rDownloaded: $(Format-Size $downloadedTotal) / $(Format-Size $remoteLength) ($([math]::Round($progress,2))%) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted   "
                 } else {
                     $etaFormatted = "Unknown"
-                    Write-Host -NoNewline "`rDownloaded: $(Format-Size $downloadedTotal) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted   "
                 }
+                    Write-Host -NoNewline "`rDownloaded: $(Format-Size $downloadedTotal) / $(Format-Size $remoteLength) ($([math]::Round($progress,2))%) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted   "				
             }
 
             Write-Host "`nDownload finished: $OutFile"
