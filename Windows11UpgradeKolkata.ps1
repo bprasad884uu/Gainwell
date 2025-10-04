@@ -222,8 +222,7 @@ if (-not (Test-Path $setupPath)) {
 $manufacturer = (Get-WmiObject -Class Win32_ComputerSystem).Manufacturer
 Write-Host "`nDetected System Manufacturer: $manufacturer"
 
-# Windows 11 CPU Compatibility Check Script with Bypass
-# GitHub CPU lists
+# CPU lists (WhyNotWin11)
 $intelListUrl = "https://raw.githubusercontent.com/rcmaehl/WhyNotWin11/main/includes/SupportedProcessorsIntel.txt"
 $amdListUrl = "https://raw.githubusercontent.com/rcmaehl/WhyNotWin11/main/includes/SupportedProcessorsAMD.txt"
 $qualcommListUrl = "https://raw.githubusercontent.com/rcmaehl/WhyNotWin11/main/includes/SupportedProcessorsQualcomm.txt"
@@ -232,7 +231,7 @@ $qualcommListUrl = "https://raw.githubusercontent.com/rcmaehl/WhyNotWin11/main/i
 $cpu = Get-CimInstance -ClassName Win32_Processor
 $rawCpuName = $cpu.Name.Trim()
 
-# Extract clean CPU model string
+# Extract clean CPU model string (keep original extraction logic)
 if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
     $cleanCpuName = $matches[0]
 } elseif ($rawCpuName -match "Core\s+i[3579]-\S+") {
@@ -248,146 +247,77 @@ if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
 } else {
     $cleanCpuName = ""
 }
-
-# Fallback if match fails
 if (-not $cleanCpuName) {
     Write-Host "`nCould not extract a matching CPU model from '$rawCpuName'" -ForegroundColor Yellow
-    $cleanCpuName = $rawCpuName  # Proceed with raw name
+    $cleanCpuName = $rawCpuName
 }
 
 # Load System.Net.Http.dll for PowerShell 5.1 if needed
-if (-not ("System.Net.Http.HttpClient" -as [type])) {
-    Add-Type -Path "$([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll"
-}
-
-# Use HttpClient instead of Invoke-WebRequest
-$httpClientHandler = New-Object System.Net.Http.HttpClientHandler
-$httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
+if (-not ("System.Net.Http.HttpClient" -as [type])) { Add-Type -Path "$([Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll" -ErrorAction SilentlyContinue }
 
 # Download CPU lists
 try {
-    $intelList = $httpClient.GetStringAsync($intelListUrl).Result
-    $amdList = $httpClient.GetStringAsync($amdListUrl).Result
-    $qualcommList = $httpClient.GetStringAsync($qualcommListUrl).Result
+    $hc = New-Object System.Net.Http.HttpClient
+    $intelList = ($hc.GetStringAsync($intelListUrl).Result -split "`n") | ForEach-Object { $_.Trim() }
+    $amdList = ($hc.GetStringAsync($amdListUrl).Result -split "`n") | ForEach-Object { $_.Trim() }
+    $qualList = ($hc.GetStringAsync($qualcommListUrl).Result -split "`n") | ForEach-Object { $_.Trim() }
+    $hc.Dispose()
 } catch {
-    Write-Host "`nFailed to download processor support lists." -ForegroundColor Yellow
-    return
+    Write-Warning "Failed to download processor support lists. Proceeding without list-based CPU check."
+    $intelList = @(); $amdList = @(); $qualList = @()
 }
-
-# Split lists into lines
-$intelList = $intelList -split "`n" | ForEach-Object { $_.Trim() }
-$amdList = $amdList -split "`n" | ForEach-Object { $_.Trim() }
-$qualcommList = $qualcommList -split "`n" | ForEach-Object { $_.Trim() }
 
 # Determine manufacturer and check support
 $cpuSupported = $false
 switch -Regex ($cpu.Manufacturer) {
     "Intel"    { $cpuSupported = $intelList -contains $cleanCpuName }
     "AMD"      { $cpuSupported = $amdList -contains $cleanCpuName }
-    "Qualcomm" { $cpuSupported = $qualcommList -contains $cleanCpuName }
+    "Qualcomm" { $cpuSupported = $qualList -contains $cleanCpuName }
     default    { Write-Host "`nUnknown manufacturer: $($cpu.Manufacturer)" }
 }
 
 # Function to check TPM 2.0
 function Check-TPM {
-    $tpm = Get-WmiObject -Namespace "Root\CIMv2\Security\MicrosoftTpm" -Class Win32_Tpm -ErrorAction SilentlyContinue
-    return $tpm.SpecVersion -match "2.0"
+    try {
+        $tpm = Get-CimInstance -Namespace "Root\CIMv2\Security\MicrosoftTpm" -Class Win32_Tpm -ErrorAction Stop
+        if ($tpm -and $tpm.SpecVersion) { return $tpm.SpecVersion -match "2.0" }
+    } catch {}
+    return $false
 }
 
-# Check if the processor is 64-bit
-$architecture = $cpu.AddressWidth
-$cpu64Bit = $architecture -eq 64
-
-# Check CPU Speed (Minimum 1 GHz)
-$cpuSpeedGHz = $cpu.MaxClockSpeed / 1000
+# Check architecture and speed
+$cpu64Bit = ($cpu.AddressWidth -eq 64)
+$cpuSpeedGHz = [math]::Round(($cpu.MaxClockSpeed / 1000), 2)
 $cpuSpeedCompatible = $cpuSpeedGHz -ge 1
 
-# Get Secure Boot status
+# Secure Boot status
 function Get-SecureBootStatus {
     try {
-        # Confirm-SecureBootUEFI works only in 64-bit PowerShell and UEFI systems
-        if ($env:PROCESSOR_ARCHITECTURE -eq 'AMD64') {
-            $secureBoot = Confirm-SecureBootUEFI -ErrorAction Stop
-            return [bool]$secureBoot
+        if (Get-Command -Name Confirm-SecureBootUEFI -ErrorAction SilentlyContinue) {
+            return [bool](Confirm-SecureBootUEFI)
         } else {
-            throw "`nNot 64-bit"
+            $msinfo = Get-CimInstance -Namespace root\WMI -Class MS_SystemInformation -ErrorAction SilentlyContinue
+            if ($msinfo -and $msinfo.SecureBoot -ne $null) { return [bool]$msinfo.SecureBoot }
+            $cs = Get-CimInstance -Class Win32_ComputerSystem -ErrorAction SilentlyContinue
+            if ($cs -and $cs.SecureBootState -ne $null) { return [bool]$cs.SecureBootState }
         }
-    } catch {
-        Write-Verbose "`nPrimary method failed: $_. Trying WMI fallback..."
-
-        try {
-            # Fallback 1: MS_SystemInformation
-            $msinfo = Get-CimInstance -Namespace root\WMI -Class MS_SystemInformation -ErrorAction Stop
-            if ($msinfo.SecureBoot -ne $null) {
-                return [bool]$msinfo.SecureBoot
-            }
-        } catch {
-            #Write-Verbose "MS_SystemInformation failed: $_"
-        }
-
-        try {
-            # Fallback 2: Win32_ComputerSystem (less reliable, but sometimes works)
-            $cs = Get-CimInstance -Class Win32_ComputerSystem
-            if ($cs.SecureBootState -ne $null) {
-                return [bool]$cs.SecureBootState
-            }
-        } catch {
-            #Write-Verbose "Win32_ComputerSystem fallback failed: $_"
-        }
-
-        #Write-Warning "Unable to determine Secure Boot status."
-        return $false
-    }
+    } catch {}
+    return $false
 }
-
-# Get Secure Boot Status
 $secureBootEnabled = Get-SecureBootStatus
-
-# Check TPM 2.0 Support
 $tpmCompatible = Check-TPM
 
 # Display results
 Write-Host "`nWindows 11 Compatibility Check" -ForegroundColor Cyan
 Write-Host "-----------------------------------"
 Write-Host "`nProcessor: $rawCpuName"
+Write-Host "`n64-bit CPU: " + (if ($cpu64Bit) { "Yes" } else { "No" })
+Write-Host "CPU Speed: $cpuSpeedGHz GHz"
+Write-Host "Secure Boot Enabled: " + (if ($secureBootEnabled) { "Yes" } else { "No" })
+Write-Host "TPM 2.0 Support: " + (if ($tpmCompatible) { "Yes" } else { "No" })
+Write-Host "CPU Support (known-list): " + (if ($cpuSupported) { "Yes" } else { "No" })
 
-# Architecture Check
-if ($cpu64Bit) {
-    Write-Host "`n64-bit CPU: Compatible" -ForegroundColor Green
-} else {
-    Write-Host "`n64-bit CPU: Not Compatible" -ForegroundColor Red
-}
-
-# CPU Speed Check
-if ($cpuSpeedCompatible) {
-    Write-Host "`nCPU Speed: $cpuSpeedGHz GHz (Compatible)" -ForegroundColor Green
-} else {
-    Write-Host "`nCPU Speed: $cpuSpeedGHz GHz (Not Compatible)" -ForegroundColor Red
-}
-
-# Secure Boot Check
-if ($secureBootEnabled) {
-    Write-Host "`nSecure Boot Enabled: Yes" -ForegroundColor Green
-} else {
-    Write-Host "`nSecure Boot Enabled: No" -ForegroundColor Red
-}
-
-# TPM 2.0 Check
-if ($tpmCompatible) {
-    Write-Host "`nTPM 2.0 Support: Yes" -ForegroundColor Green
-} else {
-    Write-Host "`nTPM 2.0 Support: No" -ForegroundColor Red
-}
-
-# CPU Support Check
-if ($cpuSupported) {
-    Write-Host "`nCPU Compatibility: $rawCpuName is supported" -ForegroundColor Green
-} else {
-    Write-Host "`nCPU Compatibility: $rawCpuName is NOT supported" -ForegroundColor Red
-}
-
-# Store failed checks
-# Incompatibility reasons
+# Collect incompatibilities
 $incompatibilityReasons = @()
 if (-not $cpu64Bit) { $incompatibilityReasons += "CPU is not 64-bit" }
 if (-not $cpuSpeedCompatible) { $incompatibilityReasons += "CPU speed is less than 1 GHz" }
@@ -395,109 +325,128 @@ if (-not $secureBootEnabled) { $incompatibilityReasons += "Secure Boot is not en
 if (-not $tpmCompatible) { $incompatibilityReasons += "TPM 2.0 is not supported or not enabled" }
 if (-not $cpuSupported) { $incompatibilityReasons += "Unsupported processor: $rawCpuName" }
 
-# Final verdict
+# Define full bypass key set
+$allBypassKeys = @(
+    @{Path="HKLM:\SYSTEM\Setup\MoSetup"; Name="AllowUpgradesWithUnsupportedTPMOrCPU"; Value=1},
+    @{Path="HKLM:\SYSTEM\Setup\LabConfig"; Name="BypassTPMCheck"; Value=1},
+    @{Path="HKLM:\SYSTEM\Setup\LabConfig"; Name="BypassSecureBootCheck"; Value=1},
+    @{Path="HKLM:\SYSTEM\Setup\LabConfig"; Name="BypassRAMCheck"; Value=1},
+    @{Path="HKLM:\SYSTEM\Setup\LabConfig"; Name="BypassStorageCheck"; Value=1},
+    @{Path="HKLM:\SYSTEM\Setup\LabConfig"; Name="BypassCPUCheck"; Value=1}
+)
+
+# Decide which bypasses are required (conservative)
+$requiredBypasses = @()
+if (-not $tpmCompatible) {
+    $requiredBypasses += $allBypassKeys | Where-Object { $_.Name -in @("AllowUpgradesWithUnsupportedTPMOrCPU","BypassTPMCheck") }
+}
+if (-not $secureBootEnabled) {
+    $requiredBypasses += $allBypassKeys | Where-Object { $_.Name -eq "BypassSecureBootCheck" }
+}
+if (-not $cpu64Bit -or -not $cpuSpeedCompatible -or -not $tpmCompatible) {
+    $requiredBypasses += $allBypassKeys | Where-Object { $_.Name -in @("BypassCPUCheck","AllowUpgradesWithUnsupportedTPMOrCPU") }
+}
 if ($incompatibilityReasons.Count -gt 0) {
-    Write-Host "`nThis system does not meet below Windows 11 requirements:" -ForegroundColor Yellow
-    foreach ($reason in $incompatibilityReasons) {
-        Write-Host " - $reason" -ForegroundColor Red
+    $requiredBypasses += $allBypassKeys | Where-Object { $_.Name -in @("BypassRAMCheck","BypassStorageCheck") }
+}
+$requiredBypasses = $requiredBypasses | Select-Object -Unique
+
+# Apply required bypasses and track which applied
+$appliedBypasses = @()
+if ($requiredBypasses.Count -gt 0) {
+    Write-Host "`nApplying required registry bypasses..." -ForegroundColor Yellow
+    foreach ($b in $requiredBypasses) {
+        try {
+            New-Item -Path $b.Path -ErrorAction SilentlyContinue | Out-Null
+            Set-ItemProperty -Path $b.Path -Name $b.Name -Type DWord -Value $b.Value -Force
+            $appliedBypasses += $b.Name
+            Write-Host " - Applied $($b.Name) at $($b.Path)"
+        } catch {
+            Write-Warning "Failed to apply $($b.Name): $_"
+        }
     }
-    Write-Host "`nRegistry Tweaks will be applied to bypass the checks..." -ForegroundColor Yellow
-    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\MoSetup" /v AllowUpgradesWithUnsupportedTPMOrCPU /t REG_DWORD /d 1 /f
-    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassTPMCheck /t REG_DWORD /d 1 /f
-    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassSecureBootCheck /t REG_DWORD /d 1 /f
-    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassRAMCheck /t REG_DWORD /d 1 /f
-    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassStorageCheck /t REG_DWORD /d 1 /f
-    $null = reg add "HKEY_LOCAL_MACHINE\SYSTEM\Setup\LabConfig" /v BypassCPUCheck /t REG_DWORD /d 1 /f
-    Write-Host "`nBypass Applied Successfully. Now Proceed for installation..." -ForegroundColor Green
+} else {
+    Write-Host "`nNo bypasses required; system looks compatible." -ForegroundColor Green
+}
+
+# Decide whether to use /product server only if ALL bypass keys were applied
+$allNames = $allBypassKeys | ForEach-Object { $_.Name } | Sort-Object
+$appliedNow = $appliedBypasses | Sort-Object
+$useProductServer = $false
+if ($allNames -and ($allNames -eq $appliedNow)) {
+    $useProductServer = $true
+    Write-Host "`nAll bypass keys applied. /product server will be used." -ForegroundColor Cyan
+} else {
+    Write-Host "`nNot all bypass keys were applied. /product server will NOT be used." -ForegroundColor Cyan
+}
+
+# Build installer args conditionally
+if ($useProductServer) {
     $installArgs = "/product server /auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable /noreboot"
 } else {
-    Write-Host "`nThis system meets all Windows 11 hardware requirements." -ForegroundColor Green
     $installArgs = "/auto upgrade /quiet /eula accept /dynamicupdate disable /telemetry disable /noreboot"
 }
 
 # Start Windows 11 Upgrade
 Write-Host "`nStarting Windows 11 upgrade..."
-$null = Start-Process -FilePath $setupPath -ArgumentList $installArgs -PassThru
+try {
+    $proc = Start-Process -FilePath $setupPath -ArgumentList $installArgs -PassThru
+    Write-Host "Setup started (PID: $($proc.Id))."
+} catch {
+    Write-Error "Failed to start setup: $_"; exit 1
+}
 
-# Path to the setup log file
+# Path to the setup log file and monitoring
 $logPath = 'C:\$WINDOWS.~BT\Sources\Panther\setupact.log'
 $setupFolder = 'C:\$WINDOWS.~BT'
 
-# Delete the log file if it exists
-if (Test-Path $logPath) {
-    $null = Remove-Item -Path $logPath -Force -ErrorAction SilentlyContinue
-}
+if (Test-Path $logPath) { Remove-Item -Path $logPath -Force -ErrorAction SilentlyContinue }
 
 function Is-SetupRunning {
-    Get-Process -Name 'setupprep','SetupHost' -ErrorAction SilentlyContinue | Where-Object { $_ } | ForEach-Object { return $true }
+    $names = @('setupprep','setuphost','setup')
+    foreach ($n in $names) { if (Get-Process -Name $n -ErrorAction SilentlyContinue) { return $true } }
     return $false
 }
 
+Write-Host "`nYour PC will restart several times. This might take a while." -ForegroundColor Green
+$spinner = ('\','|','/','-'); $spinnerIndex = 0; $currentPercent = 0
+
 while ($true) {
+    Start-Sleep -Milliseconds 500
+    $setupRunning = Is-SetupRunning
     $folderExists = Test-Path $setupFolder
     $logExists = Test-Path $logPath
-    $setupRunning = Is-SetupRunning
 
-    if ($logExists -or (-not $folderExists -and -not $setupRunning)) {
-        if (-not $folderExists -and -not $setupRunning) {
-            Write-Host "`nNeither setup folder nor upgrade process found. Exiting..." -ForegroundColor Yellow
-        }
+    if (-not $logExists -and -not $folderExists -and -not $setupRunning) {
+        Write-Host "`nNo setup activity detected. Exiting monitor." -ForegroundColor Yellow
         break
     }
-    Start-Sleep -Seconds 1
-}
 
-# Start monitoring loop
-Write-Host "`nYour PC will restart several times. This might take a while." -ForegroundColor Green
-$lastPercent = -1
-
-# Spinner characters
-$spinner = '\|/--\|/--'.ToCharArray()
-$spinnerIndex = 0
-$lastPercent = -1
-$currentPercent = 0
-
-# Initial display
-#Write-Host -NoNewline "`r$($spinner[$spinnerIndex]) 0% complete     " -ForegroundColor Cyan
-
-while ($true) {
-    Start-Sleep -Milliseconds 200
-
-    if (Test-Path $logPath) {
-        $content = Get-Content $logPath -Tail 200
-        $progressLines = $content | Where-Object { $_ -match "Overall progress: \[(\d+)%\]" }
-
-        if ($progressLines) {
-            $lastLine = $progressLines[-1]
-            if ($lastLine -match "Overall progress: \[(\d+)%\]") {
-                $currentPercent = [int]$matches[1]
+    if ($logExists) {
+        try {
+            $content = Get-Content $logPath -Tail 300 -ErrorAction SilentlyContinue
+            $progressLines = $content | Where-Object { $_ -match "Overall progress: \[(\d+)%\]" }
+            if ($progressLines) {
+                $lastLine = $progressLines[-1]
+                if ($lastLine -match "Overall progress: \[(\d+)%\]") { $currentPercent = [int]$Matches[1] }
             }
-        }
+        } catch {}
+    }
 
-        # Update spinner and progress
-        $spinnerChar = $spinner[$spinnerIndex % $spinner.Length]
-        Write-Host -NoNewline "`r$spinnerChar $currentPercent% complete     " -ForegroundColor Cyan
-        $spinnerIndex++
+    $spinnerChar = $spinner[$spinnerIndex % $spinner.Length]
+    Write-Host -NoNewline "`r$spinnerChar $currentPercent% complete    "
+    $spinnerIndex++
 
-        if ($currentPercent -ge 100) {
-            Write-Host "`r" + (' ' * 60) + "`r" -NoNewline
-            Write-Host "Upgrade completed! Your PC will restart in a few moments" -ForegroundColor Green
-            break
-        }
-    } else {
-        Write-Host -NoNewline "`rWindows 11 installation failed. Please restart the installation or try again after restarting your PC." -ForegroundColor Red
+    if ($currentPercent -ge 100) {
+        Write-Host "`nUpgrade completed! Your PC will restart in a few moments." -ForegroundColor Green
         break
     }
 }
 
-# Unmount ISO
+# Cleanup: unmount ISO
 Write-Host "`nUnmounting ISO..."
-try {
-    $null = Dismount-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContinue
-} catch {
-    Write-Warning "Failed to dismount ISO: $_"
-}
-Write-Host "`nWindows 11 upgrade process complete."
+try { $null = Dismount-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContinue } catch { Write-Warning "Failed to dismount ISO: $_" }
 
-Write-Host "`nRebooting System..."
-#Restart-Computer -Force
+Write-Host "`nWindows 11 upgrade process finished..."
+#Write-Host "`nRebooting System..."
+# Restart-Computer -Force
