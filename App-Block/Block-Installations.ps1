@@ -18,7 +18,9 @@ param (
 		"ITD_EFILING_JFX*.jar",
 		"Generic RBI Converter*.EXE",	#for Accounts
 		"On-premises data gateway*.exe",
-		"DataMovement.PersonalGatewayComponents.msi"
+		"DataMovement.PersonalGatewayComponents.msi",
+		"PROSCAN.exe",
+		"javaw.exe"
     ),
 
     [string[]]$WhitelistedPaths = @(
@@ -31,7 +33,7 @@ param (
 		"%OSDRIVE%\DEVSUITEHOME*\*",
 		"%OSDRIVE%\QUEST_TOAD\*",
 		"%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*",
-		"%OSDRIVE%\USERS\Administrator\APPDATA\LOCALLOW\ORACLE\*",
+		"%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*",
 		"%OSDRIVE%\Users\*\Appdata\Local\Packages\*",
 		"%OSDRIVE%\FG WILSON*\*",
 		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\MICROSOFT\*",
@@ -48,6 +50,7 @@ param (
 		"%OSDRIVE%\IREPSSigner",
 		"%OSDRIVE%\Users\*\AppData\Roaming\Polycom\*",
 		"%OSDRIVE%\Users\*\AppData\Local\Package Cache\*",
+		"%OSDRIVE%\Program Files (x86)\Bosch\*",
 		"D:\WEICHAI\*"
     ),
 
