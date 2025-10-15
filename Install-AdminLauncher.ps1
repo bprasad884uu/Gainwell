@@ -138,6 +138,10 @@ foreach ($p in @($installFolder, $requestsFolder)) {
     }
 }
 
+# Preset admin user and password (plain text)
+#$adminUser = ".\administrator"
+#$plainPassword = "kuchbhihoga"
+
 # Prompt for admin username & password
 Write-Host "Enter admin account to store (examples: DOMAIN\Administrator or .\Administrator)."
 $adminUser = Read-Host "Admin user"
@@ -156,7 +160,8 @@ function Read-Password([string]$prompt) {
         return $p1
     }
 }
-
+# Convert plain text password to SecureString
+#$securePass = ConvertTo-SecureString $plainPassword -AsPlainText -Force
 $securePass = Read-Password "Enter password"
 
 # Convert to plain (briefly)
