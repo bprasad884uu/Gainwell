@@ -9,7 +9,7 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 
 # ---------- Config (fill these) ----------
 $isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=043e4cb0-0b6a-4d7b-8111-74371fd00bed&P1=1760992881&P2=601&P3=2&P4=GAyjZIMFe8Eng%2bVK0afQQZXotLEZ45YKIbf%2bN%2f6CMh6XyW8F0Ygn2a%2b%2bE41dTu%2bFH8AI74plNNhRKtZmuEhdFLrdHSCNmJV%2bdXVXCqtwmBq8E1P17luhwmh%2bxo7OcfBygxJGPbH5gkNMf4wAUZFxQ91TpFJnRqZKIXANvrsAFalBsMG1dBSLORIl%2fU6ZfYe2chuoCsa4eTlfC3jYbsUBp9W7w8SuJkx6WUIIss%2bRENj331ggK8ivUAnAKBIgcgDp2IVCF8WkavrGWGnRrEav4HWMGh8h8qbMMFYNIOpiRfugVmEC7K861gQ4khHFT%2buCSINjnslHVhwlx6w9jx%2fPEA%3d%3d"
-$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=14c26e1e-69d6-47bf-b110-2b72f3d71720&P1=1760992873&P2=601&P3=2&P4=QXLc2oZ44GK1CELDZQ5COcW%2b2d%2fWxHncLMK4tn6s%2bobjiLWSLzuPr7PIyWre%2fOM9o1S0eAsGPocxp9nmPUiGljo7OqFoPmg8%2frjer2YjP7GrLk3EJ%2bU%2brr%2fHnCkeBQ1DAecOCT0IHmKOTC%2fVlyBl%2fBCN55L%2bmGCRMolUcMj9FoQ%2ff9xGdyRxbcwepKsuGfFdvrULAK%2bp7TB3PSihgzq7zVdWGszkQLfpHExfFL8CyJ65T82EKfYnTY2meAwxP3U4LpClZvbFthLDaULShzHbhhGoqrl7jnVrulM2sKSBCwvyudiaOJaA0Dsokkx3KIImKTlG7VZspbs4F1wtecbY9A%3d%3d"
+$isoUrl_EN_GB  = "h"
 
 # Provide either a SHA256 hex string or a URL that returns the hash. Leave empty ("") to skip verification.
 $Checksum = ""
