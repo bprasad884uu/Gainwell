@@ -85,6 +85,7 @@ Start-Sleep -Seconds 2
 try { Stop-Service AppIDSvc -Force -ErrorAction SilentlyContinue } catch {}
 
 # Cleanup backup directory
+$backupRoot = "C:\PolicyBackup"
 if (Test-Path $backupRoot) {
     Remove-Item $backupRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
