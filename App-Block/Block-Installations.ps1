@@ -107,56 +107,6 @@ function New-RuleGuid { return [guid]::NewGuid().ToString() }
 
 $ErrorActionPreference = 'Stop'
 
-<# backup location
-$backupRoot = "C:\PolicyBackup"
-if (-not (Test-Path $backupRoot)) { New-Item -Path $backupRoot -ItemType Directory -Force | Out-Null }
-$tsFolder = Get-Date -Format "MMyyyyddHHmmss"
-$backupDir = Join-Path $backupRoot $tsFolder
-New-Item -Path $backupDir -ItemType Directory -Force | Out-Null
-
-$humanTs = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-$meta = @{
-    CreatedAt        = $humanTs
-    BackupFolderName = $tsFolder
-    BackupFolderPath = $backupDir
-    ComputerName     = $env:COMPUTERNAME
-    User             = [Environment]::UserName
-    ScriptPath       = $MyInvocation.MyCommand.Path
-}
-$metaFile = Join-Path $backupDir 'backup-info.txt'
-$meta.GetEnumerator() | ForEach-Object { "$($_.Key): $($_.Value)" } | Out-File -FilePath $metaFile -Encoding UTF8 -Force
-
-Write-Host "=== Creating Backup ($backupDir) ==="
-
-# Backup AppLocker effective policy
-try {
-    $xmlPath = Join-Path $backupDir "AppLocker-Backup.xml"
-    Get-AppLockerPolicy -Effective -Xml | Out-File -FilePath $xmlPath -Encoding UTF8
-    Write-Host "`nAppLocker backed up to $xmlPath"
-} catch { Write-Warning "`nAppLocker backup failed: $_" }
-
-# Backup SRP
-$regPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer"
-if (Test-Path $regPath) {
-    try {
-        $regFile = Join-Path $backupDir "SRP-Backup.reg"
-        reg export "HKLM\SOFTWARE\Policies\Microsoft\Windows\Safer" $regFile /y | Out-Null
-        Write-Host "`nSRP registry exported to $regFile"
-    } catch { Write-Warning "`nSRP backup failed." }
-} else { Write-Host "`nSRP registry path not found. Skipping backup." }
-
-# Backup WDAC artifacts
-try {
-    $wdacPath = Join-Path $backupDir "WDAC-Policies"
-    New-Item -ItemType Directory -Path $wdacPath -Force | Out-Null
-    Get-ChildItem -Path "C:\Windows\System32\CodeIntegrity\*" -Include '*.cipolicy','*.xml' -ErrorAction SilentlyContinue |
-        ForEach-Object { Copy-Item -Path $_.FullName -Destination $wdacPath -Force }
-    $found = Get-ChildItem -Path $wdacPath -ErrorAction SilentlyContinue
-    if ($found) { Write-Host "`nAttempted WDAC policy backup (if any) to $wdacPath" } else { Write-Host "`nNo WDAC policy files found to back up." }
-} catch { Write-Warning "`nWDAC backup step failed: $_" }
-
-Write-Host "`n=== Backup complete. Building AppLocker XML... ==="
-#>
 # start building XML
 $xml = @"
 <?xml version="1.0" encoding="utf-8"?>
