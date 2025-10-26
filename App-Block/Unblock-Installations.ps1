@@ -73,18 +73,31 @@ Remove-Item "HKCU:\SOFTWARE\Policies\Microsoft\Windows\SrpV2" -Recurse -Force -E
 Remove-Item "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppLocker" -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item "HKCU:\SOFTWARE\Policies\Microsoft\Windows\AppLocker" -Recurse -Force -ErrorAction SilentlyContinue
 
-# 4) Clear SRP for all users (safe; policy-only)
+# 4) Clear UAC
+$uacKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+if (Test-Path $uacKey) {
+    Remove-ItemProperty -Path $uacKey -Name "EnableInstallerDetection" -ErrorAction SilentlyContinue
+}
+
+# 5) Clear Windows Installer policy
+$msiKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer"
+if (Test-Path $msiKey) {
+    Remove-ItemProperty -Path $msiKey -Name "AlwaysInstallElevated" -ErrorAction SilentlyContinue
+	Set-ItemProperty -Path $msiKey -Name "DisableMSI" -Value 0 -ErrorAction SilentlyContinue
+}
+
+# 6) Clear SRP for all users (safe; policy-only)
 Remove-AllUserSrpPolicies
 
-# 5) Apply empty policy
+# 7) Apply empty policy
 Apply-Empty-AppLockerPolicy
 
-# 6) GP refresh; keep service stopped
+# 8) GP refresh; keep service stopped
 gpupdate /force | Out-Null
 Start-Sleep -Seconds 2
 try { Stop-Service AppIDSvc -Force -ErrorAction SilentlyContinue } catch {}
 
-# Cleanup backup directory
+# 9) Cleanup backup directory
 $backupRoot = "C:\PolicyBackup"
 if (Test-Path $backupRoot) {
     Remove-Item $backupRoot -Recurse -Force -ErrorAction SilentlyContinue
