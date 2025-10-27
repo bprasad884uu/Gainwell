@@ -20,7 +20,9 @@ param (
 		"On-premises data gateway*.exe",
 		"DataMovement.PersonalGatewayComponents.msi",
 		"PROSCAN.exe",
-		"javaw.exe"
+		"javaw.exe",
+		"ZoomInstaller*.exe",
+		"Zoom_cm*.exe"
     ),
 
     [string[]]$WhitelistedPaths = @(
