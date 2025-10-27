@@ -15,45 +15,48 @@ param (
     [string[]]$WhitelistedApps = @(
 		"Diagsmart.exe",
 		"Uninstall*.exe",
-		"ITD_EFILING_JFX*.jar",
 		"Generic RBI Converter*.EXE",	#for Accounts
 		"On-premises data gateway*.exe",
-		"DataMovement.PersonalGatewayComponents.msi",
 		"PROSCAN.exe",
 		"javaw.exe",
 		"ZoomInstaller*.exe",
 		"Zoom_cm*.exe"
     ),
+	
+	[string[]]$WhitelistedMsiNames = @(
+		"DataMovement.PersonalGatewayComponents.msi"
+	),
 
     [string[]]$WhitelistedPaths = @(
 		"D:\ManageEngine*\*",
 		"E:\ManageEngine*\*",
-		"%OSDRIVE%\Siemens\*",
-		"%OSDRIVE%\Java\*",
-		"%OSDRIVE%\USERS\*\.SWT\*",
-		"%OSDRIVE%\USERS\*\TEAMCENTER\*",
-		"%OSDRIVE%\DEVSUITEHOME*\*",
-		"%OSDRIVE%\QUEST_TOAD\*",
-		"%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*",
-		"%OSDRIVE%\USERS\*\APPDATA\LOCALLOW\ORACLE\*",
-		"%OSDRIVE%\Users\*\Appdata\Local\Packages\*",
-		"%OSDRIVE%\FG WILSON*\*",
-		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\MICROSOFT\*",
-		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\JNA*\JNA*.*",
-		"%OSDRIVE%\PROGRAMDATA\Mercedes-Benz\*",			#Xentry
-		"%OSDRIVE%\PROGRAMDATA\Daimler-Truck\*",			#Xentry
-		"%OSDRIVE%\PROGRAMDATA\ZenZefiT\*",					#Xentry
-		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\CHROMIUM*\*",		#Xentry
+		"%SystemDrive%\Siemens\*",
+		"%SystemDrive%\Java\*",
+		"%SystemDrive%\Users\*\.SWT\*",
+		"%SystemDrive%\Users\*\TEAMCENTER\*",
+		"%SystemDrive%\DEVSUITEHOME*\*",
+		"%SystemDrive%\QUEST_TOAD\*",
+		"%SystemDrive%\Users\*\AppData\LocalLow\ORACLE\*",
+		"%SystemDrive%\Users\*\AppData\Local\Packages\*",
+		"%SystemDrive%\FG WILSON*\*",
+		"%SystemDrive%\Users\*\AppData\Local\MICROSOFT\*",
+		"%SystemDrive%\Users\*\AppData\Local\TEMP\JNA*\JNA*.*",
+		"%SystemDrive%\ProgramData\Mercedes-Benz\*",			#Xentry
+		"%SystemDrive%\ProgramData\Daimler-Truck\*",			#Xentry
+		"%SystemDrive%\ProgramData\ZenZefiT\*",					#Xentry
+		"%SystemDrive%\Users\*\AppData\Local\CHROMIUM*\*",		#Xentry
 		"D:\Zmysql-query-browser*\MySQL Query Browser*\*",
 		"D:\CBT\*",
-		"%OSDRIVE%\GRADE-X_DATA\*",
-		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\APPS\*",
-		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\Programs\Naukri Launcher\*",
-		"%OSDRIVE%\IREPSSigner",
-		"%OSDRIVE%\Users\*\AppData\Roaming\Polycom\*",
-		"%OSDRIVE%\Users\*\AppData\Local\Package Cache\*",
-		"%OSDRIVE%\Program Files (x86)\Bosch\*",
-		"D:\WEICHAI\*"
+		"%SystemDrive%\GRADE-X_DATA\*",
+		"%SystemDrive%\Users\*\AppData\Local\APPS\*",
+		"%SystemDrive%\Users\*\AppData\Local\Programs\Naukri Launcher\*",
+		"%SystemDrive%\IREPSSigner\*",
+		"%SystemDrive%\Users\*\AppData\Roaming\Polycom\*",
+		"%SystemDrive%\Program Files (x86)\Bosch\*",
+		"D:\WEICHAI\*",
+		"%PROGRAMFILES%\Java\*\bin\*",
+		"%PROGRAMFILES(x86)%\Java\*\bin\*"
+
     ),
 
     [string[]]$WhitelistedPublishers = @(
@@ -66,12 +69,11 @@ param (
     ),
 
     [string[]]$WhitelistedScripts = @(
-		"%OSDRIVE%\Users\*\AppData\Local\Temp\TempScript.ps1",
-		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\RAD*.ps1",
-		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\TEMP\__PSSCRIPTPOLICYTEST*.ps*",
-		"%OSDRIVE%\Users\*\AppData\Local\Temp\IPW*.*",
-		"D:\jarfile\*.jar",			
-		"%OSDRIVE%\USERS\*APPDATA\LOCAL\TEMP\*\START.BAT"			#For Xentry Software Installation
+		"%SystemDrive%\Users\*\AppData\Local\Temp\TempScript.ps1",
+		"%SystemDrive%\Users\*\AppData\Local\TEMP\RAD*.ps1",
+		"%SystemDrive%\Users\*\AppData\Local\TEMP\__PSSCRIPTPOLICYTEST*.ps*",
+		"%SystemDrive%\Users\*\AppData\Local\Temp\IPW*.*",
+		"%SystemDrive%\Users\*\AppData\Local\TEMP\*\START.BAT"			#For Xentry Software Installation
     )
 )
 
@@ -107,56 +109,6 @@ function New-RuleGuid { return [guid]::NewGuid().ToString() }
 
 $ErrorActionPreference = 'Stop'
 
-<# backup location
-$backupRoot = "C:\PolicyBackup"
-if (-not (Test-Path $backupRoot)) { New-Item -Path $backupRoot -ItemType Directory -Force | Out-Null }
-$tsFolder = Get-Date -Format "MMyyyyddHHmmss"
-$backupDir = Join-Path $backupRoot $tsFolder
-New-Item -Path $backupDir -ItemType Directory -Force | Out-Null
-
-$humanTs = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-$meta = @{
-    CreatedAt        = $humanTs
-    BackupFolderName = $tsFolder
-    BackupFolderPath = $backupDir
-    ComputerName     = $env:COMPUTERNAME
-    User             = [Environment]::UserName
-    ScriptPath       = $MyInvocation.MyCommand.Path
-}
-$metaFile = Join-Path $backupDir 'backup-info.txt'
-$meta.GetEnumerator() | ForEach-Object { "$($_.Key): $($_.Value)" } | Out-File -FilePath $metaFile -Encoding UTF8 -Force
-
-Write-Host "=== Creating Backup ($backupDir) ==="
-
-# Backup AppLocker effective policy
-try {
-    $xmlPath = Join-Path $backupDir "AppLocker-Backup.xml"
-    Get-AppLockerPolicy -Effective -Xml | Out-File -FilePath $xmlPath -Encoding UTF8
-    Write-Host "`nAppLocker backed up to $xmlPath"
-} catch { Write-Warning "`nAppLocker backup failed: $_" }
-
-# Backup SRP
-$regPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer"
-if (Test-Path $regPath) {
-    try {
-        $regFile = Join-Path $backupDir "SRP-Backup.reg"
-        reg export "HKLM\SOFTWARE\Policies\Microsoft\Windows\Safer" $regFile /y | Out-Null
-        Write-Host "`nSRP registry exported to $regFile"
-    } catch { Write-Warning "`nSRP backup failed." }
-} else { Write-Host "`nSRP registry path not found. Skipping backup." }
-
-# Backup WDAC artifacts
-try {
-    $wdacPath = Join-Path $backupDir "WDAC-Policies"
-    New-Item -ItemType Directory -Path $wdacPath -Force | Out-Null
-    Get-ChildItem -Path "C:\Windows\System32\CodeIntegrity\*" -Include '*.cipolicy','*.xml' -ErrorAction SilentlyContinue |
-        ForEach-Object { Copy-Item -Path $_.FullName -Destination $wdacPath -Force }
-    $found = Get-ChildItem -Path $wdacPath -ErrorAction SilentlyContinue
-    if ($found) { Write-Host "`nAttempted WDAC policy backup (if any) to $wdacPath" } else { Write-Host "`nNo WDAC policy files found to back up." }
-} catch { Write-Warning "`nWDAC backup step failed: $_" }
-
-Write-Host "`n=== Backup complete. Building AppLocker XML... ==="
-#>
 # start building XML
 $xml = @"
 <?xml version="1.0" encoding="utf-8"?>
@@ -301,12 +253,14 @@ $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admi
 $xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
-# Whitelisted MSI filenames and paths
-foreach ($app in $WhitelistedApps) {
-    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - MSI - $app`" Description=`"Allow MSI filename/pattern: $app`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
-    $xml += "      <Conditions><FilePathCondition Path=`"*\$app`"/></Conditions>`n"
+# Whitelisted MSI filenames anywhere
+foreach ($mapp in $WhitelistedMsiNames) {
+    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - MSI - $mapp`" Description=`"Allow MSI filename/pattern: $mapp`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
+    $xml += "      <Conditions><FilePathCondition Path=`"*\$mapp`"/></Conditions>`n"
     $xml += "    </FilePathRule>`n"
 }
+
+# Whitelisted MSI paths (from your generic allowed paths list)
 foreach ($p in $WhitelistedPaths) {
     if ([string]::IsNullOrWhiteSpace($p)) { continue }
     $path = $p
@@ -318,7 +272,7 @@ foreach ($p in $WhitelistedPaths) {
     $xml += "    </FilePathRule>`n"
 }
 
-# ProgramFiles MSI caches
+# ProgramFiles MSI caches (sometimes installers sit here)
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramFiles MSI`" Description=`"Allow MSIs from Program Files`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
@@ -327,8 +281,18 @@ $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramF
 $xml += "      <Conditions><FilePathCondition Path=`"%PROGRAMFILES(x86)%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
+# ProgramData and user Package Cache (common for bootstrapper extracts)
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramData MSI`" Description=`"Allow MSIs from ProgramData`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%ProgramData%\*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Package Cache MSI`" Description=`"Allow MSIs from Package Cache`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%SystemDrive%\Users\*\AppData\Local\Package Cache\*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
+# Windows Installer cache for repair/uninstall
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Windows Installer Cache`" Description=`"Allow MSIs from %WINDIR%\Installer`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%WINDIR%\Installer\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 $xml += "  </RuleCollection>`n"
@@ -349,23 +313,6 @@ $xml += "          <BinaryVersionRange LowSection=`"0.0.0.0`" HighSection=`"6553
 $xml += "        </FilePublisherCondition>`n"
 $xml += "      </Conditions>`n"
 $xml += "    </FilePublisherRule>`n"
-
-# Appx whitelisted paths/names
-foreach ($app in $WhitelistedApps) {
-    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Appx - $app`" Description=`"Allow Appx filename/pattern: $app`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
-    $xml += "      <Conditions><FilePathCondition Path=`"*\$app`"/></Conditions>`n"
-    $xml += "    </FilePathRule>`n"
-}
-foreach ($p in $WhitelistedPaths) {
-    if ([string]::IsNullOrWhiteSpace($p)) { continue }
-    $path = $p
-    if ($path -notmatch '[*?]') {
-        if ($path -match '\\$') { $path = $path + '*' } else { $path = $path + '\*' }
-    }
-    $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Appx Path - $path`" Description=`"Allow Appxs from $path`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
-    $xml += "      <Conditions><FilePathCondition Path=`"$path`"/></Conditions>`n"
-    $xml += "    </FilePathRule>`n"
-}
 
 $xml += "  </RuleCollection>`n"
 
@@ -416,7 +363,7 @@ try {
         Write-Warning "`nAppLocker reset failed (continuing to apply new policy): $($_.Exception.Message)"
     }
 
-    Write-Host "`nApplying new AppLocker policy ($EnforcementMode) from: $OutXmlPath"
+    Write-Host "`nApplying new AppLocker policy..."
     Set-AppLockerPolicy -XmlPolicy $OutXmlPath -ErrorAction Stop
 
     gpupdate /force | Out-Null
