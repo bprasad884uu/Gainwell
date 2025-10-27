@@ -55,7 +55,8 @@ param (
 		"%SystemDrive%\Program Files (x86)\Bosch\*",
 		"D:\WEICHAI\*",
 		"%PROGRAMFILES%\Java\*\bin\*",
-		"%PROGRAMFILES(x86)%\Java\*\bin\*"
+		"%PROGRAMFILES(x86)%\Java\*\bin\*",
+		"%SystemDrive%\Users\*\AppData\Roaming\ZOOM\*"
 
     ),
 
