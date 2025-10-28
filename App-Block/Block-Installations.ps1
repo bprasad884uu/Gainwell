@@ -30,33 +30,33 @@ param (
     [string[]]$WhitelistedPaths = @(
 		"D:\ManageEngine*\*",
 		"E:\ManageEngine*\*",
-		"%SystemDrive%\Siemens\*",
-		"%SystemDrive%\Java\*",
-		"%SystemDrive%\Users\*\.SWT\*",
-		"%SystemDrive%\Users\*\TEAMCENTER\*",
-		"%SystemDrive%\DEVSUITEHOME*\*",
-		"%SystemDrive%\QUEST_TOAD\*",
-		"%SystemDrive%\Users\*\AppData\LocalLow\ORACLE\*",
-		"%SystemDrive%\Users\*\AppData\Local\Packages\*",
-		"%SystemDrive%\FG WILSON*\*",
-		"%SystemDrive%\Users\*\AppData\Local\MICROSOFT\*",
-		"%SystemDrive%\Users\*\AppData\Local\TEMP\JNA*\JNA*.*",
-		"%SystemDrive%\ProgramData\Mercedes-Benz\*",			#Xentry
-		"%SystemDrive%\ProgramData\Daimler-Truck\*",			#Xentry
-		"%SystemDrive%\ProgramData\ZenZefiT\*",					#Xentry
-		"%SystemDrive%\Users\*\AppData\Local\CHROMIUM*\*",		#Xentry
+		"%OSDRIVE%\Siemens\*",
+		"%OSDRIVE%\Java\*",
+		"%OSDRIVE%\Users\*\.SWT\*",
+		"%OSDRIVE%\Users\*\TEAMCENTER\*",
+		"%OSDRIVE%\DEVSUITEHOME*\*",
+		"%OSDRIVE%\QUEST_TOAD\*",
+		"%OSDRIVE%\Users\*\AppData\LocalLow\ORACLE\*",
+		"%OSDRIVE%\Users\*\AppData\Local\Packages\*",
+		"%OSDRIVE%\FG WILSON*\*",
+		"%OSDRIVE%\Users\*\AppData\Local\MICROSOFT\*",
+		"%OSDRIVE%\Users\*\AppData\Local\TEMP\JNA*\JNA*.*",
+		"%OSDRIVE%\ProgramData\Mercedes-Benz\*",			#Xentry
+		"%OSDRIVE%\ProgramData\Daimler-Truck\*",			#Xentry
+		"%OSDRIVE%\ProgramData\ZenZefiT\*",					#Xentry
+		"%OSDRIVE%\Users\*\AppData\Local\CHROMIUM*\*",		#Xentry
 		"D:\Zmysql-query-browser*\MySQL Query Browser*\*",
 		"D:\CBT\*",
-		"%SystemDrive%\GRADE-X_DATA\*",
-		"%SystemDrive%\Users\*\AppData\Local\APPS\*",
-		"%SystemDrive%\Users\*\AppData\Local\Programs\Naukri Launcher\*",
-		"%SystemDrive%\IREPSSigner\*",
-		"%SystemDrive%\Users\*\AppData\Roaming\Polycom\*",
-		"%SystemDrive%\Program Files (x86)\Bosch\*",
+		"%OSDRIVE%\GRADE-X_DATA\*",
+		"%OSDRIVE%\Users\*\AppData\Local\APPS\*",
+		"%OSDRIVE%\Users\*\AppData\Local\Programs\Naukri Launcher\*",
+		"%OSDRIVE%\IREPSSigner\*",
+		"%OSDRIVE%\Users\*\AppData\Roaming\Polycom\*",
+		"%OSDRIVE%\Program Files (x86)\Bosch\*",
 		"D:\WEICHAI\*",
 		"%PROGRAMFILES%\Java\*\bin\*",
 		"%PROGRAMFILES(x86)%\Java\*\bin\*",
-		"%SystemDrive%\Users\*\AppData\Roaming\ZOOM\*"
+		"%OSDRIVE%\Users\*\AppData\Roaming\ZOOM\*"
 
     ),
 
@@ -70,11 +70,11 @@ param (
     ),
 
     [string[]]$WhitelistedScripts = @(
-		"%SystemDrive%\Users\*\AppData\Local\Temp\TempScript.ps1",
-		"%SystemDrive%\Users\*\AppData\Local\TEMP\RAD*.ps1",
-		"%SystemDrive%\Users\*\AppData\Local\TEMP\__PSSCRIPTPOLICYTEST*.ps*",
-		"%SystemDrive%\Users\*\AppData\Local\Temp\IPW*.*",
-		"%SystemDrive%\Users\*\AppData\Local\TEMP\*\START.BAT"			#For Xentry Software Installation
+		"%OSDRIVE%\Users\*\AppData\Local\Temp\TempScript.ps1",
+		"%OSDRIVE%\Users\*\AppData\Local\TEMP\RAD*.TMP.ps1",
+		"%OSDRIVE%\Users\*\AppData\Local\TEMP\__PSSCRIPTPOLICYTEST*.ps*",
+		"%OSDRIVE%\Users\*\AppData\Local\Temp\IPW*.*",
+		"%OSDRIVE%\Users\*\AppData\Local\TEMP\*\START.BAT"			#For Xentry Software Installation
     )
 )
 
@@ -288,7 +288,7 @@ $xml += "      <Conditions><FilePathCondition Path=`"%ProgramData%\*`"/></Condit
 $xml += "    </FilePathRule>`n"
 
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Package Cache MSI`" Description=`"Allow MSIs from Package Cache`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
-$xml += "      <Conditions><FilePathCondition Path=`"%SystemDrive%\Users\*\AppData\Local\Package Cache\*`"/></Conditions>`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%OSDRIVE%\Users\*\AppData\Local\Package Cache\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
 # Windows Installer cache for repair/uninstall
