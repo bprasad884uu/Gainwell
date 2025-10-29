@@ -56,7 +56,8 @@ param (
 		"D:\WEICHAI\*",
 		"%PROGRAMFILES%\Java\*\bin\*",
 		"%PROGRAMFILES(x86)%\Java\*\bin\*",
-		"%OSDRIVE%\Users\*\AppData\Roaming\ZOOM\*"
+		"%OSDRIVE%\Users\*\AppData\Roaming\ZOOM\*",
+		"%OSDRIVE%\Users\*\AppData\Local\Programs\edison-shift-reporter\*"
 
     ),
 
