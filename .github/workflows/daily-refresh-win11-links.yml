@@ -206,6 +206,10 @@ jobs:
           git config user.email "actions@github.com"
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
 
+          # Prevent CRLF flip issues
+          git config core.autocrlf false
+          git config core.safecrlf false
+          
           # Stage changes
           git add Windows11Upgrade.ps1 .github/next_run_epoch
 
