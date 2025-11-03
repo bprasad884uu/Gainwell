@@ -1,8 +1,4 @@
-# Ask the user for the IP address
-$ipAddress = Read-Host "Please enter the IP address"
-
-Invoke-Command -ComputerName $ipAddress -ScriptBlock {
-    # Define the registry paths
+# Define the registry paths
 $sourceKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI"
 $destinationKey = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
 
@@ -21,5 +17,3 @@ try {
 } catch {
     Write-Error "An error occurred: $_"
 }
-
-} -Credential (Get-Credential)
