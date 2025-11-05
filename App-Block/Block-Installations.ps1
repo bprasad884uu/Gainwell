@@ -58,7 +58,8 @@ param (
 		"%PROGRAMFILES(x86)%\Java\*\bin\*",
 		"%OSDRIVE%\Users\*\AppData\Roaming\ZOOM\*",
 		"%OSDRIVE%\Users\*\AppData\Local\Programs\edison-shift-reporter\*",
-		"%OSDRIVE%\Users\*\AppData\Local\Grammarly\*"
+		"%OSDRIVE%\Users\*\AppData\Local\Grammarly\*",
+		"%OSDRIVE%\Users\*\AppData\Local\Programs\device-controller\*"
 
     ),
 
