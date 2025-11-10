@@ -8,8 +8,8 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 [System.Net.ServicePointManager]::Expect100Continue = $false
 
 # ---------- Config (fill these) ----------
-$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=f77fe511-f521-4625-a3ee-e6483973d0c3&P1=1762692391&P2=601&P3=2&P4=vaZQv0lz%2bKBf71P9FdJkLV16NqmE%2fhyVRvnXa0Ln%2bQZbgN%2fpXcooetxRTPWBlHa4Caqz4K3ULp0TTgjqs8XDQzzLh9FkL3YermxvnpShY5%2b%2bcAr%2bWxlF7OOlHyL6Gq0AG5iyPA5X7I5e1KOJD5gKoLyB5fV2YbeMhdAJtB4gDlCTDaAPVeIeuPDxcDV989DYQmtNppseuJ6QX0NEc25p2GBif98smOuj4UwgLRtnmL4MWhEDReuaeidcrmC3nbzQcq2CUnhEPXXhSlLRp%2f%2f0b0aXLZVFaWB9RQofPcOSJrnkUug3BCA%2fvs9IyckKhpDFmWZk0nAnhdA0Ld%2fAbgtrqQ%3d%3d"
-$isoUrl_EN_GB  = "h"
+$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=6ef08876-ed26-41ad-a7c3-7cd43d6515b5&P1=1762868140&P2=601&P3=2&P4=NoZoAUpmr6CDFQVfWw7ndHJiCoQn0hNp5ZegtsVxn5bLAY%2fa6hsy8%2fD2ZaQYiw7i9txtC%2bsjOp01kV2BlyfPAjbuOa5ff5p1LeFeqq%2fNHdSWLm0yoRh9W%2b115CY7Atghm%2bILSMTNvbq73zLmv5qvTNRU5t2k5F1YsoZK9QfTNxHdkpfBvhG1lSiFvGHLTfUu9OMKjnpzlVsh%2fPT7zgLVAuZvdZ5i%2bkrBZatuYfLY%2b%2bKgkoq6nlwX92%2fgn%2b5U8sqzBAOp30QNRntGVxGbQtkHWkSHeXPNtkZQRZHy9NNpCnAmdRC%2baSxeXzLQXKIgNuW1KHcsIWc3Ao%2flaI3W3WivxA%3d%3d"
+$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=2fecc189-212d-4f7b-aa94-04c19590eaa3&P1=1762868128&P2=601&P3=2&P4=MLKy%2fri93bXk%2fkpT0uf%2fUs6NwXlCF7p9GDDrCUMbfRXTjBoJFgC9pjNXzP%2biQDICog8YkEaMyan2pkn0Hh3gv%2fBwYduzvIHxFXWJ2TZHm95Q0OazrSrJFahcgLEkQHO%2bGAmekpaqnA2E8sUqUIXPw%2fo3LcIfNaJSqD1q5LlwUqeMMR5uG1klfWw8i5iI3YDe5fumpfBYQwU5qCcH15boQ6j3j9bXtRvGCaa91b68gjjZOqgaMrHomDgGOSkQhK%2fPQBGVtRSDqXoZwBqw6wftrFdWLzHUH9iV2XuUjox1%2bHzDGKoYpSnIEftgqXm%2bmFXYodtS2I1%2bgRQUNW0T%2bEieLA%3d%3d"
 
 # Provide either a SHA256 hex string or a URL that returns the hash. Leave empty ("") to skip verification.
 $Checksum = ""
