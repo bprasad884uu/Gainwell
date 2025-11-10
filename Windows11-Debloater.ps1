@@ -437,7 +437,7 @@ function Disable-Telemetry {
   try {
     $autoLoggerDir = "$env:PROGRAMDATA\Microsoft\Diagnosis\ETLLogs\AutoLogger"
     if (Test-Path "$autoLoggerDir\AutoLogger-Diagtrack-Listener.etl"){ $null = Remove-Item "$autoLoggerDir\AutoLogger-Diagtrack-Listener.etl" -Force -ErrorAction SilentlyContinue }
-    icacls $autoLoggerDir /deny SYSTEM:`(OI`)`(CI`)F | Out-Null
+    icacls $autoLoggerDir /deny SYSTEM:`(OI`)`(CI`)F 2>$null | Out-Null
   } catch {}
   # Defender sample submission -> prompt
   try { Set-MpPreference -SubmitSamplesConsent 2 -ErrorAction SilentlyContinue | Out-Null } catch {}
