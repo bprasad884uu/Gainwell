@@ -1,18 +1,77 @@
-# ================================
-# Zoom update (console-only)
-# ================================
-$ErrorActionPreference = 'SilentlyContinue'
+# =========================================
+# Zoom Updater (No Hardcoded Version)
+# =========================================
 
-# ---- 0) Config (local version, no lookup) ----
-$latestVersion = '6.5.13227'
-$downloadUrl   = 'https://zoom.us/client/latest/ZoomInstallerFull.msi?archType=x64'
-$tempPath      = Join-Path $env:TEMP 'ZoomInstallerFull.msi'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-Write-Host "=== Zoom Updater Script ==="
-Write-Host "Target version: $latestVersion"
-Write-Host ""
+# ------------------------------------------------------
+# 1. Get Latest Windows Version from Zoom Release Notes
+# ------------------------------------------------------
+function Get-LatestZoomWindowsVersion {
 
-# ---- 1) Helper: formatters for progress ----
+    $url = "https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0061222"
+
+    try {
+        $headers = @{ "User-Agent" = "Mozilla/5.0" }
+
+        $resp = Invoke-WebRequest -Uri $url -Headers $headers -ErrorAction Stop
+        $html = $resp.Content
+        if (-not $html) { return $null }
+
+        # Extract headers from tables
+        $headerMatches = [regex]::Matches($html, "<th.*?>(.*?)<\/th>")
+        $headersList = @()
+        foreach ($h in $headerMatches) {
+            $headersList += ($h.Groups[1].Value -replace "<.*?>","").Trim()
+        }
+
+        $winIndex = $headersList.IndexOf("Windows")
+        if ($winIndex -lt 0) { return $null }
+
+        # Extract each table row
+        $rowMatches = [regex]::Matches($html, "<tr[^>]*>(.*?)<\/tr>", "Singleline")
+
+        foreach ($row in $rowMatches) {
+            $cells = [regex]::Matches($row.Value, "<td.*?>(.*?)<\/td>", "Singleline")
+            if ($cells.Count -eq 0) { continue }
+
+            $clean = @()
+            foreach ($c in $cells) {
+                $clean += (($c.Groups[1].Value -replace "<.*?>","").Trim())
+            }
+
+            if ($winIndex -ge $clean.Count) { continue }
+
+            $winCell = $clean[$winIndex]
+            if ($winCell -eq "--") { continue }
+
+            if ($winCell -match "(\d+\.\d+\.\d+)\s*\((\d+)\)") {
+                $base  = $Matches[1]
+                $build = $Matches[2]
+
+                $parts = $base.Split(".")
+                return "{0}.{1}.{2}" -f $parts[0], $parts[1], $build
+            }
+        }
+    }
+    catch {
+        Write-Host "[Warn] Error fetching Zoom release notes: $($_.Exception.Message)"
+    }
+
+    return $null
+}
+
+# ------------------------------------------------------
+# 2. Other Helpers (unchanged)
+# ------------------------------------------------------
+
+function Get-NormalizedVersion {
+    param([string]$v)
+    if (-not $v) { return $null }
+    try { return [version]($v -replace '[^\d\.]', '') }
+    catch { return $null }
+}
+
 function Format-Size {
     param([long]$bytes)
     switch ($bytes) {
@@ -33,221 +92,163 @@ function Format-Speed {
     }
 }
 
-# ---- 2) Helper: download with console progress ----
 function Get-FileWithProgress {
     param(
         [Parameter(Mandatory)] [string]$Url,
         [Parameter(Mandatory)] [string]$OutFile
     )
 
-    Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
+    Add-Type -AssemblyName System.Net.Http
+
     $handler = [System.Net.Http.HttpClientHandler]::new()
     $client  = [System.Net.Http.HttpClient]::new($handler)
 
     try {
         $response = $client.GetAsync($Url, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
-        if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
-            Write-Host "`n[Error] Download failed: $($response.StatusCode) $($response.ReasonPhrase)"
-            return $false
-        }
+        if ($response.StatusCode -ne 200) { return $false }
 
         $stream = $response.Content.ReadAsStreamAsync().Result
         $total  = $response.Content.Headers.ContentLength
-        if ($null -eq $total) { $total = 1024L * 1024L * 1024L }  # fallback 1GB
 
-        $fs = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
-        try {
-            $buffer     = New-Object byte[] (10MB)
-            $downloaded = 0L
-            $startTime  = Get-Date
+        $fs = [System.IO.File]::Open($OutFile, 2, 2, 0)
+        $buffer = New-Object byte[] (10MB)
+        $downloaded = 0
+        $start = Get-Date
 
-            Write-Host "`n[Download] Downloading Zoom MSI..."
-            while (($read = $stream.Read($buffer,0,$buffer.Length)) -gt 0) {
-                $fs.Write($buffer,0,$read)
-                $downloaded += $read
-                $elapsed  = (Get-Date) - $startTime
-                $speed    = if ($elapsed.TotalSeconds -gt 0) { $downloaded / $elapsed.TotalSeconds } else { 0 }
-                $progress = if ($total -gt 0) { [math]::Min(100, ($downloaded / $total) * 100) } else { 0 }
-                Write-Host ("`r[Download] Total: {0} | Progress: {1:N2}% | Downloaded: {2} | Speed: {3}" -f (Format-Size $total), $progress, (Format-Size $downloaded), (Format-Speed $speed)) -NoNewline
-            }
-            Write-Host "`n[Download] Completed: $OutFile"
-        } finally {
-            $fs.Close()
+        while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $fs.Write($buffer, 0, $read)
+            $downloaded += $read
         }
-    } catch {
-        Write-Host "`n[Error] Download error: $($_.Exception.Message)"
+        $fs.Close()
+        return $true
+    }
+    catch {
         return $false
-    } finally {
+    }
+    finally {
         $client.Dispose()
         $handler.Dispose()
     }
-    return $true
 }
 
-# ---- 3) Helper: robust version parsing ----
-function Get-NormalizedVersion {
-    param([string]$v)
-    if ([string]::IsNullOrWhiteSpace($v)) { return $null }
-    $clean = ($v -replace '[^\d\.]','') # e.g. "6.0.11 (39959)" -> "6.0.11"
-    try { return [version]$clean } catch { return $null }
-}
-
-# ---- 4) Helper: force uninstall for a found install ----
 function Invoke-ForceUninstall {
-    param(
-        [Parameter(Mandatory)] [pscustomobject]$Install
-    )
+    param([pscustomobject]$Install)
+
+    Get-Process -Name zoom,zoomlauncher,zoomoutlookplugin -ErrorAction SilentlyContinue | Stop-Process -Force
 
     $uninstall = $Install.UninstallString
-    $guid = $null
-    if ($uninstall -match '\{[0-9A-Fa-f\-]{36}\}') { $guid = $matches[0] }
 
-    # Kill Zoom processes
-    Get-Process -Name zoom,zoomlauncher,zoomoutlookplugin -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-
-    if ($guid) {
-        Write-Host "    -> Uninstall via MSI product code $guid"
+    if ($uninstall -match "\{[0-9A-Fa-f\-]{36}\}") {
+        $guid = $matches[0]
         Start-Process msiexec.exe -ArgumentList "/x $guid /qn /norestart" -Wait
         return
     }
 
     if ($uninstall) {
-        if ($uninstall -match '(msiexec\.exe|MsiExec\.exe).*?/I\s*\{') {
-            $uninstall = $uninstall -replace '/I','/X'
-        }
-        if ($uninstall -notmatch '/qn' -and $uninstall -notmatch '/quiet') {
-            $uninstall += ' /qn'
-        }
-        if ($uninstall -notmatch '/norestart') {
-            $uninstall += ' /norestart'
-        }
+        if ($uninstall -match "/I") { $uninstall = $uninstall -replace "/I","/X" }
+        if ($uninstall -notmatch "/qn") { $uninstall += " /qn" }
+        if ($uninstall -notmatch "/norestart") { $uninstall += " /norestart" }
 
-        Write-Host "    -> Uninstall via uninstall string"
-        Start-Process -FilePath cmd.exe -ArgumentList "/c $uninstall" -WindowStyle Hidden -Wait
-    } else {
-        Write-Host "    -> No uninstall string found; skipping uninstall."
+        Start-Process cmd.exe -ArgumentList "/c $uninstall" -WindowStyle Hidden -Wait
     }
 }
 
-# ---- 5) Enumerate installs (HKLM + HKU, any Zoom display name) ----
-Write-Host "[Info] Detecting existing Zoom installs..."
+# ------------------------------------------------------
+# 3. Scan Installed Zoom Versions
+# ------------------------------------------------------
+
+Write-Host "[Info] Detecting installed Zoom versions..."
 
 $installs = @()
 
-# HKLM Zoom (machine-wide)
-$hklmBases = @(
+# Machine-wide
+$paths = @(
     "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
     "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
 )
 
-foreach ($base in $hklmBases) {
-    if (-not (Test-Path $base)) { continue }
-    Get-ChildItem $base -ErrorAction SilentlyContinue | ForEach-Object {
-        try {
-            $p = Get-ItemProperty $_.PsPath -ErrorAction SilentlyContinue
-            if ($p.DisplayName -and $p.DisplayName -like '*Zoom*') {
+foreach ($p in $paths) {
+    if (Test-Path $p) {
+        Get-ChildItem $p | ForEach-Object {
+            $prop = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+            if ($prop.DisplayName -like "*Zoom*") {
                 $installs += [pscustomobject]@{
-                    Scope           = 'Machine'
-                    User            = 'All'
-                    Name            = $p.DisplayName
-                    Version         = $p.DisplayVersion
-                    UninstallString = if ($p.QuietUninstallString) { $p.QuietUninstallString } else { $p.UninstallString }
-                    RegPath         = $_.PsPath
+                    Scope = "Machine"
+                    User  = "All"
+                    Name  = $prop.DisplayName
+                    Version = $prop.DisplayVersion
+                    UninstallString = $prop.UninstallString
                 }
             }
-        } catch {}
+        }
     }
 }
 
-# HKU Zoom (per-user)
-$profiles = Get-CimInstance Win32_UserProfile | Select-Object LocalPath,SID
-$userSIDs = Get-ChildItem "Registry::HKEY_USERS" | Where-Object { $_.PSChildName -notlike "*_Classes" }
-
-foreach ($sidKey in $userSIDs) {
-    $SID = $sidKey.PSChildName
-    $regBase = "Registry::HKEY_USERS\$SID\Software\Microsoft\Windows\CurrentVersion\Uninstall"
-    if (-not (Test-Path $regBase)) { continue }
-
-    $profile = $profiles | Where-Object { $_.SID -eq $SID }
-    $userName = if ($profile -and $profile.LocalPath) { Split-Path $profile.LocalPath -Leaf } else { $SID }
-
-    Get-ChildItem $regBase -ErrorAction SilentlyContinue | ForEach-Object {
-        try {
-            $p = Get-ItemProperty $_.PsPath -ErrorAction SilentlyContinue
-            if ($p.DisplayName -and $p.DisplayName -like '*Zoom*') {
-                $installs += [pscustomobject]@{
-                    Scope           = 'User'
-                    User            = $userName
-                    Name            = $p.DisplayName
-                    Version         = $p.DisplayVersion
-                    UninstallString = if ($p.QuietUninstallString) { $p.QuietUninstallString } else { $p.UninstallString }
-                    RegPath         = $_.PsPath
-                }
-            }
-        } catch {}
-    }
-}
-
-# ---- 6) If nothing installed, log and exit ----
-if (-not $installs -or $installs.Count -eq 0) {
-    Write-Host "[Info] No Zoom installations found. Nothing to do."
+if ($installs.Count -eq 0) {
+    Write-Host "[Info] No Zoom installation found."
     exit 0
 }
 
-Write-Host "[Info] Detected Zoom installs:"
 foreach ($i in $installs) {
-    $name = if ($i.Name) { $i.Name } else { "Zoom" }
-    $ver  = if ($i.Version) { $i.Version } else { "Unknown" }
-    Write-Host "$name - $ver"
+    Write-Host ("- {0} ({1})" -f $i.Name, $i.Version)
 }
-Write-Host ""
 
-# ---- 7) Compare versions and decide ----
-$targetVer   = Get-NormalizedVersion $latestVersion
+# ------------------------------------------------------
+# 4. Get Latest Windows Version (NO HARDCODE)
+# ------------------------------------------------------
+
+$latestVersion = Get-LatestZoomWindowsVersion
+
+if (-not $latestVersion) {
+    Write-Host "[Error] Could not determine latest Zoom version."
+    exit 1
+}
+
+Write-Host "[Info] Latest Zoom version available: $latestVersion"
+
+$target = Get-NormalizedVersion $latestVersion
+
+# ------------------------------------------------------
+# 5. Compare Versions
+# ------------------------------------------------------
+
 $needsUpdate = @()
 
 foreach ($i in $installs) {
     $iv = Get-NormalizedVersion $i.Version
-    if ($null -eq $iv) {
-        Write-Host "[Warn] Could not parse version '$($i.Version)' for '$($i.Name)'; skipping."
-        continue
-    }
-    if ($iv -lt $targetVer) {
+    if ($iv -lt $target) {
         $needsUpdate += $i
     }
 }
 
-if (-not $needsUpdate -or $needsUpdate.Count -eq 0) {
-    Write-Host "[Info] All Zoom installs are already at $latestVersion or newer. No update needed."
+if ($needsUpdate.Count -eq 0) {
+    Write-Host "[Info] Already up to date."
     exit 0
 }
 
-Write-Host "[Info] Installs needing update:"
-$needsUpdate | Format-Table Scope, User, Name, Version -AutoSize
-Write-Host ""
+# ------------------------------------------------------
+# 6. Download + Install
+# ------------------------------------------------------
 
-# ---- 8) Uninstall all outdated instances ----
-foreach ($i in $needsUpdate) {
-    $name = if ($i.Name) { $i.Name } else { "Zoom" }
-    Write-Host ("[Uninstall] {0} ({1} - {2}) {3} -> target {4}" -f $name, $i.Scope, $i.User, $i.Version, $latestVersion)
-    Invoke-ForceUninstall -Install $i
-}
+$downloadUrl = "https://zoom.us/client/latest/ZoomInstallerFull.msi?archType=x64"
+$tempPath = Join-Path $env:TEMP "ZoomInstallerFull.msi"
 
-# ---- 9) Download new MSI once ----
-if (Test-Path $tempPath) {
-    Write-Host "[Info] Removing old installer: $tempPath"
-    Remove-Item $tempPath -Force -ErrorAction SilentlyContinue
-}
+if (Test-Path $tempPath) { Remove-Item $tempPath -Force }
 
-Write-Host "[Info] Downloading new Zoom installer..."
+Write-Host "[Info] Downloading Zoom $latestVersion..."
 $ok = Get-FileWithProgress -Url $downloadUrl -OutFile $tempPath
-if (-not $ok -or -not (Test-Path $tempPath)) {
-    Write-Host "[Error] Download failed or file missing; aborting."
+
+if (-not $ok) {
+    Write-Host "[Error] Download failed."
     exit 1
 }
 
-# ---- 10) Install new version ----
-Write-Host "[Install] Installing Zoom $latestVersion ..."
+foreach ($i in $needsUpdate) {
+    Write-Host "[Uninstall] $($i.Name) $($i.Version)"
+    Invoke-ForceUninstall $i
+}
+
+Write-Host "[Install] Installing Zoom $latestVersion..."
 Start-Process msiexec.exe -ArgumentList "/i `"$tempPath`" /qn /norestart" -Wait
-Write-Host "[Done] Zoom install attempted."
-exit 0
+
+Write-Host "[Done]"
