@@ -161,37 +161,77 @@ Write-Host "[Info] Detecting installed Zoom versions..."
 
 $installs = @()
 
-# Machine-wide
-$paths = @(
+# -----------------------
+# MACHINE-WIDE INSTALLS
+# -----------------------
+$hklmPaths = @(
     "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
     "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
 )
 
-foreach ($p in $paths) {
-    if (Test-Path $p) {
-        Get-ChildItem $p | ForEach-Object {
-            $prop = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
-            if ($prop.DisplayName -like "*Zoom*") {
-                $installs += [pscustomobject]@{
-                    Scope = "Machine"
-                    User  = "All"
-                    Name  = $prop.DisplayName
-                    Version = $prop.DisplayVersion
-                    UninstallString = $prop.UninstallString
+foreach ($path in $hklmPaths) {
+    if (Test-Path $path) {
+        Get-ChildItem $path | ForEach-Object {
+            try {
+                $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+                if ($p.DisplayName -like "*Zoom*") {
+                    $installs += [pscustomobject]@{
+                        Scope = "Machine"
+                        User  = "All"
+                        Name  = $p.DisplayName
+                        Version = $p.DisplayVersion
+                        UninstallString = if ($p.QuietUninstallString) { $p.QuietUninstallString } else { $p.UninstallString }
+                        RegPath = $_.PSPath
+                    }
                 }
-            }
+            } catch {}
         }
     }
 }
 
+# -----------------------
+# PER-USER INSTALLS
+# -----------------------
+$userProfiles = Get-CimInstance Win32_UserProfile | Where-Object { $_.Loaded -eq $true }
+
+foreach ($profile in $userProfiles) {
+    $sid = $profile.SID
+    $userName = Split-Path $profile.LocalPath -Leaf
+
+    $userUninstall = "Registry::HKU\$sid\Software\Microsoft\Windows\CurrentVersion\Uninstall"
+
+    if (Test-Path $userUninstall) {
+        Get-ChildItem $userUninstall | ForEach-Object {
+            try {
+                $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+                if ($p.DisplayName -like "*Zoom*") {
+                    $installs += [pscustomobject]@{
+                        Scope = "User"
+                        User  = $userName
+                        Name  = $p.DisplayName
+                        Version = $p.DisplayVersion
+                        UninstallString = if ($p.QuietUninstallString) { $p.QuietUninstallString } else { $p.UninstallString }
+                        RegPath = $_.PSPath
+                    }
+                }
+            } catch {}
+        }
+    }
+}
+
+# -----------------------
+# SHOW DETECTED INSTALLS
+# -----------------------
 if ($installs.Count -eq 0) {
     Write-Host "[Info] No Zoom installation found."
     exit 0
 }
 
+Write-Host "[Info] Detected Zoom installs:"
 foreach ($i in $installs) {
-    Write-Host ("- {0} ({1})" -f $i.Name, $i.Version)
+    Write-Host ("- {0} ({1}) - {2}" -f $i.Name, $i.Scope, $i.Version)
 }
+Write-Host ""
 
 # ------------------------------------------------------
 # 4. Get Latest Windows Version (NO HARDCODE)
