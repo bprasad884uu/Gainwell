@@ -1,5 +1,5 @@
 # =========================================
-# Zoom Updater (No Hardcoded Version)
+# Zoom Updater
 # =========================================
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -62,7 +62,7 @@ function Get-LatestZoomWindowsVersion {
 }
 
 # ------------------------------------------------------
-# 2. Other Helpers (unchanged)
+# 2. Other Helpers
 # ------------------------------------------------------
 
 function Get-NormalizedVersion {
@@ -234,7 +234,7 @@ foreach ($i in $installs) {
 Write-Host ""
 
 # ------------------------------------------------------
-# 4. Get Latest Windows Version (NO HARDCODE)
+# 4. Get Latest Windows Version
 # ------------------------------------------------------
 
 $latestVersion = Get-LatestZoomWindowsVersion
