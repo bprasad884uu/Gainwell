@@ -14,7 +14,7 @@ function Get-LatestZoomWindowsVersion {
     try {
         $headers = @{ "User-Agent" = "Mozilla/5.0" }
 
-        $resp = Invoke-WebRequest -Uri $url -Headers $headers -ErrorAction Stop
+        $resp = Invoke-WebRequest -Uri $url -Headers $headers -UseBasicParsing -ErrorAction Stop
         $html = $resp.Content
         if (-not $html) { return $null }
 
@@ -283,10 +283,10 @@ if (-not $ok) {
     exit 1
 }
 
-foreach ($i in $needsUpdate) {
+<#foreach ($i in $needsUpdate) {
     Write-Host "[Uninstall] $($i.Name) $($i.Version)"
     Invoke-ForceUninstall $i
-}
+}#>
 
 Write-Host "[Install] Installing Zoom $latestVersion..."
 Start-Process msiexec.exe -ArgumentList "/i `"$tempPath`" /qn /norestart" -Wait
