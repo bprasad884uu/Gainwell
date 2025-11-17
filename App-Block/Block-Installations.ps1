@@ -20,7 +20,8 @@ param (
 		"PROSCAN.exe",
 		"javaw.exe",
 		"ZoomInstaller*.exe",
-		"Zoom_cm*.exe"
+		"Zoom_cm*.exe",
+		"MSTeams*.exe"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
