@@ -304,6 +304,7 @@ foreach ($user in $userDirs) {
 
 $systemPaths = @(
     "C:\Windows\Temp",
+	"C:\Windows\SystemTemp",
     "C:\Windows\Logs",
     "C:\Windows\Prefetch",
     "C:\Windows\SoftwareDistribution\Download",
