@@ -304,18 +304,51 @@ function Get-SecureBootStatus {
     } catch {}
     return $false
 }
+# Get Secure Boot Status
 $secureBootEnabled = Get-SecureBootStatus
+
+# Check TPM 2.0 Support
 $tpmCompatible = Check-TPM
 
 # Display results
 Write-Host "`nWindows 11 Compatibility Check" -ForegroundColor Cyan
 Write-Host "-----------------------------------"
 Write-Host "`nProcessor: $rawCpuName"
-Write-Host "`n64-bit CPU: " + (if ($cpu64Bit) { "Yes" } else { "No" })
-Write-Host "CPU Speed: $cpuSpeedGHz GHz"
-Write-Host "Secure Boot Enabled: " + (if ($secureBootEnabled) { "Yes" } else { "No" })
-Write-Host "TPM 2.0 Support: " + (if ($tpmCompatible) { "Yes" } else { "No" })
-Write-Host "CPU Support (known-list): " + (if ($cpuSupported) { "Yes" } else { "No" })
+
+# Architecture Check
+if ($cpu64Bit) {
+    Write-Host "`n64-bit CPU: Compatible" -ForegroundColor Green
+} else {
+    Write-Host "`n64-bit CPU: Not Compatible" -ForegroundColor Red
+}
+
+# CPU Speed Check
+if ($cpuSpeedCompatible) {
+    Write-Host "`nCPU Speed: $cpuSpeedGHz GHz (Compatible)" -ForegroundColor Green
+} else {
+    Write-Host "`nCPU Speed: $cpuSpeedGHz GHz (Not Compatible)" -ForegroundColor Red
+}
+
+# Secure Boot Check
+if ($secureBootEnabled) {
+    Write-Host "`nSecure Boot Enabled: Yes" -ForegroundColor Green
+} else {
+    Write-Host "`nSecure Boot Enabled: No" -ForegroundColor Red
+}
+
+# TPM 2.0 Check
+if ($tpmCompatible) {
+    Write-Host "`nTPM 2.0 Support: Yes" -ForegroundColor Green
+} else {
+    Write-Host "`nTPM 2.0 Support: No" -ForegroundColor Red
+}
+
+# CPU Support Check
+if ($cpuSupported) {
+    Write-Host "`nCPU Compatibility: $rawCpuName is supported" -ForegroundColor Green
+} else {
+    Write-Host "`nCPU Compatibility: $rawCpuName is NOT supported" -ForegroundColor Red
+}
 
 # Collect incompatibilities
 $incompatibilityReasons = @()
