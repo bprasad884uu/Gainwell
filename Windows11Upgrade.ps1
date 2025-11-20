@@ -501,9 +501,21 @@ function Download-WithResume {
 
             # Use double for Math.Max to avoid Int32 overload selection
             $remainingBytes = [System.Math]::Max([double]0, [double]($remoteLength - $totalDownloaded))
-            $eta = if ($avgSpeed -gt 0 -and $remainingBytes -gt 0) { Format-ETA ($remainingBytes / $avgSpeed) } else { "Unknown" }
+            if ($remainingBytes -le 0) {
+                # Fully downloaded -> ETA 0s
+                $eta = "0s"
+            } elseif ($avgSpeed -gt 0) {
+                $eta = Format-ETA ($remainingBytes / $avgSpeed)
+            } else {
+                $eta = "Unknown"
+            }
 
-            $progressPct = if ($remoteLength -gt 0) { [math]::Round(($totalDownloaded / $remoteLength) * 100, 2) } else { 0 }
+            $progressPct = if ($remoteLength -gt 0) {
+                [math]::Round(($totalDownloaded / $remoteLength) * 100, 2)
+            } else { 0 }
+
+            if ($progressPct -gt 100) { $progressPct = 100 }
+            if ($progressPct -lt 0)   { $progressPct = 0 }
 
             # Primary formatted line (matches your requested example)
             $downloadedText = "$(Format-Size $totalDownloaded) / $(Format-Size $remoteLength) ($progressPct`%)"
