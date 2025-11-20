@@ -557,21 +557,72 @@ function Download-WithResume {
         if (-not (Test-SegmentJson -OutFile $OutFile -Silent)) { throw "Some segments are incomplete according to JSON; aborting merge. Run the script again to resume." }
         # Concatenate parts into final file
         Write-Host "`nStitching parts into final file..."
-        $outStream = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
-        foreach ($p in ($meta.Parts | Sort-Object Index)) {
-            $pf = $p.Path
-            if (-not (Test-Path $pf)) { continue }
-            $inStream = [System.IO.File]::Open($pf, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+
+		$partsSorted  = $meta.Parts | Sort-Object Index
+		$totalToWrite = 0
+
+		foreach ($p in $partsSorted) {
+			if ($p.Path -and (Test-Path $p.Path)) {
+				$totalToWrite += (Get-Item $p.Path).Length
+			}
+		}
+
+		$outStream = [System.IO.File]::Open(
+			$OutFile,
+			[System.IO.FileMode]::Create,
+			[System.IO.FileAccess]::Write,
+			[System.IO.FileShare]::None
+		)
+
+		$written   = 0
+		$barWidth  = 50  # [==================================================]
+		$partCount = $partsSorted.Count
+		$partIdx   = 0
+
+		foreach ($p in $partsSorted) {
+			$pf = $p.Path
+			if (-not (Test-Path $pf)) { continue }
+
+			$partIdx++
+			$inStream = [System.IO.File]::Open(
+				$pf,
+				[System.IO.FileMode]::Open,
+				[System.IO.FileAccess]::Read,
+				[System.IO.FileShare]::Read
+			)
+
             $buf = New-Object byte[] (16 * 1024 * 1024) # 16MB buffer
             while (($r = $inStream.Read($buf, 0, $buf.Length)) -gt 0) {
                 $outStream.Write($buf, 0, $r)
-            }
-            $inStream.Close(); Remove-Item $pf -Force -ErrorAction SilentlyContinue
-        }
+				$written += $r
+
+				if ($totalToWrite -gt 0) {
+					$pct     = [math]::Min(100, [math]::Round(($written / $totalToWrite) * 100, 2))
+					$filled  = [int]([math]::Floor(($pct / 100) * ($barWidth - 1)))  # leave 1 slot for '>'
+					if ($filled -lt 0) { $filled = 0 }
+					if ($filled -gt ($barWidth - 1)) { $filled = $barWidth - 1 }
+
+					$eqPart  = "=" * $filled
+					$pointer = ">"
+					$spaces  = " " * ($barWidth - $filled - 1)
+
+					$bar = "[{0}{1}{2}]" -f $eqPart, $pointer, $spaces
+
+					# Same line update
+					Write-Host -NoNewline "`r$bar"
+				}
+			}
+
+			$inStream.Close()
+			Remove-Item $pf -Force -ErrorAction SilentlyContinue
+		}
 
         $outStream.Close()
         if (Test-Path $metaPath) { Remove-Item $metaPath -Force -ErrorAction SilentlyContinue }
 
+		# Final full bar at 100%
+		$finalBar = "[{0}]" -f ("=" * ($barWidth - 1) + ">")
+		Write-Host "`r$finalBar"
         Write-Host "`nDownload complete: $OutFile"
     }
     catch {
