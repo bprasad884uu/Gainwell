@@ -397,7 +397,7 @@ function Download-WithResume {
                 param($Url, $partFile, $startByte, $endByte, $index, $attempts, $alreadyDownloaded)
                 try {
                     if (-not ("System.Net.Http.HttpClient" -as [type])) { Add-Type -Path "$([Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll" -ErrorAction SilentlyContinue }
-                    $h = New-Object System.Net.Http.HttpClient
+                    $h = [System.Net.Http.HttpClient]::new()
                     $h.Timeout = [System.TimeSpan]::FromHours(4)
 
                     $try = 0
@@ -415,7 +415,7 @@ function Download-WithResume {
                                 }
                             }
 
-                            $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $Url)
+                            $req = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Get, $Url)
                             $req.Headers.Range = [System.Net.Http.Headers.RangeHeaderValue]::new($resumeStart, $endByte)
                             $resp = $h.SendAsync($req, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
                             if ($resp.StatusCode -ne [System.Net.HttpStatusCode]::PartialContent -and $resp.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
@@ -439,6 +439,8 @@ function Download-WithResume {
                         } catch {
                             $err = $_.ToString()
                             if ($try -ge $attempts) {
+                                # Final failure for this segment: delete part so next run cleanly redownloads
+                                if (Test-Path $partFile) { Remove-Item $partFile -Force -ErrorAction SilentlyContinue }
                                 if ($h) { $h.Dispose() }
                                 return @{ Index = $index; Success = $false; Error = $err; Part = $partFile }
                             } else {
@@ -448,6 +450,8 @@ function Download-WithResume {
                         }
                     }
                 } catch {
+                    # Outer unexpected failure: also delete part
+                    if (Test-Path $partFile) { Remove-Item $partFile -Force -ErrorAction SilentlyContinue }
                     return @{ Index = $index; Success = $false; Error = $_.ToString(); Part = $partFile }
                 }
             }
@@ -520,24 +524,26 @@ function Download-WithResume {
         }
         Write-Host ""
 
-        # Collect results and cleanup
+        # Collect results + size checks (only trust file sizes)
         $errors = @()
         foreach ($entry in $powershellList) {
             try {
-                $result = $entry.PS.EndInvoke($entry.Async)
-                $entry.PS.Dispose()
-                if ($result -is [System.Array]) { $res = $result[0] } else { $res = $result }
-                if ($res -and $res.ContainsKey('Success') -and -not $res['Success']) {
-                    $errText = if ($res['Error']) { $res['Error'] } else { "Unknown error (no message)" }
-                    $errors += "Part:$($entry.PartFile) Index:$($res['Index']) Err:$errText"
-                } else {
-                    # Check size
-                    if ((Test-Path $entry.PartFile) -and ((Get-Item $entry.PartFile).Length -ne $entry.ExpectedSize)) {
-                        $errors += "Part size mismatch: $($entry.PartFile) - expected $(Format-Size $($entry.ExpectedSize)), actual $(Format-Size $((Get-Item $entry.PartFile).Length))"
-                    }
+                # EndInvoke just to ensure runspace finishes; ignore its output
+                try { $null = $entry.PS.EndInvoke($entry.Async) } catch {}
+                try { $entry.PS.Dispose() } catch {}
+
+                $actualLen = 0
+                if (Test-Path $entry.PartFile) {
+                    $actualLen = (Get-Item $entry.PartFile).Length
+                }
+
+                if ($actualLen -lt $entry.ExpectedSize) {
+                    $errors += "Part too small: $($entry.PartFile) - expected >= $(Format-Size $($entry.ExpectedSize)), actual $(Format-Size $actualLen)"
                 }
             } catch {
-                $errors += "Runspace failed for part $($entry.PartFile): $_"
+                $actualLen = 0
+                if (Test-Path $entry.PartFile) { $actualLen = (Get-Item $entry.PartFile).Length }
+                if ($actualLen -lt $entry.ExpectedSize) { $errors += "Part error: $($entry.PartFile) - $_" }
             }
         }
 
