@@ -10,8 +10,8 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 $ErrorActionPreference = "Stop"
 
 # ---------- Config (fill these) ----------
-$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=1632dd14-c4a7-4ad0-a2ce-7fd501bf3f6f&P1=1763612502&P2=601&P3=2&P4=pb93OfDRpIH%2f1JcRnTJBQ6DluF%2fQtTtj9RJVke3F2mNORBB3xB3%2fWQyk8FMnlI1AVyoLLoP13zd8bYOpOmqCIJQZ1cxM0io9DNLAvygD3tTQ%2bDiMUkDPDQ2KMGmTBnw4H999I3poiD1jot7QwOfhVTh%2f0femxAy6PrKz8LMxif8fSyBTJvaH2WFfH%2fuAf8OBCJlBxdNGErn1zXcuhaM9vZNG76qmBVkgvfEGl72N71d%2fDQigkpIieSyu0HghQOw6cj9NWcNiTbs961JxeNykdUalA6XkmG%2fI87HJBKXdk%2f23dSPZdF6H7Z5pe%2fc%2fBAYeSbJohfnrHukwlLQWXKcfZw%3d%3d"
-$isoUrl_EN_GB  = "h"
+$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=eae0f14b-4708-43cb-ba12-5dfd6b746510&P1=1763687612&P2=601&P3=2&P4=2mAzSWhMH6syJbGNw95ZEDH1WUDHjNFZxKgu3l4STbtYSW%2fVJb42Cn8AdR66PksYzeDwe0iW5GJSrLFXarU4y8o0mu4wOhADO%2fsJIClMJOxeIzPNMRBoZJWUpgcABQl6PSx4cr4FoHxs0tHhdeok5gnQtbxjKCGzi7tB5jGdu5DUlCxNwcn0ARdfRFX03lf9KUpDLKvn6BYdZ%2fZyk1NWPgB06VNw7fHudX9e1MA%2fbROEF56rVQg9VbwWYO%2bOun92Ldbm80tvaACsjEaYFgnw6ETZLcu66c1%2fBbDaPmD95SXzdMTK%2bTZ4mKZuBla9XQgbL9polKTc8JwLVZvr8jIETQ%3d%3d"
+$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=199e8abf-c18b-4fa5-86d0-9a8b7d328747&P1=1763687599&P2=601&P3=2&P4=K%2b%2f6u88aIx9wFtjt76obu2rmTQf3RKrnLNplir0VFQuYtmlgama79bi3nhGUygD2736wJjh0%2fsG0DbxrWgKqje2I5ITajmwjqJHZCTAFyNyJLWanDqEssZrZiM4SJ3aoqNpMMWE6ny%2fB7e4HftD97X%2fCyvwrzIsi%2bhGV0i7m8FUOA1010aIeL4FEw7Ocw6ey2wzqNxX7ASv%2fJEyCPymylOUkhVbHU4GUqeYvm%2bAbzS8kgRRPSz8x%2bxXvzDV9YeMweE%2fEMWh2y7gIHTv9KxfRr3rM6Hja2MWFCRcSFRmpdrvXFgZ4q9j%2bEt4RBRjWqtclSkWduEIxA4PYGvfDMzf06w%3d%3d"
 
 # Minimum free space for temp selection (20 GB default)
 $MinimumTempBytes = (20 * 1024 * 1024 * 1024)
