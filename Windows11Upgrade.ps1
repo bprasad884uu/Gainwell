@@ -567,6 +567,11 @@ function Download-WithResume {
 			}
 		}
 
+		if ($totalToWrite -le 0) {
+			Write-Warning "No part files found to stitch."
+			return
+		}
+
 		$outStream = [System.IO.File]::Open(
 			$OutFile,
 			[System.IO.FileMode]::Create,
@@ -576,14 +581,14 @@ function Download-WithResume {
 
 		$written   = 0
 		$barWidth  = 50  # [==================================================]
-		$partCount = $partsSorted.Count
-		$partIdx   = 0
+
+		$emptyBar = "[" + "".PadRight($barWidth, ' ') + "]"
+		Write-Host -NoNewline $emptyBar
 
 		foreach ($p in $partsSorted) {
 			$pf = $p.Path
-			if (-not (Test-Path $pf)) { continue }
+			if (-not ($pf -and (Test-Path $pf))) { continue }
 
-			$partIdx++
 			$inStream = [System.IO.File]::Open(
 				$pf,
 				[System.IO.FileMode]::Open,
@@ -596,20 +601,29 @@ function Download-WithResume {
                 $outStream.Write($buf, 0, $r)
 				$written += $r
 
+				# Progress bar update
 				if ($totalToWrite -gt 0) {
-					$pct     = [math]::Min(100, [math]::Round(($written / $totalToWrite) * 100, 2))
-					$filled  = [int]([math]::Floor(($pct / 100) * ($barWidth - 1)))  # leave 1 slot for '>'
+					$ratio = [double]$written / [double]$totalToWrite
+					if ($ratio -lt 0) { $ratio = 0 }
+					if ($ratio -gt 1) { $ratio = 1 }
+
+					$filled = [int]([math]::Floor($ratio * $barWidth))
 					if ($filled -lt 0) { $filled = 0 }
-					if ($filled -gt ($barWidth - 1)) { $filled = $barWidth - 1 }
+					if ($filled -gt $barWidth) { $filled = $barWidth }
 
-					$eqPart  = "=" * $filled
-					$pointer = ">"
-					$spaces  = " " * ($barWidth - $filled - 1)
+					if ($filled -ge $barWidth) {
+						$barBody = "".PadRight($barWidth, '=')
+					} else {
+						$eqCount = $filled
+						if ($eqCount -lt 0) { $eqCount = 0 }
+						$spaces = $barWidth - $eqCount - 1
+						if ($spaces -lt 0) { $spaces = 0 }
 
-					$bar = "[{0}{1}{2}]" -f $eqPart, $pointer, $spaces
+						$barBody = "".PadRight($eqCount, '=') + ">" + "".PadRight($spaces, ' ')
+					}
 
-					# Same line update
-					Write-Host -NoNewline "`r$bar"
+					$bar = "[" + $barBody + "]"
+					Write-Host -NoNewline ("`r" + $bar)
 				}
 			}
 
@@ -618,11 +632,14 @@ function Download-WithResume {
 		}
 
         $outStream.Close()
+
+		$finalBarBody = "".PadRight($barWidth, '=')
+		$finalBar     = "[" + $finalBarBody + "]"
+		Write-Host -NoNewline ("`r" + $finalBar)
+		Write-Host ""  # new line
+
         if (Test-Path $metaPath) { Remove-Item $metaPath -Force -ErrorAction SilentlyContinue }
 
-		# Final full bar at 100%
-		$finalBar = "[{0}]" -f ("=" * ($barWidth - 1) + ">")
-		Write-Host "`r$finalBar"
         Write-Host "`nDownload complete: $OutFile"
     }
     catch {
