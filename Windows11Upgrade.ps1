@@ -900,7 +900,7 @@ if ($requiredBypasses.Count -gt 0) {
             New-Item -Path $b.Path -ErrorAction SilentlyContinue | Out-Null
             Set-ItemProperty -Path $b.Path -Name $b.Name -Type DWord -Value $b.Value -Force
             $appliedBypasses += $b.Name
-            Write-Host " - Applied $($b.Name) at $($b.Path)"
+            Write-Host " - Applied $($b.Name)"
         } catch {
             Write-Warning "Failed to apply $($b.Name): $_"
         }
@@ -915,9 +915,9 @@ $appliedNow = $appliedBypasses | Sort-Object
 $useProductServer = $false
 if ($allNames -and ($allNames -eq $appliedNow)) {
     $useProductServer = $true
-    Write-Host "`nAll bypass keys applied. /product server will be used." -ForegroundColor Cyan
+    Write-Host "`nAll bypass keys applied." -ForegroundColor Cyan
 } else {
-    Write-Host "`nNot all bypass keys were applied. /product server will NOT be used." -ForegroundColor Cyan
+    #Write-Host "`nNot all bypass keys were applied." -ForegroundColor Cyan
 }
 
 # Build installer args conditionally
