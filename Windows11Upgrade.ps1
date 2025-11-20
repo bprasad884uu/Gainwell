@@ -23,7 +23,7 @@ switch ($locale) {
     "en-US" { $languageName = "English (US)"; $isoUrl = $isoUrl_EN_US; $destinationName = "Win11_25H2_ENUS.iso" }
     default { $languageName = $locale; Write-Warning "Unsupported/unknown language ($locale). Defaulting to en-US."; $isoUrl = $isoUrl_EN_US; $destinationName = "Win11_25H2.iso" }
 }
-Write-Host "Detected Language: $languageName - Selected ISO URL: $($isoUrl -replace '^(https?://).*','$1...')"
+Write-Host "Detected Language: $languageName"
 
 # --- Choose Temp location: prefer C: if it has >= MinimumBytes, otherwise find another drive ---
 function Select-TempRoot {
