@@ -27,7 +27,7 @@ Write-Host "Detected Language: $languageName"
 
 # --- Choose Temp location: prefer C: if it has >= MinimumBytes, otherwise find another drive ---
 function Select-TempRoot {
-    param([long]$MinimumBytes = (20 * 1024 * 1024 * 1024))
+    param([long]$MinimumBytes = (40 * 1024 * 1024 * 1024))
     try {
         $envTempRoot = [System.IO.Path]::GetPathRoot($env:TEMP)
         if ($envTempRoot) {
