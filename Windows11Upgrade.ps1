@@ -244,10 +244,10 @@ function Download-WithResume {
                     $progress = ($downloadedTotal / $remoteLength) * 100
                     $etaFormatted = Format-ETA $etaSeconds
                 } else {
-					$progress = 0
+                    $progress = 0
                     $etaFormatted = "Unknown"
                 }
-                    Write-Host -NoNewline "`rDownloaded: $(Format-Size $downloadedTotal) / $(Format-Size $remoteLength) ($([math]::Round($progress,2))%) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted   "
+                Write-Host -NoNewline "`rDownloaded: $(Format-Size $downloadedTotal) / $(Format-Size $remoteLength) ($([math]::Round($progress,2))%) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted   "
             }
 
             Write-Host "`nDownload finished: $OutFile"
@@ -258,6 +258,36 @@ function Download-WithResume {
         # ================= SEGMENTED PARALLEL DOWNLOAD BRANCH =================
         Write-Host "`nServer supports ranges. Using segmented parallel download. Size: $(Format-Size $remoteLength). MaxParallel: $MaxParallel`n"
 
+        # ---------- Adaptive segment sizing (auto tuning) ----------
+        $segmentMinExplicit = $PSBoundParameters.ContainsKey('SegmentMinBytes')
+        $maxParExplicit      = $PSBoundParameters.ContainsKey('MaxParallel')
+
+        if (-not $segmentMinExplicit -or -not $maxParExplicit) {
+            $sizeMB = [double]$remoteLength / 1MB
+
+            if ($sizeMB -le 200) {
+                $recSeg = 5MB
+                $recPar = 4
+            } elseif ($sizeMB -le 1024) {
+                $recSeg = 20MB
+                $recPar = 8
+            } elseif ($sizeMB -le 8192) {
+                $recSeg = 100MB
+                $recPar = 16
+            } else {
+                $recSeg = 200MB
+                $recPar = 32
+            }
+
+            if (-not $segmentMinExplicit) {
+                $SegmentMinBytes = [long]$recSeg
+            }
+            if (-not $maxParExplicit) {
+                $MaxParallel = [int]$recPar
+            }
+        }
+
+        # JSON metadata path
         $metaPath = "$OutFile.segmentmeta.json"
         $meta     = $null
 
@@ -371,6 +401,7 @@ function Download-WithResume {
             $partFile         = $partMeta.Path
             $expectedPartSize = [long]$partMeta.ExpectedSize
 
+            # Always trust actual length from disk for resume
             $existingLength = 0
             if ($partFile -and (Test-Path $partFile)) {
                 $existingLength = (Get-Item $partFile).Length
@@ -491,7 +522,7 @@ function Download-WithResume {
             $meta | ConvertTo-Json -Depth 6 | Set-Content -Path $metaPath -Encoding UTF8
             $deltaBytes = $totalDownloaded - $lastTotal
             $deltaTime = ($now - $lastTime).TotalSeconds
-            if ($deltaTime -lt 0.5) { $deltaTime = 0.5 }  # clamp to avoid huge spikes
+            if ($deltaTime -lt 0.5) { $deltaTime = 0.5 }  # clamp to avoid tiny spikes
             $instantSpeed = if ($deltaTime -gt 0) { $deltaBytes / $deltaTime } else { 0 }
 
             $avgSpeedSamples.Enqueue($instantSpeed)
@@ -567,88 +598,89 @@ function Download-WithResume {
 
         # JSON + file-size verify before merge
         if (-not (Test-SegmentJson -OutFile $OutFile -Silent)) { throw "Some segments are incomplete according to JSON; aborting merge. Run the script again to resume." }
+
         # Concatenate parts into final file
         Write-Host "`nStitching parts into final file..."
 
-		$partsSorted  = $meta.Parts | Sort-Object Index
-		$totalToWrite = 0
+        $partsSorted  = $meta.Parts | Sort-Object Index
+        $totalToWrite = 0
 
-		foreach ($p in $partsSorted) {
-			if ($p.Path -and (Test-Path $p.Path)) {
-				$totalToWrite += (Get-Item $p.Path).Length
-			}
-		}
+        foreach ($p in $partsSorted) {
+            if ($p.Path -and (Test-Path $p.Path)) {
+                $totalToWrite += (Get-Item $p.Path).Length
+            }
+        }
 
-		if ($totalToWrite -le 0) {
-			Write-Warning "No part files found to stitch."
-			return
-		}
+        if ($totalToWrite -le 0) {
+            Write-Warning "No part files found to stitch."
+            return
+        }
 
-		$outStream = [System.IO.File]::Open(
-			$OutFile,
-			[System.IO.FileMode]::Create,
-			[System.IO.FileAccess]::Write,
-			[System.IO.FileShare]::None
-		)
+        $outStream = [System.IO.File]::Open(
+            $OutFile,
+            [System.IO.FileMode]::Create,
+            [System.IO.FileAccess]::Write,
+            [System.IO.FileShare]::None
+        )
 
-		$written   = 0
-		$barWidth  = 50  # [==================================================]
+        $written   = 0
+        $barWidth  = 50  # [==================================================]
 
-		$emptyBar = "[" + "".PadRight($barWidth, ' ') + "]"
-		Write-Host -NoNewline $emptyBar
+        $emptyBar = "[" + "".PadRight($barWidth, ' ') + "]"
+        Write-Host -NoNewline $emptyBar
 
-		foreach ($p in $partsSorted) {
-			$pf = $p.Path
-			if (-not ($pf -and (Test-Path $pf))) { continue }
+        foreach ($p in $partsSorted) {
+            $pf = $p.Path
+            if (-not ($pf -and (Test-Path $pf))) { continue }
 
-			$inStream = [System.IO.File]::Open(
-				$pf,
-				[System.IO.FileMode]::Open,
-				[System.IO.FileAccess]::Read,
-				[System.IO.FileShare]::Read
-			)
+            $inStream = [System.IO.File]::Open(
+                $pf,
+                [System.IO.FileMode]::Open,
+                [System.IO.FileAccess]::Read,
+                [System.IO.FileShare]::Read
+            )
 
             $buf = New-Object byte[] (16 * 1024 * 1024) # 16MB buffer
             while (($r = $inStream.Read($buf, 0, $buf.Length)) -gt 0) {
                 $outStream.Write($buf, 0, $r)
-				$written += $r
+                $written += $r
 
-				# Progress bar update
-				if ($totalToWrite -gt 0) {
-					$ratio = [double]$written / [double]$totalToWrite
-					if ($ratio -lt 0) { $ratio = 0 }
-					if ($ratio -gt 1) { $ratio = 1 }
+                # Progress bar update
+                if ($totalToWrite -gt 0) {
+                    $ratio = [double]$written / [double]$totalToWrite
+                    if ($ratio -lt 0) { $ratio = 0 }
+                    if ($ratio -gt 1) { $ratio = 1 }
 
-					$filled = [int]([math]::Floor($ratio * $barWidth))
-					if ($filled -lt 0) { $filled = 0 }
-					if ($filled -gt $barWidth) { $filled = $barWidth }
+                    $filled = [int]([math]::Floor($ratio * $barWidth))
+                    if ($filled -lt 0) { $filled = 0 }
+                    if ($filled -gt $barWidth) { $filled = $barWidth }
 
-					if ($filled -ge $barWidth) {
-						$barBody = "".PadRight($barWidth, '=')
-					} else {
-						$eqCount = $filled
-						if ($eqCount -lt 0) { $eqCount = 0 }
-						$spaces = $barWidth - $eqCount - 1
-						if ($spaces -lt 0) { $spaces = 0 }
+                    if ($filled -ge $barWidth) {
+                        $barBody = "".PadRight($barWidth, '=')
+                    } else {
+                        $eqCount = $filled
+                        if ($eqCount -lt 0) { $eqCount = 0 }
+                        $spaces = $barWidth - $eqCount - 1
+                        if ($spaces -lt 0) { $spaces = 0 }
 
-						$barBody = "".PadRight($eqCount, '=') + ">" + "".PadRight($spaces, ' ')
-					}
+                        $barBody = "".PadRight($eqCount, '=') + ">" + "".PadRight($spaces, ' ')
+                    }
 
-					$bar = "[" + $barBody + "]"
-					Write-Host -NoNewline ("`r" + $bar)
-				}
-			}
+                    $bar = "[" + $barBody + "]"
+                    Write-Host -NoNewline ("`r" + $bar)
+                }
+            }
 
-			$inStream.Close()
-			Remove-Item $pf -Force -ErrorAction SilentlyContinue
-		}
+            $inStream.Close()
+            Remove-Item $pf -Force -ErrorAction SilentlyContinue
+        }
 
         $outStream.Close()
 
-		$finalBarBody = "".PadRight($barWidth, '=')
-		$finalBar     = "[" + $finalBarBody + "]"
-		Write-Host -NoNewline ("`r" + $finalBar)
-		Write-Host ""  # new line
+        $finalBarBody = "".PadRight($barWidth, '=')
+        $finalBar     = "[" + $finalBarBody + "]"
+        Write-Host -NoNewline ("`r" + $finalBar)
+        Write-Host ""  # new line
 
         if (Test-Path $metaPath) { Remove-Item $metaPath -Force -ErrorAction SilentlyContinue }
 
@@ -681,7 +713,8 @@ if (Test-Path $destination) {
 if (-not $downloadSuccess) {
     try {
         Write-Host "`nStarting download..."
-        Download-WithResume -Url $isoUrl -OutFile $destination -MaxParallel 32 -SegmentMinBytes (20MB)
+        # No explicit SegmentMinBytes here -> adaptive auto-tuning kicks in
+        Download-WithResume -Url $isoUrl -OutFile $destination
     } catch {
         Write-Error "Download flow failed: $_"
         exit 1
@@ -689,7 +722,6 @@ if (-not $downloadSuccess) {
 }
 
 # ---------- Step 2: Mount ISO (clean unmount first) ----------
-# Get all volumes that are mounted from ISO files
 Write-Host "`nUnmounting any ISO images previously mounted..."
 $volumes = Get-Volume | Where-Object { $_.DriveType -eq 'CD-ROM' }
 
@@ -916,8 +948,6 @@ $useProductServer = $false
 if ($allNames -and ($allNames -eq $appliedNow)) {
     $useProductServer = $true
     Write-Host "`nAll bypass keys applied." -ForegroundColor Cyan
-} else {
-    #Write-Host "`nNot all bypass keys were applied." -ForegroundColor Cyan
 }
 
 # Build installer args conditionally
