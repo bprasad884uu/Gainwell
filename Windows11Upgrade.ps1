@@ -141,7 +141,7 @@ function Download-WithResume {
         [Parameter(Mandatory=$true)][string]$Url,
         [Parameter(Mandatory=$true)][string]$OutFile,
         [int]$MaxParallel = 32,
-        [long]$SegmentMinBytes = (20 * 1024 * 1024),
+        [long]$SegmentMinBytes = (20 * 1024 * 1024), # kept but ignored for fixed 32 segments
         [int]$AttemptsPerPart = 3
     )
 
@@ -258,35 +258,6 @@ function Download-WithResume {
         # ================= SEGMENTED PARALLEL DOWNLOAD BRANCH =================
         Write-Host "`nServer supports ranges. Using segmented parallel download. Size: $(Format-Size $remoteLength). MaxParallel: $MaxParallel`n"
 
-        # ---------- Adaptive segment sizing (auto tuning) ----------
-        $segmentMinExplicit = $PSBoundParameters.ContainsKey('SegmentMinBytes')
-        $maxParExplicit      = $PSBoundParameters.ContainsKey('MaxParallel')
-
-        if (-not $segmentMinExplicit -or -not $maxParExplicit) {
-            $sizeMB = [double]$remoteLength / 1MB
-
-            if ($sizeMB -le 200) {
-                $recSeg = 5MB
-                $recPar = 4
-            } elseif ($sizeMB -le 1024) {
-                $recSeg = 20MB
-                $recPar = 8
-            } elseif ($sizeMB -le 8192) {
-                $recSeg = 100MB
-                $recPar = 16
-            } else {
-                $recSeg = 200MB
-                $recPar = 32
-            }
-
-            if (-not $segmentMinExplicit) {
-                $SegmentMinBytes = [long]$recSeg
-            }
-            if (-not $maxParExplicit) {
-                $MaxParallel = [int]$recPar
-            }
-        }
-
         # JSON metadata path
         $metaPath = "$OutFile.segmentmeta.json"
         $meta     = $null
@@ -296,8 +267,8 @@ function Download-WithResume {
             try { $meta = Get-Content $metaPath -Raw | ConvertFrom-Json } catch { $meta = $null }
         }
 
-        # If meta exists but size changed -> wipe parts + meta
-        if ($meta -and [long]$meta.RemoteLength -ne $remoteLength) {
+        # If meta exists but size OR segment layout changed -> wipe parts + meta
+        if ($meta -and ([long]$meta.RemoteLength -ne $remoteLength -or [int]$meta.SegmentCount -ne 32)) {
             if ($meta.Parts) {
                 foreach ($p in $meta.Parts) {
                     if ($p.Path -and (Test-Path $p.Path)) {
@@ -309,14 +280,14 @@ function Download-WithResume {
             $meta = $null
         }
 
-        # If final ISO exists but size mismatched, delete final only (parts stay for resume)
+        # If final ISO exists but size mismatched, delete final only (parts stay for resume if compatible meta)
         if (Test-Path $OutFile) {
             $existingLength = (Get-Item $OutFile).Length
-            if ($existingLength -eq $remoteLength) {
+            if ($existingLength -eq $remoteLength -and $meta -and [int]$meta.SegmentCount -eq 32) {
                 Write-Host "`nFile already present and size matches remote. Skipping download."
                 return
             } else {
-                Write-Host "`nExisting ISO size differs; removing ISO but keeping parts for resume."
+                Write-Host "`nExisting ISO size differs or layout changed; removing ISO but keeping compatible parts for resume (if any)."
                 Remove-Item $OutFile -Force -ErrorAction SilentlyContinue
             }
         }
@@ -326,21 +297,19 @@ function Download-WithResume {
         $partFiles    = $null
 
         if ($meta) {
-            # Resume layout from old meta
+            # Resume layout from old meta (must already be 32)
             $segmentCount = [int]$meta.SegmentCount
             $segmentSize  = [long]$meta.SegmentSize
             $partFiles    = @($meta.Parts | Sort-Object Index | ForEach-Object { $_.Path })
         } else {
-            # Fresh layout
-            $segmentsNeeded = [math]::Ceiling(([double]$remoteLength) / ([double]$SegmentMinBytes))
-            if ($segmentsNeeded -gt $MaxParallel) {
-                $segmentCount = [int]$MaxParallel
-            } else {
-                $segmentCount = [int]$segmentsNeeded
-                if ($segmentCount -lt 1) { $segmentCount = 1 }
-            }
+            # Fresh layout: ALWAYS 32 segments (IDM-style fixed)
+            $segmentCount = 32
+            if ($segmentCount -lt 1) { $segmentCount = 1 }
 
-            $segmentSize = [long][math]::Floor(([double]$remoteLength) / ([double]$segmentCount))
+            # Make sure segmentSize at least 1 byte (for safety)
+            $segmentSize = [long][math]::Floor(([double]$remoteLength) / [double]$segmentCount)
+            if ($segmentSize -lt 1) { $segmentSize = 1 }
+
             $partFiles   = for ($i = 0; $i -lt $segmentCount; $i++) { "$OutFile.part$i" }
 
             # Build fresh meta
@@ -360,21 +329,27 @@ function Download-WithResume {
                     $endByte = [long]((($i + 1) * $segmentSize) - 1)
                 }
 
-                $partFile        = $partFiles[$i]
-                $expectedSize    = [long]($endByte - $startByte + 1)
-                $bytesDownloaded = 0
-                $completed       = $false
+                if ($startByte -gt $endByte) {
+                    $expectedSize    = 0
+                    $bytesDownloaded = 0
+                    $completed       = $true
+                } else {
+                    $partFile        = $partFiles[$i]
+                    $expectedSize    = [long]($endByte - $startByte + 1)
+                    $bytesDownloaded = 0
+                    $completed       = $false
 
-                if (Test-Path $partFile) {
-                    $bytesDownloaded = (Get-Item $partFile).Length
-                    if ($bytesDownloaded -ge $expectedSize) {
-                        $completed = $true
+                    if (Test-Path $partFile) {
+                        $bytesDownloaded = (Get-Item $partFile).Length
+                        if ($bytesDownloaded -ge $expectedSize) {
+                            $completed = $true
+                        }
                     }
                 }
 
                 $meta.Parts += [pscustomobject]@{
                     Index           = $i
-                    Path            = $partFile
+                    Path            = $partFiles[$i]
                     Start           = $startByte
                     End             = $endByte
                     ExpectedSize    = $expectedSize
@@ -400,6 +375,12 @@ function Download-WithResume {
             $endByte          = [long]$partMeta.End
             $partFile         = $partMeta.Path
             $expectedPartSize = [long]$partMeta.ExpectedSize
+
+            if ($expectedPartSize -le 0 -or $startByte -gt $endByte) {
+                $partMeta.Completed       = $true
+                $partMeta.BytesDownloaded = 0
+                continue
+            }
 
             # Always trust actual length from disk for resume
             $existingLength = 0
@@ -522,7 +503,7 @@ function Download-WithResume {
             $meta | ConvertTo-Json -Depth 6 | Set-Content -Path $metaPath -Encoding UTF8
             $deltaBytes = $totalDownloaded - $lastTotal
             $deltaTime = ($now - $lastTime).TotalSeconds
-            if ($deltaTime -lt 0.5) { $deltaTime = 0.5 }  # clamp to avoid tiny spikes
+            if ($deltaTime -lt 0.5) { $deltaTime = 0.5 }  # clamp to avoid huge spikes
             $instantSpeed = if ($deltaTime -gt 0) { $deltaBytes / $deltaTime } else { 0 }
 
             $avgSpeedSamples.Enqueue($instantSpeed)
@@ -548,7 +529,7 @@ function Download-WithResume {
             if ($progressPct -gt 100) { $progressPct = 100 }
             if ($progressPct -lt 0)   { $progressPct = 0 }
 
-            # Primary formatted line (matches your requested example)
+            # Primary formatted line
             $downloadedText = "$(Format-Size $totalDownloaded) / $(Format-Size $remoteLength) ($progressPct`%)"
             $speedText = "$(Format-Speed $avgSpeed)"
             $etaText = $eta
@@ -694,7 +675,7 @@ function Download-WithResume {
     }
 }
 
-# ---------- Step 0: If file exists, try mount to verify; otherwise download with resume & verify ----------
+# ---------- Step 0: If file exists, try mount to verify; otherwise download with resume ----------
 $downloadSuccess = $false
 if (Test-Path $destination) {
     Write-Host "`nFile already exists: $destination"
@@ -713,8 +694,8 @@ if (Test-Path $destination) {
 if (-not $downloadSuccess) {
     try {
         Write-Host "`nStarting download..."
-        # No explicit SegmentMinBytes here -> adaptive auto-tuning kicks in
-        Download-WithResume -Url $isoUrl -OutFile $destination
+        # Fixed 32 segments behaviour. MaxParallel = 32 by default, but you can pass a lower value.
+        Download-WithResume -Url $isoUrl -OutFile $destination -MaxParallel 32
     } catch {
         Write-Error "Download flow failed: $_"
         exit 1
@@ -770,7 +751,7 @@ $qualcommListUrl = "https://raw.githubusercontent.com/rcmaehl/WhyNotWin11/main/i
 $cpu = Get-CimInstance -ClassName Win32_Processor
 $rawCpuName = $cpu.Name.Trim()
 
-# Extract clean CPU model string (keep original extraction logic)
+# Extract clean CPU model string
 if ($rawCpuName -match "Core\(TM\)\s+i[3579]-\S+") {
     $cleanCpuName = $matches[0]
 } elseif ($rawCpuName -match "Core\s+i[3579]-\S+") {
