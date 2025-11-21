@@ -81,83 +81,44 @@ function Format-ETA { param([double]$seconds)
     return ($parts -join ' ')
 }
 
-# ---------- JSON-based segment verification helper ----------
-function Test-SegmentJson {
-    param(
-        [Parameter(Mandatory=$true)][string]$OutFile,
-        [switch]$Silent
-    )
-
-    $metaPath = "$OutFile.segmentmeta.json"
-
-    if (-not (Test-Path $metaPath)) {
-        Write-Warning "Meta file not found: $metaPath"
-        return $false
-    }
-
-    $meta  = Get-Content $metaPath -Raw | ConvertFrom-Json
-    $allOk = $true
-
-    foreach ($p in $meta.Parts) {
-        $expected = [long]$p.ExpectedSize
-        $actual   = 0
-        if ($p.Path -and (Test-Path $p.Path)) {
-            $actual = (Get-Item $p.Path).Length
-        }
-
-        $p.BytesDownloaded = $actual
-        if ($expected -gt 0 -and $actual -ge $expected) {
-            $p.Completed = $true
-        } else {
-            $p.Completed = $false
-            $allOk = $false
-        }
-    }
-
-    # Update meta file on disk
-    $meta | ConvertTo-Json -Depth 6 | Set-Content -Path $metaPath -Encoding UTF8
-
-    if (-not $Silent) {
-        $meta.Parts |
-            Select-Object Index,
-                          @{n='BytesDownloaded';e={[long]$_.BytesDownloaded}},
-                          @{n='ExpectedSize';e={[long]$_.ExpectedSize}},
-                          Completed |
-            Format-Table -AutoSize
-
-        if ($allOk) {
-            Write-Host "`nAll segments complete according to JSON + file sizes."
-        } else {
-            Write-Warning "`nSome segments are incomplete. Next run will resume remaining parts."
-        }
-    }
-
-    return $allOk
-}
-
-# ---------- Download with resume support (runspace-based segmented downloader) ----------
+# ---------- Download with resume support (32 parallel, speed-based reallocation by blocks) ----------
 function Download-WithResume {
     param(
         [Parameter(Mandatory=$true)][string]$Url,
         [Parameter(Mandatory=$true)][string]$OutFile,
         [int]$MaxParallel = 32,
-        [long]$SegmentMinBytes = (20 * 1024 * 1024), # kept but ignored for fixed 32 segments
-        [int]$AttemptsPerPart = 3
+        [int]$AttemptsPerPart = 3,
+        [long]$BlockSizeBytes = (16 * 1024 * 1024)  # ~16 MB per block (fixed, no auto detect)
     )
 
     if (-not ("System.Net.Http.HttpClient" -as [type])) {
         Add-Type -Path "$([Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll" -ErrorAction SilentlyContinue
     }
 
+    # Block file name == metadata (start/end ranges encoded)
+    function Get-BlockPath {
+        param(
+            [string]$OutFile,
+            [int]   $Index,
+            [long]  $Start,
+            [long]  $End
+        )
+        $dir  = [System.IO.Path]::GetDirectoryName($OutFile)
+        $base = [System.IO.Path]::GetFileName($OutFile)
+        $name = "{0}.blk{1:D6}_{2:D016}_{3:D016}.part" -f $base, $Index, $Start, $End
+        return (Join-Path $dir $name)
+    }
+
     Write-Host "`nPreparing download:`n"
+
     $tmpFolder = [System.IO.Path]::GetDirectoryName($OutFile)
     if (-not (Test-Path $tmpFolder)) { New-Item -Path $tmpFolder -ItemType Directory -Force | Out-Null }
 
-    $client = New-Object System.Net.Http.HttpClient
+    $client = [System.Net.Http.HttpClient]::new()
     $client.Timeout = [System.TimeSpan]::FromHours(4)
 
     try {
-        # Probe server for range support and length (HEAD preferred, fallback to ranged GET probe)
+        # ---- Probe server for length + ranges ----
         $req = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Head, $Url)
         try {
             $resp = $client.SendAsync($req, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
@@ -177,423 +138,308 @@ function Download-WithResume {
         }
 
         $remoteLength = $null
-        if ($resp.Content.Headers.ContentLength -ne $null) { $remoteLength = [long]$resp.Content.Headers.ContentLength }
-        elseif ($resp.Content.Headers.ContentRange -ne $null -and $resp.Content.Headers.ContentRange.Length -ne $null) {
+        if ($resp.Content.Headers.ContentLength -ne $null) {
+            $remoteLength = [long]$resp.Content.Headers.ContentLength
+        } elseif ($resp.Content.Headers.ContentRange -ne $null -and $resp.Content.Headers.ContentRange.Length -ne $null) {
             $remoteLength = [long]$resp.Content.Headers.ContentRange.Length
         }
 
         $resp.Dispose()
 
-        # If remote length unknown but ranges supported, try small GET to get length
-        if (($remoteLength -eq $null) -and $acceptRanges) {
-            try {
-                $probe = $client.SendAsync([System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Get, $Url), [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
-                if ($probe.Content.Headers.ContentLength -ne $null) { $remoteLength = [long]$probe.Content.Headers.ContentLength }
-                $probe.Dispose()
-            } catch {}
+        if (-not $remoteLength -or $remoteLength -le 0) {
+            throw "Could not determine remote file size."
         }
 
-        # ================= SINGLE-STREAM RESUME BRANCH =================
-        if (-not $acceptRanges -or -not $remoteLength -or $remoteLength -le 0) {
-            Write-Host "`nServer does not support ranged requests or remote length unknown — using single-stream resume with larger buffer."
-            $start = 0
-            if (Test-Path $OutFile) {
-                try { $start = (Get-Item $OutFile).Length } catch { $start = 0 }
-                if ($start -gt 0) { Write-Host "`nPartial file detected: $(Format-Size $start). Resuming..." }
-            }
-
-            $request = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $Url)
-            if ($start -gt 0) { $request.Headers.Range = [System.Net.Http.Headers.RangeHeaderValue]::new($start, $null) }
-
-            $response = $client.SendAsync($request, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
-            if ($response.StatusCode -eq [System.Net.HttpStatusCode]::RequestedRangeNotSatisfiable) {
-                Write-Warning "Server says requested range not satisfiable. Removing partial and retrying full download."
-                Remove-Item $OutFile -Force -ErrorAction SilentlyContinue
-                $start = 0
-                $request = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $Url)
-                $response = $client.SendAsync($request, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
-            }
-            if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK -and $response.StatusCode -ne [System.Net.HttpStatusCode]::PartialContent) {
-                throw "Download failed: $($response.StatusCode) $($response.ReasonPhrase)"
-            }
-
-            $content = $response.Content
-            $stream = $content.ReadAsStreamAsync().Result
-            if ($start -eq 0) {
-                $fs = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
-            } else {
-                $fs = [System.IO.File]::Open($OutFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
-                $fs.Seek($start, 'Begin') | Out-Null
-            }
-
-            $bufferSize = 20 * 1024 * 1024  # 20MB buffer for high throughput
-            $buffer = New-Object byte[] $bufferSize
-            $downloadedThisSession = 0
-            $sessionStart = Get-Date
-
-            while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
-                $fs.Write($buffer, 0, $bytesRead)
-                $downloadedThisSession += $bytesRead
-                $downloadedTotal = $start + $downloadedThisSession
-                $elapsed = (Get-Date) - $sessionStart
-                $speed = if ($elapsed.TotalSeconds -gt 0) { $downloadedThisSession / $elapsed.TotalSeconds } else { 0 }
-
-                if ($remoteLength -gt 0 -and $speed -gt 0) {
-                    $remaining = $remoteLength - $downloadedTotal
-                    $etaSeconds = $remaining / $speed
-                    $progress = ($downloadedTotal / $remoteLength) * 100
-                    $etaFormatted = Format-ETA $etaSeconds
-                } else {
-                    $progress = 0
-                    $etaFormatted = "Unknown"
-                }
-                Write-Host -NoNewline "`rDownloaded: $(Format-Size $downloadedTotal) / $(Format-Size $remoteLength) ($([math]::Round($progress,2))%) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted   "
-            }
-
-            Write-Host "`nDownload finished: $OutFile"
-            $stream.Close(); $content.Dispose(); $fs.Close(); $response.Dispose()
-            return
+        if (-not $acceptRanges) {
+            throw "Server does not support ranged requests. Parallel download not possible."
         }
 
-        # ================= SEGMENTED PARALLEL DOWNLOAD BRANCH =================
-        Write-Host "`nServer supports ranges. Using segmented parallel download. Size: $(Format-Size $remoteLength). MaxParallel: $MaxParallel`n"
+        Write-Host "Server supports ranges. Size: $(Format-Size $remoteLength). MaxParallel: $MaxParallel`n"
 
-        # JSON metadata path
-        $metaPath = "$OutFile.segmentmeta.json"
-        $meta     = $null
-
-        # Try load existing meta for resume
-        if (Test-Path $metaPath) {
-            try { $meta = Get-Content $metaPath -Raw | ConvertFrom-Json } catch { $meta = $null }
-        }
-
-        # If meta exists but size OR segment layout changed -> wipe parts + meta
-        if ($meta -and ([long]$meta.RemoteLength -ne $remoteLength -or [int]$meta.SegmentCount -ne 32)) {
-            if ($meta.Parts) {
-                foreach ($p in $meta.Parts) {
-                    if ($p.Path -and (Test-Path $p.Path)) {
-                        Remove-Item $p.Path -Force -ErrorAction SilentlyContinue
-                    }
-                }
-            }
-            Remove-Item $metaPath -Force -ErrorAction SilentlyContinue
-            $meta = $null
-        }
-
-        # If final ISO exists but size mismatched, delete final only (parts stay for resume if compatible meta)
+        # If final ISO exists and size exact match -> skip
         if (Test-Path $OutFile) {
             $existingLength = (Get-Item $OutFile).Length
-            if ($existingLength -eq $remoteLength -and $meta -and [int]$meta.SegmentCount -eq 32) {
-                Write-Host "`nFile already present and size matches remote. Skipping download."
+            if ($existingLength -eq $remoteLength) {
+                Write-Host "File already present with correct size. Skipping download."
                 return
             } else {
-                Write-Host "`nExisting ISO size differs or layout changed; removing ISO but keeping compatible parts for resume (if any)."
+                Write-Host "Existing ISO size differs; removing ISO but keeping any block parts for resume."
                 Remove-Item $OutFile -Force -ErrorAction SilentlyContinue
             }
         }
 
-        $segmentCount = $null
-        $segmentSize  = $null
-        $partFiles    = $null
+        # ---------- Build block list ----------
+        if ($BlockSizeBytes -lt 1024*1024) { $BlockSizeBytes = 1024*1024 } # minimum 1 MB
+        $blocks      = @()
+        $blockIndex  = 0
+        $totalBlocks = [math]::Ceiling($remoteLength / $BlockSizeBytes)
 
-        if ($meta) {
-            # Resume layout from old meta (must already be 32)
-            $segmentCount = [int]$meta.SegmentCount
-            $segmentSize  = [long]$meta.SegmentSize
-            $partFiles    = @($meta.Parts | Sort-Object Index | ForEach-Object { $_.Path })
-        } else {
-            # Fresh layout: ALWAYS 32 segments (IDM-style fixed)
-            $segmentCount = 32
-            if ($segmentCount -lt 1) { $segmentCount = 1 }
+        for ($start = 0; $start -lt $remoteLength; $start += $BlockSizeBytes) {
+            $end = [long]($start + $BlockSizeBytes - 1)
+            if ($end -ge $remoteLength) { $end = [long]($remoteLength - 1) }
 
-            # Make sure segmentSize at least 1 byte (for safety)
-            $segmentSize = [long][math]::Floor(([double]$remoteLength) / [double]$segmentCount)
-            if ($segmentSize -lt 1) { $segmentSize = 1 }
+            $expectedSize = [long]($end - $start + 1)
+            $path         = Get-BlockPath -OutFile $OutFile -Index $blockIndex -Start $start -End $end
 
-            $partFiles   = for ($i = 0; $i -lt $segmentCount; $i++) { "$OutFile.part$i" }
+            $existing     = 0
+            $completed    = $false
 
-            # Build fresh meta
-            $meta = [pscustomobject]@{
-                Url          = $Url
-                RemoteLength = $remoteLength
-                SegmentCount = $segmentCount
-                SegmentSize  = $segmentSize
-                Parts        = @()
-            }
-
-            for ($i = 0; $i -lt $segmentCount; $i++) {
-                $startByte = [long]($i * $segmentSize)
-                if ($i -eq ($segmentCount - 1)) {
-                    $endByte = [long]($remoteLength - 1)
-                } else {
-                    $endByte = [long]((($i + 1) * $segmentSize) - 1)
-                }
-
-                if ($startByte -gt $endByte) {
-                    $expectedSize    = 0
-                    $bytesDownloaded = 0
-                    $completed       = $true
-                } else {
-                    $partFile        = $partFiles[$i]
-                    $expectedSize    = [long]($endByte - $startByte + 1)
-                    $bytesDownloaded = 0
-                    $completed       = $false
-
-                    if (Test-Path $partFile) {
-                        $bytesDownloaded = (Get-Item $partFile).Length
-                        if ($bytesDownloaded -ge $expectedSize) {
-                            $completed = $true
-                        }
-                    }
-                }
-
-                $meta.Parts += [pscustomobject]@{
-                    Index           = $i
-                    Path            = $partFiles[$i]
-                    Start           = $startByte
-                    End             = $endByte
-                    ExpectedSize    = $expectedSize
-                    BytesDownloaded = $bytesDownloaded
-                    Completed       = $completed
+            if (Test-Path $path) {
+                $existing = (Get-Item $path).Length
+                if ($existing -gt $expectedSize) {
+                    # corrupt / over-size -> reset
+                    Remove-Item $path -Force -ErrorAction SilentlyContinue
+                    $existing  = 0
+                    $completed = $false
+                } elseif ($existing -ge $expectedSize) {
+                    $completed = $true
                 }
             }
 
-            $meta | ConvertTo-Json -Depth 6 | Set-Content -Path $metaPath -Encoding UTF8
+            $blocks += [pscustomobject]@{
+                Index        = $blockIndex
+                Start        = [long]$start
+                End          = [long]$end
+                ExpectedSize = $expectedSize
+                Path         = $path
+                Existing     = $existing
+                Completed    = $completed
+            }
+
+            $blockIndex++
         }
 
-        # create runspace pool
+        # Agar sab blocks already complete hon to direct stitching pe jao
+        $allComplete = $true
+        foreach ($b in $blocks) {
+            if (-not $b.Completed) { $allComplete = $false; break }
+        }
+
+        # ---------- Parallel download using runspace pool ----------
         $minThreads = 1
         $maxThreads = [int]([System.Math]::Max([double]1, [double]$MaxParallel))
         $rsp = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspacePool($minThreads, $maxThreads)
         $rsp.ThreadOptions = "ReuseThread"
         $rsp.Open()
 
-        $powershellList = @()
-        for ($i = 0; $i -lt $segmentCount; $i++) {
-            $partMeta         = $meta.Parts | Where-Object { $_.Index -eq $i }
-            $startByte        = [long]$partMeta.Start
-            $endByte          = [long]$partMeta.End
-            $partFile         = $partMeta.Path
-            $expectedPartSize = [long]$partMeta.ExpectedSize
+        $jobs = @()
 
-            if ($expectedPartSize -le 0 -or $startByte -gt $endByte) {
-                $partMeta.Completed       = $true
-                $partMeta.BytesDownloaded = 0
-                continue
-            }
+        if (-not $allComplete) {
+            foreach ($b in $blocks) {
+                if ($b.Completed -or $b.ExpectedSize -le 0) { continue }
 
-            # Always trust actual length from disk for resume
-            $existingLength = 0
-            if ($partFile -and (Test-Path $partFile)) {
-                $existingLength = (Get-Item $partFile).Length
-            }
+                $ps = [System.Management.Automation.PowerShell]::Create()
+                $ps.RunspacePool = $rsp
 
-            # If part is larger than expected, reset it
-            if ($existingLength -gt $expectedPartSize) {
-                Write-Warning "Segment $i part file larger than expected. Resetting this part."
-                Remove-Item $partFile -Force -ErrorAction SilentlyContinue
-                $existingLength = 0
-            }
+                $script = {
+                    param($Url, $path, $start, $end, $existing, $idx, $attempts)
 
-            # Skip if already full
-            if ($expectedPartSize -gt 0 -and $existingLength -ge $expectedPartSize) {
-                $partMeta.Completed       = $true
-                $partMeta.BytesDownloaded = $existingLength
-                continue
-            }
+                    try {
+                        if (-not ("System.Net.Http.HttpClient" -as [type])) {
+                            Add-Type -Path "$([Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll" -ErrorAction SilentlyContinue
+                        }
+                        $try = 0
+                        while ($true) {
+                            $try++
+                            try {
+                                $resumeStart = [long]($start + $existing)
+                                if ($resumeStart -gt $end) {
+                                    return @{ Index = $idx; Success = $true; Error = $null }
+                                }
 
-            $ps = [System.Management.Automation.PowerShell]::Create()
-            $ps.RunspacePool = $rsp
+                                $clientInner = [System.Net.Http.HttpClient]::new()
+                                $clientInner.Timeout = [System.TimeSpan]::FromHours(4)
 
-            $script = {
-                param($Url, $partFile, $startByte, $endByte, $index, $attempts, $alreadyDownloaded)
-                try {
-                    if (-not ("System.Net.Http.HttpClient" -as [type])) { Add-Type -Path "$([Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory())\System.Net.Http.dll" -ErrorAction SilentlyContinue }
-                    $h = [System.Net.Http.HttpClient]::new()
-                    $h.Timeout = [System.TimeSpan]::FromHours(4)
+                                $reqInner = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Get, $Url)
+                                $reqInner.Headers.Range = [System.Net.Http.Headers.RangeHeaderValue]::new($resumeStart, $end)
 
-                    $try = 0
-                    while ($true) {
-                        $try++
-                        try {
-                            $resumeStart = [long]($startByte + $alreadyDownloaded)
-                            if ($resumeStart -gt $endByte) {
-                                $h.Dispose()
-                                return @{
-                                    Index   = $index
-                                    Success = $true
-                                    Error   = $null
-                                    Part    = $partFile
+                                $respInner = $clientInner.SendAsync($reqInner, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+                                if ($respInner.StatusCode -ne [System.Net.HttpStatusCode]::PartialContent -and
+                                    $respInner.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
+                                    throw "HTTP $($respInner.StatusCode) $($respInner.ReasonPhrase)"
+                                }
+
+                                $stream = $respInner.Content.ReadAsStreamAsync().Result
+
+                                if ($existing -gt 0 -and (Test-Path $path)) {
+                                    $fs = [System.IO.File]::Open($path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+                                    $fs.Seek(0, 'End') | Out-Null
+                                } else {
+                                    $fs = [System.IO.File]::Open($path, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+                                }
+
+                                $buffer = New-Object byte[] (8 * 1024 * 1024) # 8MB buffer
+                                while (($r = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                                    $fs.Write($buffer, 0, $r)
+                                }
+
+                                $fs.Close()
+                                $stream.Close()
+                                $respInner.Dispose()
+                                $clientInner.Dispose()
+
+                                return @{ Index = $idx; Success = $true; Error = $null }
+                            } catch {
+                                $err = $_.ToString()
+                                if ($try -ge $attempts) {
+                                    if (Test-Path $path) { Remove-Item $path -Force -ErrorAction SilentlyContinue }
+                                    return @{ Index = $idx; Success = $false; Error = $err }
+                                } else {
+                                    Start-Sleep -Seconds (2 * $try)
+                                    continue
                                 }
                             }
-
-                            $req = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Get, $Url)
-                            $req.Headers.Range = [System.Net.Http.Headers.RangeHeaderValue]::new($resumeStart, $endByte)
-                            $resp = $h.SendAsync($req, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
-                            if ($resp.StatusCode -ne [System.Net.HttpStatusCode]::PartialContent -and $resp.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
-                                throw "HTTP $($resp.StatusCode) $($resp.ReasonPhrase)"
-                            }
-                            $stream = $resp.Content.ReadAsStreamAsync().Result
-
-                            if ($alreadyDownloaded -gt 0 -and (Test-Path $partFile)) {
-                                $fs = [System.IO.File]::Open($partFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
-                                $fs.Seek(0, 'End') | Out-Null
-                            } else {
-                                $fs = [System.IO.File]::Open($partFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
-                            }
-                            $buffer = New-Object byte[] (8 * 1024 * 1024) # 8MB buffer
-                            while (($r = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
-                                $fs.Write($buffer, 0, $r)
-                            }
-                            $fs.Close()
-                            $stream.Close(); $resp.Dispose(); $h.Dispose()
-                            return @{ Index = $index; Success = $true; Error = $null; Part = $partFile }
-                        } catch {
-                            $err = $_.ToString()
-                            if ($try -ge $attempts) {
-                                # Final failure for this segment: delete part so next run cleanly redownloads
-                                if (Test-Path $partFile) { Remove-Item $partFile -Force -ErrorAction SilentlyContinue }
-                                if ($h) { $h.Dispose() }
-                                return @{ Index = $index; Success = $false; Error = $err; Part = $partFile }
-                            } else {
-                                Start-Sleep -Seconds (2 * $try)
-                                continue
-                            }
                         }
+                    } catch {
+                        if (Test-Path $path) { Remove-Item $path -Force -ErrorAction SilentlyContinue }
+                        return @{ Index = $idx; Success = $false; Error = $_.ToString() }
                     }
-                } catch {
-                    # Outer unexpected failure: also delete part
-                    if (Test-Path $partFile) { Remove-Item $partFile -Force -ErrorAction SilentlyContinue }
-                    return @{ Index = $index; Success = $false; Error = $_.ToString(); Part = $partFile }
+                }
+
+                $async = $ps.AddScript($script).
+                              AddArgument($Url).
+                              AddArgument($b.Path).
+                              AddArgument($b.Start).
+                              AddArgument($b.End).
+                              AddArgument($b.Existing).
+                              AddArgument($b.Index).
+                              AddArgument($AttemptsPerPart).
+                              BeginInvoke()
+
+                $jobs += [pscustomobject]@{
+                    PS   = $ps
+                    Async= $async
+                    Block= $b
                 }
             }
 
-            $ps.AddScript($script).AddArgument($Url).AddArgument($partFile).AddArgument($startByte).AddArgument($endByte).AddArgument($i).AddArgument($AttemptsPerPart).AddArgument($existingLength) | Out-Null
-            $async = $ps.BeginInvoke()
-            $powershellList += [PSCustomObject]@{ PS = $ps; Async = $async; Index = $i; PartFile = $partFile; ExpectedSize = $expectedPartSize }
-        }
+            # ---------- Progress loop (speed + ETA) ----------
+            $lastTotal       = 0
+            $lastTime        = (Get-Date).AddSeconds(-1)
+            $avgSpeedSamples = New-Object System.Collections.Queue
+            $maxSamples      = 5
 
-        # Monitor progress with smoothed speed and ETA
-        $lastTotal = 0
-        $lastTime = (Get-Date).AddSeconds(-1)  # initialize a second earlier to avoid tiny delta
-        $avgSpeedSamples = New-Object System.Collections.Queue
-        $maxSamples = 5
+            while ($true) {
+                $now             = Get-Date
+                $totalDownloaded = 0
 
-        while ($true) {
-            $now = Get-Date
-            $totalDownloaded = 0
-            for ($i = 0; $i -lt $meta.Parts.Count; $i++) {
-                $pf  = $meta.Parts[$i].Path
-                $len = 0
-                if ($pf -and (Test-Path $pf)) {
-                    $len = (Get-Item $pf).Length
+                foreach ($b in $blocks) {
+                    $len = 0
+                    if ($b.Path -and (Test-Path $b.Path)) {
+                        $len = (Get-Item $b.Path).Length
+                    }
+                    if ($len -ge $b.ExpectedSize) { $b.Completed = $true }
                     $totalDownloaded += $len
                 }
 
-                $metaPart = $meta.Parts[$i]
-                $metaPart.BytesDownloaded = $len
-                if ($metaPart.ExpectedSize -gt 0 -and $len -ge $metaPart.ExpectedSize) {
-                    $metaPart.Completed = $true
+                $deltaBytes = $totalDownloaded - $lastTotal
+                $deltaTime  = ($now - $lastTime).TotalSeconds
+                if ($deltaTime -lt 0.5) { $deltaTime = 0.5 }
+                $instantSpeed = if ($deltaTime -gt 0) { $deltaBytes / $deltaTime } else { 0 }
+
+                $avgSpeedSamples.Enqueue($instantSpeed)
+                if ($avgSpeedSamples.Count -gt $maxSamples) { [void]$avgSpeedSamples.Dequeue() }
+                $avgSpeed = ($avgSpeedSamples | Measure-Object -Average).Average
+                if (-not $avgSpeed) { $avgSpeed = 0 }
+
+                $remainingBytes = [System.Math]::Max([double]0, [double]($remoteLength - $totalDownloaded))
+                $eta = if ($remainingBytes -le 0) {
+                    "0s"
+                } elseif ($avgSpeed -gt 0) {
+                    Format-ETA ($remainingBytes / $avgSpeed)
                 } else {
-                    $metaPart.Completed = $false
+                    "Unknown"
+                }
+
+                $progressPct = if ($remoteLength -gt 0) {
+                    [math]::Round(($totalDownloaded / $remoteLength) * 100, 2)
+                } else { 0 }
+
+                if ($progressPct -gt 100) { $progressPct = 100 }
+                if ($progressPct -lt 0)   { $progressPct = 0 }
+
+                $downloadedText = "$(Format-Size $totalDownloaded) / $(Format-Size $remoteLength) ($progressPct`%)"
+                $speedText      = "$(Format-Speed $avgSpeed)"
+                $etaText        = $eta
+
+                Write-Host -NoNewline "`rDownloaded: $downloadedText | Speed: $speedText | ETA: $etaText   "
+
+                $lastTotal = $totalDownloaded
+                $lastTime  = $now
+
+                $allDone = $true
+                foreach ($j in $jobs) {
+                    if (-not $j.Async.IsCompleted) { $allDone = $false; break }
+                }
+                if ($allDone) { break }
+
+                Start-Sleep -Seconds 1
+            }
+            Write-Host ""
+
+            # ---------- Collect results ----------
+            $errors = @()
+            foreach ($j in $jobs) {
+                try {
+                    $res = $j.PS.EndInvoke($j.Async)
+                    $j.PS.Dispose()
+
+                    $blk = $j.Block
+                    $actualLen = 0
+                    if ($blk.Path -and (Test-Path $blk.Path)) {
+                        $actualLen = (Get-Item $blk.Path).Length
+                    }
+
+                    if ($actualLen -lt $blk.ExpectedSize) {
+                        $errors += "Block $($blk.Index) too small: expected $(Format-Size $($blk.ExpectedSize)), actual $(Format-Size $actualLen)"
+                    }
+
+                    if ($res -and $res.Success -ne $true) {
+                        $errors += "Block $($blk.Index) error: $($res.Error)"
+                    }
+                } catch {
+                    $blk = $j.Block
+                    $actualLen = 0
+                    if ($blk.Path -and (Test-Path $blk.Path)) {
+                        $actualLen = (Get-Item $blk.Path).Length
+                    }
+                    if ($actualLen -lt $blk.ExpectedSize) {
+                        $errors += "Block $($blk.Index) runspace failure: $_"
+                    }
                 }
             }
 
-            # Write meta to disk so you can inspect status any time
-            $meta | ConvertTo-Json -Depth 6 | Set-Content -Path $metaPath -Encoding UTF8
-            $deltaBytes = $totalDownloaded - $lastTotal
-            $deltaTime = ($now - $lastTime).TotalSeconds
-            if ($deltaTime -lt 0.5) { $deltaTime = 0.5 }  # clamp to avoid huge spikes
-            $instantSpeed = if ($deltaTime -gt 0) { $deltaBytes / $deltaTime } else { 0 }
-
-            $avgSpeedSamples.Enqueue($instantSpeed)
-            if ($avgSpeedSamples.Count -gt $maxSamples) { [void]$avgSpeedSamples.Dequeue() }
-            $avgSpeed = ($avgSpeedSamples | Measure-Object -Average).Average
-            if (-not $avgSpeed) { $avgSpeed = 0 }
-
-            # Use double for Math.Max to avoid Int32 overload selection
-            $remainingBytes = [System.Math]::Max([double]0, [double]($remoteLength - $totalDownloaded))
-            if ($remainingBytes -le 0) {
-                # Fully downloaded -> ETA 0s
-                $eta = "0s"
-            } elseif ($avgSpeed -gt 0) {
-                $eta = Format-ETA ($remainingBytes / $avgSpeed)
-            } else {
-                $eta = "Unknown"
-            }
-
-            $progressPct = if ($remoteLength -gt 0) {
-                [math]::Round(($totalDownloaded / $remoteLength) * 100, 2)
-            } else { 0 }
-
-            if ($progressPct -gt 100) { $progressPct = 100 }
-            if ($progressPct -lt 0)   { $progressPct = 0 }
-
-            # Primary formatted line
-            $downloadedText = "$(Format-Size $totalDownloaded) / $(Format-Size $remoteLength) ($progressPct`%)"
-            $speedText = "$(Format-Speed $avgSpeed)"
-            $etaText = $eta
-
-            Write-Host -NoNewline "`rDownloaded: $downloadedText | Speed: $speedText | ETA: $etaText   "
-
-            $lastTotal = $totalDownloaded
-            $lastTime = $now
-
-            # completion check
-            $allDone = $true
-            foreach ($entry in $powershellList) { if (-not $entry.Async.IsCompleted) { $allDone = $false; break } }
-            if ($allDone) { break }
-
-            Start-Sleep -Seconds 1
-        }
-        Write-Host ""
-
-        # Collect results + size checks (only trust file sizes)
-        $errors = @()
-        foreach ($entry in $powershellList) {
-            try {
-                # EndInvoke just to ensure runspace finishes; ignore its output
-                try { $null = $entry.PS.EndInvoke($entry.Async) } catch {}
-                try { $entry.PS.Dispose() } catch {}
-
-                $actualLen = 0
-                if (Test-Path $entry.PartFile) {
-                    $actualLen = (Get-Item $entry.PartFile).Length
-                }
-
-                if ($actualLen -lt $entry.ExpectedSize) {
-                    $errors += "Part too small: $($entry.PartFile) - expected >= $(Format-Size $($entry.ExpectedSize)), actual $(Format-Size $actualLen)"
-                }
-            } catch {
-                $actualLen = 0
-                if (Test-Path $entry.PartFile) { $actualLen = (Get-Item $entry.PartFile).Length }
-                if ($actualLen -lt $entry.ExpectedSize) { $errors += "Part error: $($entry.PartFile) - $_" }
+            if ($errors.Count -gt 0) {
+                throw "One or more blocks failed: $($errors -join '; ')"
             }
         }
 
         try { $rsp.Close(); $rsp.Dispose() } catch {}
 
-        if ($errors.Count -gt 0) {
-            throw "One or more segment downloads failed: $($errors -join '; ')"
+        # Final verify: sab blocks present + size OK?
+        foreach ($b in $blocks) {
+            $len = 0
+            if ($b.Path -and (Test-Path $b.Path)) {
+                $len = (Get-Item $b.Path).Length
+            }
+            if ($len -lt $b.ExpectedSize) {
+                throw "Block $($b.Index) incomplete even after download. Run again to resume."
+            }
         }
 
-        # JSON + file-size verify before merge
-        if (-not (Test-SegmentJson -OutFile $OutFile -Silent)) { throw "Some segments are incomplete according to JSON; aborting merge. Run the script again to resume." }
-
-        # Concatenate parts into final file
+        # ---------- Stitch blocks into final file (with progress bar) ----------
         Write-Host "`nStitching parts into final file..."
 
-        $partsSorted  = $meta.Parts | Sort-Object Index
-        $totalToWrite = 0
-
-        foreach ($p in $partsSorted) {
-            if ($p.Path -and (Test-Path $p.Path)) {
-                $totalToWrite += (Get-Item $p.Path).Length
+        $blocksSorted  = $blocks | Sort-Object Start
+        $totalToWrite  = 0
+        foreach ($b in $blocksSorted) {
+            if ($b.Path -and (Test-Path $b.Path)) {
+                $totalToWrite += (Get-Item $b.Path).Length
             }
         }
 
         if ($totalToWrite -le 0) {
-            Write-Warning "No part files found to stitch."
+            Write-Warning "No block files found to stitch."
             return
         }
 
@@ -604,14 +450,13 @@ function Download-WithResume {
             [System.IO.FileShare]::None
         )
 
-        $written   = 0
-        $barWidth  = 50  # [==================================================]
-
+        $written  = 0
+        $barWidth = 50
         $emptyBar = "[" + "".PadRight($barWidth, ' ') + "]"
         Write-Host -NoNewline $emptyBar
 
-        foreach ($p in $partsSorted) {
-            $pf = $p.Path
+        foreach ($b in $blocksSorted) {
+            $pf = $b.Path
             if (-not ($pf -and (Test-Path $pf))) { continue }
 
             $inStream = [System.IO.File]::Open(
@@ -626,7 +471,6 @@ function Download-WithResume {
                 $outStream.Write($buf, 0, $r)
                 $written += $r
 
-                # Progress bar update
                 if ($totalToWrite -gt 0) {
                     $ratio = [double]$written / [double]$totalToWrite
                     if ($ratio -lt 0) { $ratio = 0 }
@@ -661,9 +505,7 @@ function Download-WithResume {
         $finalBarBody = "".PadRight($barWidth, '=')
         $finalBar     = "[" + $finalBarBody + "]"
         Write-Host -NoNewline ("`r" + $finalBar)
-        Write-Host ""  # new line
-
-        if (Test-Path $metaPath) { Remove-Item $metaPath -Force -ErrorAction SilentlyContinue }
+        Write-Host ""
 
         Write-Host "`nDownload complete: $OutFile"
     }
