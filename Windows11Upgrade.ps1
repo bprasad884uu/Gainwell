@@ -849,5 +849,5 @@ Write-Host "`nUnmounting ISO..."
 try { $null = Dismount-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContinue } catch { Write-Warning "Failed to dismount ISO: $_" }
 
 Write-Host "`nWindows 11 upgrade process finished..."
-#Write-Host "`nRebooting System..."
-# Restart-Computer -Force
+Write-Host "`nRebooting System..."
+Restart-Computer -Force
