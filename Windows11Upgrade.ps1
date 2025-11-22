@@ -88,7 +88,7 @@ function Download-WithResume {
         [Parameter(Mandatory=$true)][string]$OutFile,
         [int]$MaxParallel = 32,
         [int]$AttemptsPerPart = 3,
-        [long]$BlockSizeBytes = (16 * 1024 * 1024)  # ~16 MB per block (fixed, no auto detect)
+        [long]$BlockSizeBytes = (16 * 1024 * 1024)  # 16 MB per block
     )
 
     if (-not ("System.Net.Http.HttpClient" -as [type])) {
@@ -98,21 +98,29 @@ function Download-WithResume {
     # Block file name == metadata (start/end ranges encoded)
     function Get-BlockPath {
         param(
-            [string]$OutFile,
+            [string]$SegmentFolder,
+            [string]$BaseName,
             [int]   $Index,
             [long]  $Start,
             [long]  $End
         )
-        $dir  = [System.IO.Path]::GetDirectoryName($OutFile)
-        $base = [System.IO.Path]::GetFileName($OutFile)
-        $name = "{0}.blk{1:D6}_{2:D016}_{3:D016}.part" -f $base, $Index, $Start, $End
-        return (Join-Path $dir $name)
+        $name = "{0}.blk{1:D6}_{2:D016}_{3:D016}.part" -f $BaseName, $Index, $Start, $End
+        return (Join-Path $SegmentFolder $name)
     }
 
     Write-Host "`nPreparing download:`n"
 
     $tmpFolder = [System.IO.Path]::GetDirectoryName($OutFile)
     if (-not (Test-Path $tmpFolder)) { New-Item -Path $tmpFolder -ItemType Directory -Force | Out-Null }
+
+    # IDM-style segment folder: Temp\DwnlData\<FileNameWithoutExt>
+    $segmentRoot   = Join-Path $tmpFolder "DwnlData"
+    $baseNameNoExt = [System.IO.Path]::GetFileNameWithoutExtension($OutFile)
+    $segmentFolder = Join-Path $segmentRoot $baseNameNoExt
+
+    if (-not (Test-Path $segmentFolder)) {
+        New-Item -Path $segmentFolder -ItemType Directory -Force | Out-Null
+    }
 
     $client = [System.Net.Http.HttpClient]::new()
     $client.Timeout = [System.TimeSpan]::FromHours(4)
@@ -170,24 +178,25 @@ function Download-WithResume {
 
         # ---------- Build block list ----------
         if ($BlockSizeBytes -lt 1024*1024) { $BlockSizeBytes = 1024*1024 } # minimum 1 MB
-        $blocks      = @()
-        $blockIndex  = 0
+        $blocks = @()
+        $blockIndex = 0
         $totalBlocks = [math]::Ceiling($remoteLength / $BlockSizeBytes)
+        $baseName = [System.IO.Path]::GetFileNameWithoutExtension($OutFile)
 
         for ($start = 0; $start -lt $remoteLength; $start += $BlockSizeBytes) {
             $end = [long]($start + $BlockSizeBytes - 1)
             if ($end -ge $remoteLength) { $end = [long]($remoteLength - 1) }
 
             $expectedSize = [long]($end - $start + 1)
-            $path         = Get-BlockPath -OutFile $OutFile -Index $blockIndex -Start $start -End $end
+            $path = Get-BlockPath -SegmentFolder $segmentFolder -BaseName $baseName -Index $blockIndex -Start $start -End $end
 
-            $existing     = 0
-            $completed    = $false
+            $existing = 0
+            $completed = $false
 
             if (Test-Path $path) {
                 $existing = (Get-Item $path).Length
                 if ($existing -gt $expectedSize) {
-                    # corrupt / over-size -> reset
+                    # corrupt / oversize -> reset
                     Remove-Item $path -Force -ErrorAction SilentlyContinue
                     $existing  = 0
                     $completed = $false
@@ -196,20 +205,11 @@ function Download-WithResume {
                 }
             }
 
-            $blocks += [pscustomobject]@{
-                Index        = $blockIndex
-                Start        = [long]$start
-                End          = [long]$end
-                ExpectedSize = $expectedSize
-                Path         = $path
-                Existing     = $existing
-                Completed    = $completed
-            }
-
+            $blocks += [pscustomobject]@{ Index = $blockIndex; Start = [long]$start; End = [long]$end; ExpectedSize = $expectedSize; Path = $path; Existing = $existing; Completed = $completed }
             $blockIndex++
         }
 
-        # Agar sab blocks already complete hon to direct stitching pe jao
+        # Resume check: if all blocks exist and match size, stitch only
         $allComplete = $true
         foreach ($b in $blocks) {
             if (-not $b.Completed) { $allComplete = $false; break }
@@ -296,31 +296,23 @@ function Download-WithResume {
                     }
                 }
 
-                $async = $ps.AddScript($script).
-                              AddArgument($Url).
-                              AddArgument($b.Path).
-                              AddArgument($b.Start).
-                              AddArgument($b.End).
-                              AddArgument($b.Existing).
-                              AddArgument($b.Index).
-                              AddArgument($AttemptsPerPart).
-                              BeginInvoke()
+                $async = ($ps.AddScript($script).AddArgument(@($Url,$b.Path,$b.Start,$b.End,$b.Existing,$b.Index,$AttemptsPerPart))).BeginInvoke()
 
                 $jobs += [pscustomobject]@{
-                    PS   = $ps
-                    Async= $async
-                    Block= $b
+                    PS = $ps
+                    Async = $async
+                    Block = $b
                 }
             }
 
-            # ---------- Progress loop (speed + ETA) ----------
-            $lastTotal       = 0
-            $lastTime        = (Get-Date).AddSeconds(-1)
+            # ---------- Progress loop ----------
+            $lastTotal = 0
+            $lastTime = (Get-Date).AddSeconds(-1)
             $avgSpeedSamples = New-Object System.Collections.Queue
-            $maxSamples      = 5
+            $maxSamples = 5
 
             while ($true) {
-                $now             = Get-Date
+                $now = Get-Date
                 $totalDownloaded = 0
 
                 foreach ($b in $blocks) {
@@ -333,7 +325,7 @@ function Download-WithResume {
                 }
 
                 $deltaBytes = $totalDownloaded - $lastTotal
-                $deltaTime  = ($now - $lastTime).TotalSeconds
+                $deltaTime = ($now - $lastTime).TotalSeconds
                 if ($deltaTime -lt 0.5) { $deltaTime = 0.5 }
                 $instantSpeed = if ($deltaTime -gt 0) { $deltaBytes / $deltaTime } else { 0 }
 
@@ -359,13 +351,13 @@ function Download-WithResume {
                 if ($progressPct -lt 0)   { $progressPct = 0 }
 
                 $downloadedText = "$(Format-Size $totalDownloaded) / $(Format-Size $remoteLength) ($progressPct`%)"
-                $speedText      = "$(Format-Speed $avgSpeed)"
-                $etaText        = $eta
+                $speedText = "$(Format-Speed $avgSpeed)"
+                $etaText = $eta
 
                 Write-Host -NoNewline "`rDownloaded: $downloadedText | Speed: $speedText | ETA: $etaText   "
 
                 $lastTotal = $totalDownloaded
-                $lastTime  = $now
+                $lastTime = $now
 
                 $allDone = $true
                 foreach ($j in $jobs) {
@@ -430,8 +422,8 @@ function Download-WithResume {
         # ---------- Stitch blocks into final file (with progress bar) ----------
         Write-Host "`nStitching parts into final file..."
 
-        $blocksSorted  = $blocks | Sort-Object Start
-        $totalToWrite  = 0
+        $blocksSorted = $blocks | Sort-Object Start
+        $totalToWrite = 0
         foreach ($b in $blocksSorted) {
             if ($b.Path -and (Test-Path $b.Path)) {
                 $totalToWrite += (Get-Item $b.Path).Length
@@ -503,9 +495,25 @@ function Download-WithResume {
         $outStream.Close()
 
         $finalBarBody = "".PadRight($barWidth, '=')
-        $finalBar     = "[" + $finalBarBody + "]"
+        $finalBar = "[" + $finalBarBody + "]"
         Write-Host -NoNewline ("`r" + $finalBar)
         Write-Host ""
+
+        # Delete DwnlData\<filename> folder, and if DwnlData is empty, remove it as well
+        try {
+            if (Test-Path $segmentFolder) {
+                Remove-Item $segmentFolder -Recurse -Force -ErrorAction SilentlyContinue
+            }
+
+            if (Test-Path $segmentRoot) {
+                $remaining = Get-ChildItem $segmentRoot -Recurse -ErrorAction SilentlyContinue
+                if (-not $remaining) {
+                    Remove-Item $segmentRoot -Recurse -Force -ErrorAction SilentlyContinue
+                }
+            }
+        } catch {
+            Write-Warning "Failed to cleanup DwnlData folder: $_"
+        }
 
         Write-Host "`nDownload complete: $OutFile"
     }
