@@ -296,7 +296,7 @@ function Download-WithResume {
                     }
                 }
 
-                $async = ($ps.AddScript($script).AddArgument(@($Url,$b.Path,$b.Start,$b.End,$b.Existing,$b.Index,$AttemptsPerPart))).BeginInvoke()
+                $async = $ps.AddScript($script).AddArgument($Url).AddArgument($b.Path).AddArgument($b.Start).AddArgument($b.End).AddArgument($b.Existing).AddArgument($b.Index).AddArgument($AttemptsPerPart).BeginInvoke()
 
                 $jobs += [pscustomobject]@{
                     PS = $ps
