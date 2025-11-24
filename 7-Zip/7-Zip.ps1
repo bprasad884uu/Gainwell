@@ -1,46 +1,87 @@
-# 7-Zip Version Check and Conditional Update Script
+<#
+7-Zip version check & conditional install
 
-$DownloadUrl = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/7-Zip/7-Zip-x64.exe"
-$InstallerPath = "$env:TEMP\7zip_installer.exe"
-$RequiredVersion = [Version]"25.00"
-$InstalledVersion = $null
+- Checks 7-Zip in Uninstall registry keys.
+- Reads DisplayVersion (handles values like "21.03 beta").
+- If installed AND version < 25.00  -> download + silent install.
+- If installed AND version >= 25.00 -> skip.
+- If not installed                  -> skip (as per requirement).
+#>
 
-Write-Host "`nChecking 7-Zip Installation..." -ForegroundColor Cyan
-
-# Updated registry paths
-$Paths = @(
-    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\7-Zip",
-    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\7-Zip"
+param(
+    [string]$DownloadUrl = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/7-Zip/7-Zip-x64.exe",
+    [Version]$RequiredVersion = "25.00"
 )
 
-foreach ($Path in $Paths) {
-    if (Test-Path $Path) {
-        $installed = (Get-ItemProperty -Path $Path -ErrorAction SilentlyContinue)."DisplayVersion"
-        if ($installed) {
-            $InstalledVersion = [Version]$installed
-            break
+$InstallerPath = Join-Path $env:TEMP "7-Zip-x64.exe"
+
+Write-Host "`n=== 7-Zip Check ===" -ForegroundColor Cyan
+
+function Get-7ZipInstalledVersion {
+    $paths = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\7-Zip",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\7-Zip"
+    )
+
+    foreach ($path in $paths) {
+        if (Test-Path $path) {
+            $props = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue
+            $rawVersion = $props.DisplayVersion
+
+            if (-not $rawVersion) { continue }
+
+            # Handle values like "21.03 beta" -> "21.03"
+            if ($rawVersion -match '\d+(\.\d+){0,3}') {
+                $numericVersion = $Matches[0]
+
+                try {
+                    return [Version]$numericVersion
+                } catch {
+                    Write-Host "Found 7-Zip version string '$rawVersion' but could not parse it." -ForegroundColor Yellow
+                    return $null
+                }
+            }
         }
     }
+
+    return $null
 }
 
-if ($InstalledVersion) {
-    Write-Host "7-Zip Installed Version: $InstalledVersion"
+$InstalledVersion = Get-7ZipInstalledVersion
 
-    if ($InstalledVersion -ge $RequiredVersion) {
-        Write-Host "7-Zip is already up to date. Skipping installation." -ForegroundColor Green
-        return
-    } else {
-        Write-Host "Version found but outdated. Updating..." -ForegroundColor Yellow
-    }
+if (-not $InstalledVersion) {
+    Write-Host "7-Zip not found (or version could not be read). Skipping download and installation." -ForegroundColor Yellow
+    return
+}
 
-    Write-Host "Downloading latest installer..."
-    Invoke-WebRequest -Uri $DownloadUrl -OutFile $InstallerPath -UseBasicParsing
+Write-Host "Detected 7-Zip version: $InstalledVersion"
 
-    Write-Host "Installing silently..."
-    Start-Process -FilePath $InstallerPath -ArgumentList "/S" -Wait
+if ($InstalledVersion -ge $RequiredVersion) {
+    Write-Host "7-Zip already upto-date ($InstalledVersion). No installation needed." -ForegroundColor Green
+    return
+}
 
-    Write-Host "Update completed successfully." -ForegroundColor Green
+Write-Host "7-Zip is older than required ($RequiredVersion). Updating..." -ForegroundColor Yellow
 
-} else {
-    Write-Host "7-Zip is NOT installed. Skipping download and installation as requested." -ForegroundColor DarkYellow
+# Download installer
+try {
+    Write-Host "Downloading installer from:`n$DownloadUrl"
+    Invoke-WebRequest -Uri $DownloadUrl -OutFile $InstallerPath -UseBasicParsing -ErrorAction Stop
+    Write-Host "Download completed: $InstallerPath"
+}
+catch {
+    Write-Host "Failed to download 7-Zip installer: $($_.Exception.Message)" -ForegroundColor Red
+    return
+}
+
+# Silent install
+try {
+    Write-Host "Running silent installation..."
+    $proc = Start-Process -FilePath $InstallerPath -ArgumentList "/S" -Wait -PassThru
+    Write-Host "Installer exit code: $($proc.ExitCode)"
+
+    Write-Host "7-Zip installation/update completed." -ForegroundColor Green
+}
+catch {
+    Write-Host "Failed to run 7-Zip installer: $($_.Exception.Message)" -ForegroundColor Red
 }
