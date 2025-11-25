@@ -33,7 +33,6 @@ foreach ($RegPath in $RegPaths) {
                 $InstalledVersion = $null 
             }
         }
-
         break
     }
 }
@@ -49,26 +48,27 @@ Write-Host "`nInstalled Version: $InstalledVersion"
 if ($InstalledVersion -lt $RequiredVersion) {
     $InstallRequired = $true
     Write-Host "`nOlder version detected..." -ForegroundColor Yellow
-} else {
-    #Write-Host "`nRequired or newer version found..." -ForegroundColor Cyan
 }
 
-# ---------------- ALWAYS RUN MSIECEX IF INSTALLED ---------------- #
+# ---------------- DYNAMIC MSI GUID DETECTION ---------------- #
 
-#Write-Host "`nRunning MSI cleanup/uninstall..." -ForegroundColor Yellow
-Start-Process "msiexec.exe" -ArgumentList "/x {23170F69-40C1-2702-2409-000001000000} /quiet /norestart" -Wait -ErrorAction SilentlyContinue
+$MsiGuid = $null
+if ($UninstallString -match '\{23170F69-40C1-2702-[0-9A-F\-]+\}') {
+    $MsiGuid = $Matches[0]
+}
+
+# Always run MSI uninstall if GUID found
+if ($MsiGuid) {
+    Start-Process "msiexec.exe" -ArgumentList "/x $MsiGuid /quiet /norestart" -Wait -ErrorAction SilentlyContinue
+}
 
 # ---------------- UNINSTALL & INSTALL ONLY IF OLDER VERSION ---------------- #
 
 if ($InstallRequired) {
-    #Write-Host "`nOlder version detected...." -ForegroundColor Yellow
 
     if ($UninstallString) {
-
-        # If registry returns multi-string, pick first
         if ($UninstallString -is [array]) { $UninstallString = $UninstallString[0] }
 
-        # Extract clean EXE from uninstall string
         if ($UninstallString -match '^(\".*?\.exe\")') {
             $Exe = $Matches[1].Trim('"')
         } elseif ($UninstallString -match '^(.*?\.exe)') {
@@ -77,11 +77,8 @@ if ($InstallRequired) {
             $Exe = $UninstallString
         }
 
-        #Write-Host "Uninstalling...."
         Start-Process -FilePath $Exe -ArgumentList "/S" -Wait -ErrorAction SilentlyContinue
     }
-
-    #Write-Host "Uninstall completed." -ForegroundColor Green
 
     Write-Host "`nDownloading latest 7-Zip..."
     Invoke-WebRequest -Uri $DownloadUrl -OutFile $InstallerPath -UseBasicParsing
@@ -92,5 +89,5 @@ if ($InstallRequired) {
     Write-Host "`n7-Zip updated successfully." -ForegroundColor Green
 }
 else {
-    Write-Host "`n7-Zip is already up to date. No action required.." -ForegroundColor Cyan
+    Write-Host "`n7-Zip is already up to date. No action required." -ForegroundColor Cyan
 }
