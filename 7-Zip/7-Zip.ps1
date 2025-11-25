@@ -7,6 +7,7 @@ $RequiredVersion = [Version]"25.00"
 $InstalledVersion = $null
 $UninstallString  = $null
 $InstallRequired  = $false
+$AllEntries       = @()
 
 Write-Host "`nChecking 7-Zip Installation..." -ForegroundColor Cyan
 
@@ -17,35 +18,40 @@ $RegPaths = @(
 )
 
 foreach ($RegPath in $RegPaths) {
-    $item = Get-ItemProperty -Path $RegPath -ErrorAction SilentlyContinue |
-        Where-Object { $_.DisplayName -match "7-?Zip" }
+    $found = Get-ItemProperty -Path $RegPath -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -match "7-?Zip" }
 
-    if ($item) {
-        Write-Host "Found entry: $($item.DisplayName)"
-
-        $rawVersion      = $item.DisplayVersion
-        $UninstallString = $item.UninstallString
-
-        if ($rawVersion -match '\d+(\.\d+){0,3}') {
-            try { 
-                $InstalledVersion = [Version]$Matches[0] 
-            } catch { 
-                $InstalledVersion = $null 
-            }
-        }
-        break
-    }
+    if ($found) { $AllEntries += $found }
 }
 
-if (-not $InstalledVersion) {
+if (-not $AllEntries -or $AllEntries.Count -eq 0) {
     Write-Host "`n7-Zip not installed. Skipping install." -ForegroundColor Yellow
     return
 }
 
-Write-Host "`nInstalled Version: $InstalledVersion"
+# Pick first entry for version and uninstall EXE logic (your original behavior)
+$item = $AllEntries | Select-Object -First 1
+
+Write-Host "Found entry: $($item.DisplayName)"
+
+$rawVersion      = $item.DisplayVersion
+$UninstallString = $item.UninstallString
+
+# Extract clean version number
+if ($rawVersion -and $rawVersion -match '\d+(\.\d+){0,3}') {
+    try { 
+        $InstalledVersion = [Version]$Matches[0] 
+    } catch { 
+        $InstalledVersion = $null 
+    }
+}
+
+if ($InstalledVersion) {
+    Write-Host "`nInstalled Version: $InstalledVersion"
+}
 
 # Decide if we need to reinstall
-if ($InstalledVersion -lt $RequiredVersion) {
+if ($InstalledVersion -and $InstalledVersion -lt $RequiredVersion) {
     $InstallRequired = $true
     Write-Host "`nOlder version detected..." -ForegroundColor Yellow
 }
@@ -53,8 +59,26 @@ if ($InstalledVersion -lt $RequiredVersion) {
 # ---------------- DYNAMIC MSI GUID DETECTION ---------------- #
 
 $MsiGuid = $null
-if ($UninstallString -match '\{23170F69-40C1-2702-[0-9A-F\-]+\}') {
-    $MsiGuid = $Matches[0]
+
+foreach ($entry in $AllEntries) {
+
+    # Check in UninstallString
+    if ($entry.UninstallString -and $entry.UninstallString -match '\{23170F69-40C1-2702-[0-9A-F\-]+\}') {
+        $MsiGuid = $Matches[0]
+        break
+    }
+
+    # Check in registry key name
+    if ($entry.PSChildName -and $entry.PSChildName -match '\{23170F69-40C1-2702-[0-9A-F\-]+\}') {
+        $MsiGuid = $Matches[0]
+        break
+    }
+
+    # Check full path
+    if ($entry.PSPath -and $entry.PSPath -match '\{23170F69-40C1-2702-[0-9A-F\-]+\}') {
+        $MsiGuid = $Matches[0]
+        break
+    }
 }
 
 # Always run MSI uninstall if GUID found
