@@ -50,7 +50,7 @@ if ($InstalledVersion -lt $RequiredVersion) {
     $InstallRequired = $true
     Write-Host "`nOlder version detected..." -ForegroundColor Yellow
 } else {
-    Write-Host "`nRequired or newer version found..." -ForegroundColor Cyan
+    #Write-Host "`nRequired or newer version found..." -ForegroundColor Cyan
 }
 
 # ---------------- ALWAYS RUN MSIECEX IF INSTALLED ---------------- #
