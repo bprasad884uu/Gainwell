@@ -15,23 +15,22 @@ $Paths = @(
 
 foreach ($Path in $Paths) {
     if (Test-Path $Path) {
-        $installed = (Get-ItemProperty -Path $Path -ErrorAction SilentlyContinue)."DisplayVersion"
-
+        $Props = Get-ItemProperty -Path $Path -ErrorAction SilentlyContinue
+        
+        $installed = $Props.DisplayVersion
+        $UninstallString = $Props.UninstallString
+        
         if ($installed) {
-            # "21.04 beta" → "21.04"
+            # Extract numeric version from values
             if ($installed -match '\d+(\.\d+){0,3}') {
-                $cleanVersion = $Matches[0]
+                $CleanVersion = $Matches[0]
 
                 try {
-                    $InstalledVersion = [Version]$cleanVersion
+                    $InstalledVersion = [Version]$CleanVersion
                 } catch {
-                    Write-Host "Found 7-Zip version string '$installed' (cleaned: '$cleanVersion') but could not parse it as System.Version." -ForegroundColor Yellow
+                    Write-Host "Invalid version format detected: $installed" -ForegroundColor Red
                     $InstalledVersion = $null
                 }
-            }
-            else {
-                Write-Host "Found 7-Zip version string '$installed' but no numeric version could be extracted." -ForegroundColor Yellow
-                $InstalledVersion = $null
             }
 
             if ($InstalledVersion) { break }
@@ -40,23 +39,33 @@ foreach ($Path in $Paths) {
 }
 
 if ($InstalledVersion) {
-    Write-Host "7-Zip Installed Version: $InstalledVersion"
+
+    Write-Host "Detected installed version: $InstalledVersion" -ForegroundColor Cyan
 
     if ($InstalledVersion -ge $RequiredVersion) {
-        Write-Host "7-Zip is already up to date. Skipping installation." -ForegroundColor Green
+        Write-Host "7-Zip is already up to date. No action required." -ForegroundColor Green
         return
-    } else {
-        Write-Host "Version found but outdated. Updating..." -ForegroundColor Yellow
     }
 
-    Write-Host "Downloading latest installer..."
+    Write-Host "Outdated version detected. Removing existing 7-Zip..." -ForegroundColor Yellow
+    
+    if ($UninstallString) {
+        # Silent uninstall if possible
+        Start-Process -FilePath $UninstallString -ArgumentList "/S" -Wait
+        Write-Host "Uninstall completed." -ForegroundColor Green
+    } else {
+        Write-Host "Uninstall command not found. Cannot remove old version." -ForegroundColor Red
+        return
+    }
+
+    Write-Host "Downloading latest version..."
     Invoke-WebRequest -Uri $DownloadUrl -OutFile $InstallerPath -UseBasicParsing
 
-    Write-Host "Installing silently..."
+    Write-Host "Installing updated version..."
     Start-Process -FilePath $InstallerPath -ArgumentList "/S" -Wait
 
     Write-Host "Update completed successfully." -ForegroundColor Green
 
 } else {
-    Write-Host "7-Zip is NOT installed or version could not be determined. Skipping download and installation as requested." -ForegroundColor DarkYellow
+    Write-Host "7-Zip not installed or version unreadable. Skipping installation as per rule." -ForegroundColor DarkYellow
 }
