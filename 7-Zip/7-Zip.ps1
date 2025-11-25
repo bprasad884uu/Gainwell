@@ -1,71 +1,96 @@
-# 7-Zip Version Check and Conditional Update Script
+# 7-Zip Version Check, Conditional Uninstall & Optional Update
 
-$DownloadUrl = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/7-Zip/7-Zip-x64.exe"
-$InstallerPath = "$env:TEMP\7zip_installer.exe"
+$DownloadUrl     = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/7-Zip/7-Zip-x64.exe"
+$InstallerPath   = "$env:TEMP\7zip_installer.exe"
 $RequiredVersion = [Version]"25.00"
+
 $InstalledVersion = $null
+$UninstallString  = $null
+$InstallRequired  = $false
 
 Write-Host "`nChecking 7-Zip Installation..." -ForegroundColor Cyan
 
-# Updated registry paths
-$Paths = @(
-    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\7-Zip",
-    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\7-Zip"
+# Search uninstall registry keys dynamically
+$RegPaths = @(
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
 )
 
-foreach ($Path in $Paths) {
-    if (Test-Path $Path) {
-        $Props = Get-ItemProperty -Path $Path -ErrorAction SilentlyContinue
-        
-        $installed = $Props.DisplayVersion
-        $UninstallString = $Props.UninstallString
-        
-        if ($installed) {
-            # Extract numeric version from values
-            if ($installed -match '\d+(\.\d+){0,3}') {
-                $CleanVersion = $Matches[0]
+foreach ($RegPath in $RegPaths) {
+    $item = Get-ItemProperty -Path $RegPath -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -match "7-?Zip" }
 
-                try {
-                    $InstalledVersion = [Version]$CleanVersion
-                } catch {
-                    Write-Host "Invalid version format detected: $installed" -ForegroundColor Red
-                    $InstalledVersion = $null
-                }
+    if ($item) {
+        Write-Host "Found entry: $($item.DisplayName)"
+
+        $rawVersion      = $item.DisplayVersion
+        $UninstallString = $item.UninstallString
+
+        if ($rawVersion -match '\d+(\.\d+){0,3}') {
+            try { 
+                $InstalledVersion = [Version]$Matches[0] 
+            } catch { 
+                $InstalledVersion = $null 
             }
-
-            if ($InstalledVersion) { break }
         }
+
+        break
     }
 }
 
-if ($InstalledVersion) {
+if (-not $InstalledVersion) {
+    Write-Host "`n7-Zip not installed. Skipping install." -ForegroundColor Yellow
+    return
+}
 
-    Write-Host "Detected installed version: $InstalledVersion" -ForegroundColor Cyan
+Write-Host "`nInstalled Version: $InstalledVersion"
 
-    if ($InstalledVersion -ge $RequiredVersion) {
-        Write-Host "7-Zip is already up to date. No action required." -ForegroundColor Green
-        return
-    }
+# Decide if we need to reinstall
+if ($InstalledVersion -lt $RequiredVersion) {
+    $InstallRequired = $true
+    Write-Host "`nOlder version detected..." -ForegroundColor Yellow
+} else {
+    Write-Host "`nRequired or newer version found..." -ForegroundColor Cyan
+}
 
-    Write-Host "Outdated version detected. Removing existing 7-Zip..." -ForegroundColor Yellow
-    
+# ---------------- ALWAYS RUN MSIECEX IF INSTALLED ---------------- #
+
+#Write-Host "`nRunning MSI cleanup/uninstall..." -ForegroundColor Yellow
+Start-Process "msiexec.exe" -ArgumentList "/x {23170F69-40C1-2702-2409-000001000000} /quiet /norestart" -Wait -ErrorAction SilentlyContinue
+
+# ---------------- UNINSTALL & INSTALL ONLY IF OLDER VERSION ---------------- #
+
+if ($InstallRequired) {
+    #Write-Host "`nOlder version detected...." -ForegroundColor Yellow
+
     if ($UninstallString) {
-        # Silent uninstall if possible
-        Start-Process -FilePath $UninstallString -ArgumentList "/S" -Wait
-        Write-Host "Uninstall completed." -ForegroundColor Green
-    } else {
-        Write-Host "Uninstall command not found. Cannot remove old version." -ForegroundColor Red
-        return
+
+        # If registry returns multi-string, pick first
+        if ($UninstallString -is [array]) { $UninstallString = $UninstallString[0] }
+
+        # Extract clean EXE from uninstall string
+        if ($UninstallString -match '^(\".*?\.exe\")') {
+            $Exe = $Matches[1].Trim('"')
+        } elseif ($UninstallString -match '^(.*?\.exe)') {
+            $Exe = $Matches[1]
+        } else {
+            $Exe = $UninstallString
+        }
+
+        #Write-Host "Uninstalling...."
+        Start-Process -FilePath $Exe -ArgumentList "/S" -Wait -ErrorAction SilentlyContinue
     }
 
-    Write-Host "Downloading latest version..."
+    #Write-Host "Uninstall completed." -ForegroundColor Green
+
+    Write-Host "`nDownloading latest 7-Zip..."
     Invoke-WebRequest -Uri $DownloadUrl -OutFile $InstallerPath -UseBasicParsing
 
-    Write-Host "Installing updated version..."
+    Write-Host "`nInstalling latest version..."
     Start-Process -FilePath $InstallerPath -ArgumentList "/S" -Wait
 
-    Write-Host "Update completed successfully." -ForegroundColor Green
-
-} else {
-    Write-Host "7-Zip not installed or version unreadable. Skipping installation as per rule." -ForegroundColor DarkYellow
+    Write-Host "`n7-Zip updated successfully." -ForegroundColor Green
+}
+else {
+    Write-Host "`n7-Zip is already up to date. No action required.." -ForegroundColor Cyan
 }
