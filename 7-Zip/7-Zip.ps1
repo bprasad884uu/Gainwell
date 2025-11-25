@@ -1,117 +1,98 @@
-# 7-Zip Version Check, Conditional Uninstall & Optional Update
+# 7-Zip found -> uninstall + reinstall
 
-$DownloadUrl     = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/7-Zip/7-Zip-x64.exe"
-$InstallerPath   = "$env:TEMP\7zip_installer.exe"
-$RequiredVersion = [Version]"25.00"
+$DownloadUrl   = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/7-Zip/7-Zip-x64.msi"
+$InstallerPath = "$env:TEMP\7zip_latest.msi"
 
-$InstalledVersion = $null
-$UninstallString  = $null
-$InstallRequired  = $false
-$AllEntries       = @()
+Write-Host "`nChecking 7-Zip installation..." -ForegroundColor Cyan
 
-Write-Host "`nChecking 7-Zip Installation..." -ForegroundColor Cyan
-
-# Search uninstall registry keys dynamically
 $RegPaths = @(
     "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
     "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
 )
 
-foreach ($RegPath in $RegPaths) {
-    $found = Get-ItemProperty -Path $RegPath -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -match "7-?Zip" }
+$AllEntries = @()
+
+foreach ($path in $RegPaths) {
+    $found = Get-ItemProperty -Path $path -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -match "7-?Zip" }
 
     if ($found) { $AllEntries += $found }
 }
 
-if (-not $AllEntries -or $AllEntries.Count -eq 0) {
-    Write-Host "`n7-Zip not installed. Skipping install." -ForegroundColor Yellow
+if ($AllEntries.Count -eq 0) {
+    Write-Host "`n7-Zip not installed. Skipping..." -ForegroundColor Yellow
     return
 }
 
-# Pick first entry for version and uninstall EXE logic (your original behavior)
-$item = $AllEntries | Select-Object -First 1
+# ---------- Show ALL found versions in output ----------
 
-Write-Host "Found entry: $($item.DisplayName)"
+Write-Host ""
+foreach ($entry in $AllEntries) {
+    $verOut = "Unknown"
 
-$rawVersion      = $item.DisplayVersion
-$UninstallString = $item.UninstallString
-
-# Extract clean version number
-if ($rawVersion -and $rawVersion -match '\d+(\.\d+){0,3}') {
-    try { 
-        $InstalledVersion = [Version]$Matches[0] 
-    } catch { 
-        $InstalledVersion = $null 
+    if ($entry.DisplayVersion -and $entry.DisplayVersion -match '\d+(\.\d+){0,3}') {
+        try {
+            $v = [Version]$Matches[0]
+            $verOut = $v.ToString()
+        } catch {
+            $verOut = $entry.DisplayVersion
+        }
     }
+
+    Write-Host "7-Zip Found : $($entry.DisplayName)  ->  $verOut"
 }
 
-if ($InstalledVersion) {
-    Write-Host "`nInstalled Version: $InstalledVersion"
-}
+# ---------- For uninstall, use ONLY first entry's UninstallString ----------
 
-# Decide if we need to reinstall
-if ($InstalledVersion -and $InstalledVersion -lt $RequiredVersion) {
-    $InstallRequired = $true
-    Write-Host "`nOlder version detected..." -ForegroundColor Yellow
-}
+$first          = $AllEntries | Select-Object -First 1
+$UninstallString = $first.UninstallString
 
-# ---------------- DYNAMIC MSI GUID DETECTION ---------------- #
+# ---------------- DETECT UNINSTALL METHODS ----------------
 
-$MsiGuid = $null
+$MsiGuids = @()
+$UninstallExecutables = @()
 
 foreach ($entry in $AllEntries) {
 
-    # Check in UninstallString
-    if ($entry.UninstallString -and $entry.UninstallString -match '\{23170F69-40C1-2702-[0-9A-F\-]+\}') {
-        $MsiGuid = $Matches[0]
-        break
-    }
+    # Collect uninstall EXE if available
+    if ($entry.UninstallString) {
+        $str = $entry.UninstallString
 
-    # Check in registry key name
-    if ($entry.PSChildName -and $entry.PSChildName -match '\{23170F69-40C1-2702-[0-9A-F\-]+\}') {
-        $MsiGuid = $Matches[0]
-        break
-    }
-
-    # Check full path
-    if ($entry.PSPath -and $entry.PSPath -match '\{23170F69-40C1-2702-[0-9A-F\-]+\}') {
-        $MsiGuid = $Matches[0]
-        break
-    }
-}
-
-# Always run MSI uninstall if GUID found
-if ($MsiGuid) {
-    Start-Process "msiexec.exe" -ArgumentList "/x $MsiGuid /quiet /norestart" -Wait -ErrorAction SilentlyContinue
-}
-
-# ---------------- UNINSTALL & INSTALL ONLY IF OLDER VERSION ---------------- #
-
-if ($InstallRequired) {
-
-    if ($UninstallString) {
-        if ($UninstallString -is [array]) { $UninstallString = $UninstallString[0] }
-
-        if ($UninstallString -match '^(\".*?\.exe\")') {
-            $Exe = $Matches[1].Trim('"')
-        } elseif ($UninstallString -match '^(.*?\.exe)') {
-            $Exe = $Matches[1]
-        } else {
-            $Exe = $UninstallString
+        # Extract EXE path if present
+        if ($str -match '\"(.*?\.exe)\"') {
+            $UninstallExecutables += $Matches[1]
         }
-
-        Start-Process -FilePath $Exe -ArgumentList "/S" -Wait -ErrorAction SilentlyContinue
     }
 
-    Write-Host "`nDownloading latest 7-Zip..."
-    Invoke-WebRequest -Uri $DownloadUrl -OutFile $InstallerPath -UseBasicParsing
-
-    Write-Host "`nInstalling latest version..."
-    Start-Process -FilePath $InstallerPath -ArgumentList "/S" -Wait
-
-    Write-Host "`n7-Zip updated successfully." -ForegroundColor Green
+    # Detect MSI GUID from UninstallString, registry key name or entry path
+    foreach ($source in @($entry.UninstallString, $entry.PSChildName, $entry.PSPath)) {
+        if ($source -and $source -match '\{23170F69-40C1-2702-[0-9A-F\-]+\}') {
+            $guid = $Matches[0]
+            if ($guid -and $MsiGuids -notcontains $guid) { $MsiGuids += $guid }
+        }
+    }
 }
-else {
-    Write-Host "`n7-Zip is already up to date. No action required." -ForegroundColor Cyan
+
+# ---------------- RUN UNINSTALL ----------------
+
+if ($UninstallExecutables.Count -gt 0) {
+    foreach ($exe in $UninstallExecutables | Select-Object -Unique) {
+        Start-Process $exe -ArgumentList "/S" -Wait -ErrorAction SilentlyContinue
+    }
 }
+
+if ($MsiGuids.Count -gt 0) {
+    foreach ($guid in $MsiGuids) {
+        Start-Process "msiexec.exe" -ArgumentList "/x $guid /quiet /norestart" -Wait
+    }
+}
+
+# ---------------- INSTALL NEW VERSION ----------------
+
+Write-Host "`nDownloading latest 7-Zip..."
+Invoke-WebRequest -Uri $DownloadUrl -OutFile $InstallerPath -UseBasicParsing
+
+Write-Host "Installing latest 7-Zip..."
+Start-Process "msiexec.exe" -ArgumentList "/i `"$InstallerPath`" /quiet /norestart" -Wait
+
+Write-Host "`n7-Zip installation completed successfully." -ForegroundColor Green
