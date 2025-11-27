@@ -67,7 +67,15 @@ function OK   { param($m) Write-Output "[OK]    $m" }
 $system = [System.Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties()
 $hostname = $system.HostName
 $domain   = $system.DomainName
-$isDomainJoined = -not [string]::IsNullOrWhiteSpace($domain)
+
+# If not domain joined, display workgroup as "Not joined (WORKGROUP)"
+if ([string]::IsNullOrWhiteSpace($domain)) {
+    $workgroup = (Get-CimInstance Win32_ComputerSystem).Workgroup
+    $domain = "Not joined ($workgroup)"
+    $isDomainJoined = $false
+} else {
+    $isDomainJoined = $true
+}
 
 $CompanyConfig = @(
     @{ Code = "GCPL"; FullName = "Gainwell Commosales Private Limited"; Domains = @("gainwellindia.com");        HostnamePatterns = @("GCPL") },
@@ -116,9 +124,9 @@ if ([string]::IsNullOrWhiteSpace($companyCode)) {
 Info "Hostname: $hostname"
 Info "Domain: $domain"
 if ($companyFull) {
-    Info "Resolved company: $companyCode ($companyFull)"
+    Info "Company: $companyCode ($companyFull)"
 } else {
-    Info "Resolved company: $companyCode"
+    Info "Company: $companyCode"
 }
 
 # Exclude RMSPL
