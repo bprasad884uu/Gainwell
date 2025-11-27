@@ -62,7 +62,9 @@ $CompanyConfig = @(
     @{ Code = "RMSPL";FullName = "Resurgent Mining Solutions Private Limited"; Domains = @();                      HostnamePatterns = @("RMSPL") },
     @{ Code = "GTPL"; FullName = "Gainwell Trucking Private Limited";     Domains = @();                      HostnamePatterns = @("GTPL") },
     @{ Code = "ASPL"; FullName = "Acceleron Solutions Private Limited";   Domains = @();                      HostnamePatterns = @("ASPL") },
-    @{ Code = "TIL";  FullName = "Tractors India Limited";                Domains = @("tiplindia.com");       HostnamePatterns = @("TIL") }
+    @{ Code = "TIL";  FullName = "Tractors India Limited";                Domains = @("tiplindia.com");       HostnamePatterns = @("TIL") },
+    @{ Code = "GESPL";  FullName = "Gainwell Engineering Services Private Limited";                Domains = @();       HostnamePatterns = @("GESPL") }
+	
 )
 
 $companyCode = ""
