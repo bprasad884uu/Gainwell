@@ -28,27 +28,6 @@
           [INFO]  ...
           [WARN]  ...
           [OK]    ...
-
-.PARAMETER InstallerUrl
-    HTTP/HTTPS URL of WindowsSensor.exe to download if the local installer path is not available.
-
-.PARAMETER InstallerPath
-    Local path to WindowsSensor.exe to use for installation or upgrade.
-    If not present, the script downloads it from InstallerUrl.
-
-.PARAMETER ForceDownload
-    Forces a fresh download of WindowsSensor.exe even if it already exists locally.
-
-.EXAMPLE
-    .\Install-CrowdStrike.ps1 -InstallerPath "C:\Temp\WindowsSensor.exe"
-
-.EXAMPLE
-    .\Install-CrowdStrike.ps1 -InstallerUrl "https://github.com/.../WindowsSensor.exe"
-
-.NOTES
-    - Requires administrative privileges.
-    - Safe to run multiple times; upgrade attempts will not interrupt existing installations.
-    - RMSPL systems are intentionally excluded from installation and upgrade.
 #>
 
 param(
@@ -70,7 +49,7 @@ $domain   = $system.DomainName
 
 # If not domain joined, display workgroup as "Not joined (WORKGROUP)"
 if ([string]::IsNullOrWhiteSpace($domain)) {
-    $workgroup = (Get-CimInstance Win32_ComputerSystem).Workgroup
+    $workgroup = (Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).Workgroup
     $domain = "Not joined ($workgroup)"
     $isDomainJoined = $false
 } else {
@@ -196,6 +175,30 @@ function Get-CSInfo {
 }
 
 # ---------------------------
+# Version helper (added)
+# ---------------------------
+function Convert-ToVersionObj {
+    param([string]$verString)
+    if ([string]::IsNullOrWhiteSpace($verString)) { return $null }
+    # extract numeric version like 7.29.20108.0
+    if ($verString -match '([0-9]+(\.[0-9]+)*)') {
+        $num = $matches[1]
+        try {
+            return [version]$num
+        } catch {
+            # normalize to 4 parts
+            $parts = $num.Split('.') | ForEach-Object { [int]$_ }
+            while ($parts.Count -lt 4) { $parts += 0 }
+            while ($parts.Count -gt 4) { $parts = $parts[0..3] }
+            return [version]("$($parts -join '.')")
+        }
+    }
+    return $null
+}
+
+$MinRequiredVersion = Convert-ToVersionObj "7.28"
+
+# ---------------------------
 # Ensure installer available
 # ---------------------------
 function Ensure-Installer {
@@ -247,18 +250,50 @@ if ($cs.Installed) {
     Info "CrowdStrike detected."
     Info "Version: $($cs.DisplayVersion)"
 
-    # Attempt upgrade only if installer available
+    # Determine if upgrade is required based on version (added)
+    $currentVerObj = Convert-ToVersionObj $cs.DisplayVersion
+    $forceUpgradeByVersion = $false
+
+    if ($currentVerObj -ne $null) {
+        if ($currentVerObj -lt $MinRequiredVersion) {
+            Info "Installed version ($currentVerObj) is below required $($MinRequiredVersion). Will upgrade."
+            $forceUpgradeByVersion = $true
+        } else {
+            Info "Installed version is $currentVerObj (meets or exceeds $($MinRequiredVersion))."
+        }
+    } else {
+        Warn "Could not parse installed version. Proceeding with upgrade for safety."
+        $forceUpgradeByVersion = $true
+    }
+
+    # Decide if we need the installer: either version forces it or user forced download
+    $needInstaller = $forceUpgradeByVersion -or $ForceDownload
     $haveInstaller = $true
-    if (-not (Test-Path -LiteralPath $InstallerPath) -or $ForceDownload) {
+    if ($needInstaller) {
         $haveInstaller = Ensure-Installer -Url $InstallerUrl -OutFile $InstallerPath -Force:$ForceDownload
+    } else {
+        # If no need and no force, check if user provided a local installer path
+        if (Test-Path -LiteralPath $InstallerPath) { $haveInstaller = $true } else { $haveInstaller = $false }
     }
 
     if (-not $haveInstaller) {
-        Warn "No installer available for upgrade. Reporting installed version and exiting."
+        if ($forceUpgradeByVersion -or $ForceDownload) {
+            Warn "No installer available to perform required upgrade. Reporting installed version and exiting."
+        } else {
+            Info "No installer provided; skipping upgrade."
+        }
         OK "Installed version: $($cs.DisplayVersion)"
         return
     }
 
+    # If upgrade not required and not forced, skip installer execution
+    if (-not $forceUpgradeByVersion -and -not $ForceDownload) {
+        Info "Upgrade not required. Skipping installer execution."
+        OK "Installed version: $($cs.DisplayVersion)"
+        return
+    }
+
+    # Proceed with upgrade
     Info "Attempting upgrade using installer..."
     $r = Run-Installer -ExePath $InstallerPath -Arguments $InstallArgs
 
