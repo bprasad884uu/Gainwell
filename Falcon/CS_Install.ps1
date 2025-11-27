@@ -259,7 +259,7 @@ if ($cs.Installed) {
             Info "Installed version ($currentVerObj) is below required $($MinRequiredVersion). Will upgrade."
             $forceUpgradeByVersion = $true
         } else {
-            Info "Installed version is $currentVerObj (meets or exceeds $($MinRequiredVersion))."
+            Info "Installed version is $currentVerObj."
         }
     } else {
         Warn "Could not parse installed version. Proceeding with upgrade for safety."
@@ -280,7 +280,7 @@ if ($cs.Installed) {
         if ($forceUpgradeByVersion -or $ForceDownload) {
             Warn "No installer available to perform required upgrade. Reporting installed version and exiting."
         } else {
-            Info "No installer provided; skipping upgrade."
+            Info "CrowdStrike Falcon is already up to date. No action required."
         }
         OK "Installed version: $($cs.DisplayVersion)"
         return
