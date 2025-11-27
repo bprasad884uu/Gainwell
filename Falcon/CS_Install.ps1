@@ -258,7 +258,7 @@ if ($cs.Installed) {
 
     if ($currentVerObj -ne $null) {
         if ($currentVerObj -lt $MinRequiredVersion) {
-            Info "Installed version ($currentVerObj) is below required $($MinRequiredVersion). Will upgrade."
+            Info "Installed version ($currentVerObj) is below required version. Will upgrade."
             $forceUpgradeByVersion = $true
         }
     } else {
@@ -322,7 +322,7 @@ if (-not $dlOk) {
 
 $insRes = Run-Installer -ExePath $InstallerPath -Arguments $InstallArgs
 if ($insRes.Success) {
-    OK "Installation completed (installer exit code 0). Re-checking installation..."
+    OK "Installation completed..."
     $post = Get-CSInfo
     if ($post.Installed) {
         OK "Installed version: $($post.DisplayVersion)"
