@@ -21,7 +21,8 @@ param (
 		"javaw.exe",
 		"ZoomInstaller*.exe",
 		"Zoom_cm*.exe",
-		"MSTeams*.exe"
+		"MSTeams*.exe",
+		"Mechanic.exe"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
