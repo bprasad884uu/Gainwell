@@ -78,7 +78,8 @@ param (
 		"%OSDRIVE%\Users\*\AppData\Local\TEMP\RAD*.TMP.ps1",
 		"%OSDRIVE%\Users\*\AppData\Local\TEMP\__PSSCRIPTPOLICYTEST*.ps*",
 		"%OSDRIVE%\Users\*\AppData\Local\Temp\IPW*.*",
-		"%OSDRIVE%\Users\*\AppData\Local\TEMP\*\START.BAT"			#For Xentry Software Installation
+		"%OSDRIVE%\Users\*\AppData\Local\TEMP\*\START.BAT",			#For Xentry Software Installation
+		"D:\Outlook_Mail_Merge_Attachment_v1.1.9_BETA\Outlook Mail Merge Attachment.vbs"
     )
 )
 
