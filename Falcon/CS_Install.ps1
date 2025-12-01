@@ -198,7 +198,7 @@ function Convert-ToVersionObj {
     return $null
 }
 
-$MinRequiredVersion = Convert-ToVersionObj "7.28"
+$MinRequiredVersion = Convert-ToVersionObj "7.29"
 
 # ---------------------------
 # Ensure installer available
