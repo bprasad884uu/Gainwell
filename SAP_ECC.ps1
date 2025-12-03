@@ -1,9 +1,18 @@
-# Detect the real logged-in use
+# Detect the real logged-in user
 $userFull  = (Get-CimInstance -ClassName Win32_ComputerSystem).UserName
-$userName  = $userFull.Split('\')[-1]          # Domain\Username se sirf username
+$userName  = $userFull.Split('\')[-1]
 
-# Build the SAP Common folder path for that user
+# SAP Common folder path
 $targetFolder = "C:\Users\$userName\AppData\Roaming\SAP\Common"
+
+# If folder does NOT exist, skip everything
+if (!(Test-Path $targetFolder)) {
+    return
+}
+
+# Folder exists, delete old files first
+Get-ChildItem -Path $targetFolder -File -ErrorAction SilentlyContinue | Remove-Item -Force
+
 
 ########################
 # 1. saplogon.ini
