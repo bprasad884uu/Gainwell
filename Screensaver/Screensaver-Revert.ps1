@@ -41,16 +41,16 @@ foreach ($key in $filteredKeys) {
             foreach ($path in @($photoViewerPath, $policyPath, $policy)) {
                 if (Test-Path $path) {
                     Remove-Item -Path $path -Recurse -Force
-                    Write-Output "✅ Removed registry key: $path"
+                    Write-Output "Removed registry key: $path"
                 } else {
-                    Write-Output "ℹ️ Registry key not found: $path"
+                    Write-Output "Registry key not found: $path"
                 }
             }
 
-            Write-Output "✅ Registry settings reverted for user: $UserName"
+            Write-Output "Registry settings reverted for user: $UserName"
 
         } catch {
-            Write-Output "❌ Failed to revert settings for user: $UserName - Error: $_"
+            Write-Output "Failed to revert settings for user: $UserName - Error: $_"
         }
     }
 }
@@ -61,4 +61,4 @@ RUNDLL32.EXE user32.dll, UpdatePerUserSystemParameters ,1 ,True
 # Apply Group Policy
 gpupdate /force 
 
-Write-Output "✅ Screensaver settings reverted successfully for all users!"
+Write-Output "Screensaver settings reverted successfully for all users!"
