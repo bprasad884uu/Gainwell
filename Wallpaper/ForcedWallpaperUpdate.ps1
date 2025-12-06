@@ -1,8 +1,6 @@
 # Set the path to the wallpaper image
 $wallpaper = "C:\Windows\web\Wallpaper\Windows\wallpaper.jpg"
 
-Copy-Item -Path .\wallpaper.jpg -Destination $wallpaper -Force
-
 # Get all user profiles using CIMInstance
 $userProfiles = Get-CimInstance Win32_UserProfile
 

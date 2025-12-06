@@ -13,11 +13,6 @@ $batchFilePath = "C:\Windows\System32\ForcedWallpaperUpdate.bat"
 $powershellPath = "C:\Windows\System32\ForcedWallpaperUpdate.ps1"
 $triggerInterval = 5
 
-#Copy Gainwell Wallpaper to Destination
-#Copy-Item -Path .\Wallpaper.jpg -Destination $filePath
-
-& .\Wallpaper.ps1
-
 # Get the current logged-in username from the registry
 $registryPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI"
 $lastLoggedOnSAMUser = (Get-ItemProperty -Path $registryPath -Name LastLoggedOnSAMUser).LastLoggedOnSAMUser
