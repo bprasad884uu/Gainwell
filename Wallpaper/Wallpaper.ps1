@@ -152,7 +152,7 @@ if ($company -in @("GTPL", "GEPL")) {
 
     if (Test-Path $source) {
         Copy-Item -Path $source -Destination $destination -Force
-        Write-Host "Image Applied"
+        Write-Host "$company Image Applied"
     } else {
         #Write-Warning "GTPL/GEPL detected but source image not found: $source"
     }
@@ -161,18 +161,18 @@ elseif ($company -eq "TIL") {
     # Use the TIL Base64 string and save with a TIL-specific name
     $saved = Save-Base64Image -Base64String $base64ImageTIL -OutputFolder $outputFolder -BaseName "Wallpaper"
     if ($saved) {
-        Write-Host "TIL wallpaper created: $saved"
+        Write-Host "$company wallpaper created."
     } else {
-        Write-Warning "Failed to create TIL wallpaper."
+        Write-Warning "Failed to create $company wallpaper."
     }
 }
 elseif ($company) {
     # Default company — use main base64Image
     $saved = Save-Base64Image -Base64String $base64Image -OutputFolder $outputFolder -BaseName "Wallpaper"
     if ($saved) {
-        Write-Host "Company wallpaper created: $saved"
+        Write-Host "$company wallpaper created."
     } else {
-        Write-Warning "Failed to create company wallpaper."
+        Write-Warning "Failed to create $company wallpaper."
     }
 }
 else {
