@@ -163,7 +163,7 @@ elseif ($company -eq "TIL") {
     if ($saved) {
         Write-Host "$company wallpaper created."
     } else {
-        Write-Warning "Failed to create $company wallpaper."
+        #Write-Warning "Failed to create $company wallpaper."
     }
 }
 elseif ($company) {
@@ -172,7 +172,7 @@ elseif ($company) {
     if ($saved) {
         Write-Host "$company wallpaper created."
     } else {
-        Write-Warning "Failed to create $company wallpaper."
+        #Write-Warning "Failed to create $company wallpaper."
     }
 }
 else {
