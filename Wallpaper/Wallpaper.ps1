@@ -176,7 +176,7 @@ elseif ($company) {
     }
 }
 else {
-    Write-Warning "No known company matched. Skipping image generation for $company."
+    Write-Warning "No known company matched. Skipping image generation."
 }
 
 # ==========================
