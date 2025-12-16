@@ -781,7 +781,7 @@ function Configure-BackgroundApps {
 }
 Configure-BackgroundApps -Undo:$UndoBackgroundApps
 
-# -------------------------
+<# -------------------------
 # Services (Full list; Aggressive uses more Manual/Disabled)
 # -------------------------
 Write-Info "Configuring service startup types (Aggressive=$($Aggressive.IsPresent))..."
@@ -972,7 +972,7 @@ $services = @(
 
 foreach($svc in $services){ Set-ServiceStartupType -ServiceName $svc.Name -StartupType $svc.StartupType }
 Write-OK "Service startup types updated."
-
+#>
 # -------------------------
 # Appx Debloat (WPFTweaksDeBloat style)
 # -------------------------
