@@ -170,31 +170,56 @@ else {
 Write-Info "Using PowerShell $PwshType as system default."
 
 # -------------------------------------------------
-# 3. All Users PowerShell 5.1 redirect
+# 3. All Users PowerShell 5.1 redirect (SAFE)
 # -------------------------------------------------
+
+Write-Info "Configuring system-wide PowerShell redirect..."
 
 $AllUsersProfile = "$env:WINDIR\System32\WindowsPowerShell\v1.0\profile.ps1"
 
-if (!(Test-Path $AllUsersProfile)) {
-    New-Item -ItemType File -Path $AllUsersProfile -Force | Out-Null
-}
+$MarkerStart = "# >>> PWSH REDIRECT START"
+$MarkerEnd   = "# <<< PWSH REDIRECT END"
 
 $ProfileContent = @"
-# --- Auto redirect to PowerShell 7 ($PwshType) ---
-if (`$PSVersionTable.PSVersion.Major -lt 6) {
-    `$pwsh = '$DefaultPwsh'
-    if (Test-Path `$pwsh) {
-        & `$pwsh
-        exit
+$MarkerStart
+try {
+    if (`$PSVersionTable.PSVersion.Major -lt 6) {
+        `$pwsh = '$DefaultPwsh'
+        if (Test-Path `$pwsh) {
+            & `$pwsh
+            exit
+        }
     }
+} catch {
+    # Silent fail (ExecutionPolicy / security safe)
 }
+$MarkerEnd
 "@
 
-if (-not (Select-String -Path $AllUsersProfile -Pattern "Auto redirect to PowerShell 7" -Quiet)) {
-    Add-Content -Path $AllUsersProfile -Value $ProfileContent
+# Create profile if missing
+if (!(Test-Path $AllUsersProfile)) {
+    Set-Content -Path $AllUsersProfile -Value $ProfileContent -Encoding UTF8
+}
+else {
+    $existing = Get-Content $AllUsersProfile -Raw
+
+    if ($existing -match [regex]::Escape($MarkerStart)) {
+        # Replace existing redirect block safely
+        $updated = [regex]::Replace(
+            $existing,
+            "$MarkerStart[\s\S]*?$MarkerEnd",
+            $ProfileContent
+        )
+    }
+    else {
+        # Append new redirect block
+        $updated = $existing + "`r`n`r`n" + $ProfileContent
+    }
+
+    Set-Content -Path $AllUsersProfile -Value $updated -Encoding UTF8
 }
 
-Write-OK "PowerShell redirect configured."
+Write-OK "PowerShell redirect configured (execution-policy safe)."
 
 # -------------------------------------------------
 # 4. Windows Terminal - existing users
