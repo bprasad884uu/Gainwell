@@ -169,7 +169,7 @@ else {
 
 Write-Info "Using PowerShell $PwshType as system default."
 
-<# -------------------------------------------------
+# -------------------------------------------------
 # 3. All Users PowerShell 5.1 redirect (SAFE)
 # -------------------------------------------------
 
@@ -220,7 +220,7 @@ else {
 }
 
 Write-OK "PowerShell redirect configured (execution-policy safe)."
-#>
+
 # -------------------------------------------------
 # 4. Windows Terminal - existing users
 # -------------------------------------------------
