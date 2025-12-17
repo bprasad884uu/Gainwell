@@ -757,28 +757,30 @@ Write-OK "PowerShell 7 install + smart default configuration completed."
 # -------------------------------------------------
 # 6. Replace Win+X menu PowerShell links
 # -------------------------------------------------
-Write-Info "Updating Win+X menu to use PowerShell 7..."
-$winxPath = "$env:LocalAppData\Microsoft\Windows\WinX"
-if ((Test-Path $winxPath) -and (Test-Path $DefaultPwsh)) {
+Write-Info "Updating Win+X menu shortcuts for all users..."
+$UserProfiles = Get-ChildItem "C:\Users" -Directory |
+    Where-Object { $_.Name -notin @("Public","Default User","All Users") }
+foreach ($User in $UserProfiles) {
+    $winxPath = "C:\Users\$($User.Name)\AppData\Local\Microsoft\Windows\WinX"
+    if (!(Test-Path $winxPath)) { continue }
     try {
         $shortcuts = Get-ChildItem -Path $winxPath -Recurse -Filter *.lnk
         foreach ($sc in $shortcuts) {
             $wshell = New-Object -ComObject WScript.Shell
             $shortcut = $wshell.CreateShortcut($sc.FullName)
             if ($shortcut.TargetPath -match "powershell.exe") {
-                $shortcut.TargetPath = $DefaultPwsh
+                $shortcut.TargetPath  = $DefaultPwsh
                 $shortcut.IconLocation = "$DefaultPwsh,0"
                 $shortcut.Save()
-                Write-Info "Updated Win+X shortcut: $($sc.FullName)"
+                Write-Info "Updated Win+X shortcut for user $($User.Name): $($sc.Name)"
             }
         }
-        Write-OK "Win+X menu now launches PowerShell 7 (normal + admin). Sign out/in to see changes."
-    } catch { 
-        Write-Warn "Failed to update Win+X shortcuts: $_" 
     }
-} else { 
-    Write-Warn "Win+X path or pwsh.exe missing - skipping." 
+    catch {
+        Write-Warn "Failed to update Win+X menu for user: $($User.Name)"
+    }
 }
+Write-OK "Win+X menu updated to use PowerShell ($PwshType) for all users."
 
 # PowerShell 7 telemetry opt out
 Write-Info "Opting out of PowerShell telemetry..."
