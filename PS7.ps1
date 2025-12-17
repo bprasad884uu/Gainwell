@@ -132,8 +132,7 @@ if (-not $installedStableVer -or $installedStableVer -lt $targetVer) {
             } else {
                 $etaFormatted = "Calculating..."
             }
-
-            Write-OK "`rTotal: $(Format-Size $totalSize) | Progress: $([math]::Round($progress,2))% | Downloaded: $(Format-Size $downloaded) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted" -NoNewline
+            Write-Host "`rTotal: $(Format-Size $totalSize) | Progress: $([math]::Round($progress,2))% | Downloaded: $(Format-Size $downloaded) | Speed: $(Format-Speed $speed) | ETA: $etaFormatted" -NoNewline
         }
 
         $fileStream.Close()
