@@ -168,14 +168,6 @@ if ($removedSids -eq 0) {
     Write-Output "Total unresolved SIDs removed: $removedSids"
 }
 
-# Save and change execution policy (if necessary)
-$originalExecutionPolicy = Get-ExecutionPolicy -Scope Process -ErrorAction SilentlyContinue
-if ($originalExecutionPolicy -ne 'Bypass' -and $originalExecutionPolicy -ne 'Undefined') {
-    Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
-    Write-Host "Execution policy changed to 'Bypass' for the duration of the script."
-}
-
-
 # -------------------------
 # Ensure local users require password and must change at next logon (fixed)
 # -------------------------
@@ -480,9 +472,5 @@ Remove-Item -Path .\secpol.cfg -Force -Confirm:$false > $null 2>&1
 
 Write-Host "Security policy applied successfully."
 Write-Host "================================================="
-
-# Reset execution policy silently
-Set-ExecutionPolicy $originalExecutionPolicy -Scope Process -Force > $null 2>&1
-Set-ExecutionPolicy $originalExecutionPolicy -Scope LocalMachine -Force > $null 2>&1
 
 # End of script
