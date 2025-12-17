@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 
 # ---------- Config (fill these) ----------
 $isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=5535f83e-4eb9-4295-99c9-1ea9808a0be7&P1=1766013949&P2=601&P3=2&P4=ZcXOjBWNLJGo0NjLPl54rcBcqNvJnSJD%2fyFnZ3j4y02Rlpts6JUbbyNthqKgDjoIslY%2f0%2bEyAXQdwlEJpp%2b5%2f5oj4HEjglTE011S%2f6gVlk5LuyImKCkNHlu6FbdmPQaRrF4Iluho0EzBUaN66Dh9AK8Y1vJSWUE7gokikGktE41cggZRyYcKSa1%2bbXC%2bSYnSpzSbtE9Nq8Aem18kpbsSrkCIoQM%2bhiOfgZI5RZF7sVbDaLdejYuqwGt1b2QWGEEeDarkrxJuv%2ftR4tEw7o5kz5uDLcM4oRPRlzbZ7SgGAQl8dkuEJm7bNZbEZgQwcVm%2bPglB%2bVitCP1I4MGPDtCwsA%3d%3d"
-$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=f10bff58-951f-43ae-8f28-4ddd88f32395&P1=1766013939&P2=601&P3=2&P4=xSh45%2foQPX802Zhg4gmBcfQIJnNe6vWjI%2blxuVpSbjUy9IkU9h%2fpxd%2bzwU2%2b%2bzEIonhuvq%2bJFSrlnTcihnhbH2XtyS5427kD9hwmDbYFG%2fUKol%2f91ersneXv1a90JV%2fktVBF8dFDkEBf0xxE3b3a2JUhDFEdAtpOogZU00D5JiU0wkwwr1%2b7lj5%2fOVSEnegmW12v7ec7SO%2bK3pUyRqVEJ%2boTBa%2f3ZqIRwWxc8GtH%2b3p%2f8pjVWyXQvkd6TtIAXxQY5v%2bzxxyixnCC37Lz6TWP5CMkUSrSUHOL4kT2bSQuLHhPcVdqicZY4pkczBixqldBa1jwMDNeoKL%2bnyNKqsbk3Q%3d%3d"
+$isoUrl_EN_GB  = "h"
 
 # Minimum free space for temp selection (40 GB default)
 $MinimumTempBytes = (40 * 1024 * 1024 * 1024)
