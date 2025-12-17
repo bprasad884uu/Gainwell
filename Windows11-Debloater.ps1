@@ -645,35 +645,112 @@ if (-not $installedVer -or $installedVer -lt $targetVer) {
     Write-OK "PowerShell $installedVer is up to date (>= $targetVer). Skipping install."
 }
 
-if (Test-Path $pwshPath) { 
-    Write-OK "PowerShell 7 present: $pwshPath" 
-} else { 
-    Write-Warn "PowerShell 7 not found after install attempt." 
+# -------------------------------------------------
+# 2. Smart default selection (Preview > Stable)
+# -------------------------------------------------
+
+if (Test-Path $PwshPreview) {
+    $DefaultPwsh = $PwshPreview
+    $PwshType    = "Preview"
+}
+elseif (Test-Path $PwshStable) {
+    $DefaultPwsh = $PwshStable
+    $PwshType    = "Stable"
+}
+else {
+    Write-Warn "No PowerShell 7 installation available after install step."
+    return
 }
 
-# Replace Win+X menu PowerShell links
-Write-Info "Updating Win+X menu to use PowerShell 7..."
-$winxPath = "$env:LocalAppData\Microsoft\Windows\WinX"
-if ((Test-Path $winxPath) -and (Test-Path $pwshPath)) {
-    try {
-        $shortcuts = Get-ChildItem -Path $winxPath -Recurse -Filter *.lnk
-        foreach ($sc in $shortcuts) {
-            $wshell = New-Object -ComObject WScript.Shell
-            $shortcut = $wshell.CreateShortcut($sc.FullName)
-            if ($shortcut.TargetPath -match "powershell.exe") {
-                $shortcut.TargetPath = $pwshPath
-                $shortcut.IconLocation = "$pwshPath,0"
-                $shortcut.Save()
-                Write-Info "Updated Win+X shortcut: $($sc.FullName)"
-            }
-        }
-        Write-OK "Win+X menu now launches PowerShell 7 (normal + admin). Sign out/in to see changes."
-    } catch { 
-        Write-Warn "Failed to update Win+X shortcuts: $_" 
-    }
-} else { 
-    Write-Warn "Win+X path or pwsh.exe missing - skipping." 
+Write-Info "Using PowerShell $PwshType as system default: $DefaultPwsh"
+
+# -------------------------------------------------
+# 3. All Users PowerShell 5.1 redirect
+# -------------------------------------------------
+
+$AllUsersProfile = "$env:WINDIR\System32\WindowsPowerShell\v1.0\profile.ps1"
+
+if (!(Test-Path $AllUsersProfile)) {
+    New-Item -ItemType File -Path $AllUsersProfile -Force | Out-Null
 }
+
+$ProfileContent = @"
+# --- Auto redirect to PowerShell 7 ($PwshType) ---
+if (`$PSVersionTable.PSVersion.Major -lt 6) {
+    `$pwsh = '$DefaultPwsh'
+    if (Test-Path `$pwsh) {
+        & `$pwsh
+        exit
+    }
+}
+"@
+
+if (-not (Select-String -Path $AllUsersProfile -Pattern "Auto redirect to PowerShell 7" -Quiet)) {
+    Add-Content -Path $AllUsersProfile -Value $ProfileContent
+}
+
+Write-OK "PowerShell redirect configured."
+
+# -------------------------------------------------
+# 4. Windows Terminal - existing users
+# -------------------------------------------------
+
+Write-Info "Configuring Windows Terminal default (existing users)..."
+
+$UserProfiles = Get-ChildItem "C:\Users" -Directory |
+    Where-Object { $_.Name -notin @("Public","Default","Default User","All Users") }
+
+foreach ($User in $UserProfiles) {
+
+    $WtSettingsPath = "C:\Users\$($User.Name)\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
+    if (!(Test-Path $WtSettingsPath)) { continue }
+
+    try {
+        $json = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json
+        $pwshProfile = $json.profiles.list | Where-Object {
+            $_.commandline -eq $DefaultPwsh
+        }
+
+        if ($pwshProfile) {
+            $json.defaultProfile = $pwshProfile.guid
+            $json | ConvertTo-Json -Depth 10 | Set-Content $WtSettingsPath -Encoding UTF8
+        }
+    } catch {
+        Write-Warn "Failed to update Terminal for user: $($User.Name)"
+    }
+}
+
+# -------------------------------------------------
+# 5. Windows Terminal - new users
+# -------------------------------------------------
+
+Write-Info "Configuring Windows Terminal default for new users..."
+
+$DefaultUserPath = "C:\Users\Default\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState"
+$DefaultSettingsPath = Join-Path $DefaultUserPath "settings.json"
+
+if (!(Test-Path $DefaultUserPath)) {
+    New-Item -ItemType Directory -Path $DefaultUserPath -Force | Out-Null
+}
+
+if (!(Test-Path $DefaultSettingsPath)) {
+    $Guid = [guid]::NewGuid().ToString()
+    @{
+        defaultProfile = "{$Guid}"
+        profiles = @{
+            list = @(
+                @{
+                    guid        = "{$Guid}"
+                    name        = "PowerShell ($PwshType)"
+                    commandline = $DefaultPwsh
+                }
+            )
+        }
+    } | ConvertTo-Json -Depth 10 |
+        Set-Content $DefaultSettingsPath -Encoding UTF8
+}
+
+Write-OK "PowerShell 7 install + smart default configuration completed."
 
 # PowerShell 7 telemetry opt out
 Write-Info "Opting out of PowerShell telemetry..."
