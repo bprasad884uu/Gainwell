@@ -11,10 +11,10 @@ $PwshPreview = "C:\Program Files\PowerShell\7-preview\pwsh.exe"
 # -------------------------
 # Helpers
 # -------------------------
-function Write-OK([string]$msg){ Write-Host "[OK] $msg" -ForegroundColor Green }
-function Write-Info([string]$msg){ Write-Host "[..] $msg" -ForegroundColor Cyan }
+function Write-OK([string]$msg){ Write-Host "`n[OK] $msg" -ForegroundColor Green }
+function Write-Info([string]$msg){ Write-Host "`n[..] $msg" -ForegroundColor Cyan }
 function Write-Warn([string]$msg){ Write-Warning $msg }
-function Write-Err([string]$msg){ Write-Host "[ERR] $msg" -ForegroundColor Red }
+function Write-Err([string]$msg){ Write-Host "`n[ERR] $msg" -ForegroundColor Red }
 
 # -------------------------------------------------
 # 1. Ensure PowerShell 7 (Stable) is installed
@@ -31,7 +31,7 @@ try {
     $msiFile      = "$env:TEMP\$($asset.name)"
     Write-Info "Latest PowerShell stable release detected: $targetVer"
 } catch {
-    Write-Warn "Failed to fetch latest release info. Falling back to 7.5.4."
+    Write-Warn "`nFailed to fetch latest release info. Falling back to 7.5.4."
     $targetVer = [Version]"7.5.4"
     $msiUrl    = "https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/PowerShell-7.5.4-win-x64.msi"
     $msiFile   = "$env:TEMP\PowerShell-7.5.4-win-x64.msi"
@@ -88,7 +88,7 @@ if (-not $installedStableVer -or $installedStableVer -lt $targetVer) {
         $httpClientHandler = New-Object System.Net.Http.HttpClientHandler
         $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
 
-        Write-Info "`nStarting download of PowerShell $targetVer..."
+        Write-Info "Starting download of PowerShell $targetVer..."
         $response = $httpClient.GetAsync($msiUrl, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
 
         if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
@@ -136,15 +136,15 @@ if (-not $installedStableVer -or $installedStableVer -lt $targetVer) {
         }
 
         $fileStream.Close()
-        Write-OK "`nDownload Completed."
+        Write-OK "Download Completed."
         $httpClient.Dispose()
 
-        Write-Info "`nInstalling..."
+        Write-Info "Installing..."
         Start-Process "msiexec.exe" -ArgumentList "/i `"$msiFile`" /quiet /norestart" -Wait
         Remove-Item $msiFile -Force -ErrorAction SilentlyContinue
-		Write-OK "`nPowershell $targetVer Installed."
+		Write-OK "Powershell $targetVer Installed."
     } catch {
-        Write-Warn "Installation failed: $_"
+        Write-Warn "`nInstallation failed: $_"
     }
 } else {
     Write-OK "PowerShell $installedVer is up to date (>= $targetVer). Skipping install."
@@ -163,7 +163,7 @@ elseif (Test-Path $PwshStable) {
     $PwshType    = "Stable"
 }
 else {
-    Write-Warn "No PowerShell 7 installation available after install step."
+    Write-Warn "`nNo PowerShell 7 installation available after install step."
     return
 }
 
@@ -221,7 +221,7 @@ foreach ($User in $UserProfiles) {
             $json | ConvertTo-Json -Depth 10 | Set-Content $WtSettingsPath -Encoding UTF8
         }
     } catch {
-        Write-Warn "Failed to update Terminal for user: $($User.Name)"
+        Write-Warn "`nFailed to update Terminal for user: $($User.Name)"
     }
 }
 
@@ -283,7 +283,7 @@ foreach ($User in $UserProfiles) {
         }
     }
     catch {
-        Write-Warn "Failed to update Win+X menu for user: $($User.Name)"
+        Write-Warn "`nFailed to update Win+X menu for user: $($User.Name)"
     }
 }
 Write-OK "Win+X menu updated to use PowerShell ($PwshType) for all users."
