@@ -517,7 +517,9 @@ Write-OK "`n[*] Full Silent Disk Cleanup finished on all drives."
 # PowerShell 7 Setup and Integration
 # -------------------------
 Write-Info "Checking PowerShell 7 installation..."
-$pwshPath   = "C:\Program Files\PowerShell\7\pwsh.exe"
+
+$PwshStable  = "C:\Program Files\PowerShell\7\pwsh.exe"
+$PwshPreview = "C:\Program Files\PowerShell\7-preview\pwsh.exe"
 
 # --- Get latest release info from GitHub ---
 try {
@@ -544,7 +546,7 @@ function Get-InstalledPwshVersion {
     } catch { return $null }
 }
 
-$installedVer = Get-InstalledPwshVersion -exePath $pwshPath
+$installedVer = Get-InstalledPwshVersion -exePath $PwshStable
 if ($installedVer) {
     Write-Info "Detected PowerShell version: $installedVer"
 } else {
@@ -698,7 +700,7 @@ Write-OK "PowerShell redirect configured."
 Write-Info "Configuring Windows Terminal default (existing users)..."
 
 $UserProfiles = Get-ChildItem "C:\Users" -Directory |
-    Where-Object { $_.Name -notin @("Public","Default","Default User","All Users") }
+    Where-Object { $_.Name -notin @("Public","Default User","All Users") }
 
 foreach ($User in $UserProfiles) {
 
@@ -751,6 +753,32 @@ if (!(Test-Path $DefaultSettingsPath)) {
 }
 
 Write-OK "PowerShell 7 install + smart default configuration completed."
+
+# -------------------------------------------------
+# 6. Replace Win+X menu PowerShell links
+# -------------------------------------------------
+Write-Info "Updating Win+X menu to use PowerShell 7..."
+$winxPath = "$env:LocalAppData\Microsoft\Windows\WinX"
+if ((Test-Path $winxPath) -and (Test-Path $DefaultPwsh)) {
+    try {
+        $shortcuts = Get-ChildItem -Path $winxPath -Recurse -Filter *.lnk
+        foreach ($sc in $shortcuts) {
+            $wshell = New-Object -ComObject WScript.Shell
+            $shortcut = $wshell.CreateShortcut($sc.FullName)
+            if ($shortcut.TargetPath -match "powershell.exe") {
+                $shortcut.TargetPath = $DefaultPwsh
+                $shortcut.IconLocation = "$DefaultPwsh,0"
+                $shortcut.Save()
+                Write-Info "Updated Win+X shortcut: $($sc.FullName)"
+            }
+        }
+        Write-OK "Win+X menu now launches PowerShell 7 (normal + admin). Sign out/in to see changes."
+    } catch { 
+        Write-Warn "Failed to update Win+X shortcuts: $_" 
+    }
+} else { 
+    Write-Warn "Win+X path or pwsh.exe missing - skipping." 
+}
 
 # PowerShell 7 telemetry opt out
 Write-Info "Opting out of PowerShell telemetry..."
