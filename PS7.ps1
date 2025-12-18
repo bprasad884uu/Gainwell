@@ -1,7 +1,6 @@
 # =================================================
-# PowerShell 7 Setup and Integration
+# PowerShell 7 - Setup and Integration
 # =================================================
-
 # -------------------------
 # Paths
 # -------------------------
@@ -9,12 +8,22 @@ $PwshStable  = "C:\Program Files\PowerShell\7\pwsh.exe"
 $PwshPreview = "C:\Program Files\PowerShell\7-preview\pwsh.exe"
 
 # -------------------------
-# Helpers
+# Helper: Get pwsh version
 # -------------------------
 function Write-OK([string]$msg){ Write-Host "`n[OK] $msg" -ForegroundColor Green }
 function Write-Info([string]$msg){ Write-Host "`n[..] $msg" -ForegroundColor Cyan }
 function Write-Warn([string]$msg){ Write-Warning $msg }
 function Write-Err([string]$msg){ Write-Host "`n[ERR] $msg" -ForegroundColor Red }
+
+function Get-PwshVersion {
+    param([string]$Path)
+    if (Test-Path $Path) {
+        try {
+            return [Version](& $Path -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()')
+        } catch {}
+    }
+    return $null
+}
 
 # -------------------------------------------------
 # 1. Ensure PowerShell 7 (Stable) is installed
@@ -109,7 +118,7 @@ if (-not $installedStableVer -or $installedStableVer -lt $targetVer) {
         $downloaded = 0
         $startTime = Get-Date
 
-        Write-Info "`nDownloading PowerShell MSI..."
+        Write-Info "Downloading PowerShell MSI..."
         while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
             $fileStream.Write($buffer, 0, $bytesRead)
             $downloaded += $bytesRead
@@ -150,17 +159,16 @@ if (-not $installedStableVer -or $installedStableVer -lt $targetVer) {
     Write-OK "PowerShell $installedVer is up to date (>= $targetVer). Skipping install."
 }
 
-# -------------------------------------------------
-# 2. Smart default selection (Preview > Stable)
-# -------------------------------------------------
-
+# =================================================
+# 2. Select DEFAULT pwsh (Preview > Stable)
+# =================================================
 if (Test-Path $PwshPreview) {
     $DefaultPwsh = $PwshPreview
-    $PwshType    = "Preview"
+    $PwshType = "Preview"
 }
 elseif (Test-Path $PwshStable) {
     $DefaultPwsh = $PwshStable
-    $PwshType    = "Stable"
+    $PwshType = "Stable"
 }
 else {
     Write-Warn "`nNo PowerShell 7 installation available after install step."
@@ -172,15 +180,14 @@ Write-Info "Using PowerShell $PwshType as system default."
 # -------------------------------------------------
 # 3. All Users PowerShell 5.1 redirect
 # -------------------------------------------------
+Write-Info "Configuring system-wide PowerShell redirect..."
 
 $AllUsersProfile = "$env:WINDIR\System32\WindowsPowerShell\v1.0\profile.ps1"
+$MarkerStart = "# >>> PWSH REDIRECT START"
+$MarkerEnd   = "# <<< PWSH REDIRECT END"
 
-if (!(Test-Path $AllUsersProfile)) {
-    New-Item -ItemType File -Path $AllUsersProfile -Force | Out-Null
-}
-
-$ProfileContent = @"
-# --- Auto redirect to PowerShell 7 ($PwshType) ---
+$RedirectBlock = @"
+$MarkerStart
 if (`$PSVersionTable.PSVersion.Major -lt 6) {
     `$pwsh = '$DefaultPwsh'
     if (Test-Path `$pwsh) {
@@ -188,10 +195,23 @@ if (`$PSVersionTable.PSVersion.Major -lt 6) {
         exit
     }
 }
+$MarkerEnd
 "@
 
-if (-not (Select-String -Path $AllUsersProfile -Pattern "Auto redirect to PowerShell 7" -Quiet)) {
-    Add-Content -Path $AllUsersProfile -Value $ProfileContent
+if (!(Test-Path $AllUsersProfile)) {
+    Set-Content $AllUsersProfile $RedirectBlock
+} else {
+    $content = Get-Content $AllUsersProfile -Raw
+    if ($content -match [regex]::Escape($MarkerStart)) {
+        $content = [regex]::Replace(
+            $content,
+            "$MarkerStart[\s\S]*?$MarkerEnd",
+            $RedirectBlock
+        )
+    } else {
+        $content += "`r`n$RedirectBlock"
+    }
+    Set-Content $AllUsersProfile $content
 }
 
 Write-OK "PowerShell redirect configured."
@@ -199,63 +219,69 @@ Write-OK "PowerShell redirect configured."
 # -------------------------------------------------
 # 4. Windows Terminal - existing users
 # -------------------------------------------------
+Write-Info "Configuring Windows Terminal (existing users)..."
 
-Write-Info "Configuring Windows Terminal default (existing users)..."
-
-$UserProfiles = Get-ChildItem "C:\Users" -Directory |
+$UserProfiles = Get-ChildItem C:\Users -Directory |
     Where-Object { $_.Name -notin @("Public","Default","Default User","All Users") }
 
 foreach ($User in $UserProfiles) {
 
-    $WtSettingsPath = "C:\Users\$($User.Name)\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
-    if (!(Test-Path $WtSettingsPath)) { continue }
+    $SettingsPath = "C:\Users\$($User.Name)\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
+    if (!(Test-Path $SettingsPath)) { continue }
 
     try {
-        $json = Get-Content $WtSettingsPath -Raw | ConvertFrom-Json
+        $json = Get-Content $SettingsPath -Raw | ConvertFrom-Json
+
         $pwshProfile = $json.profiles.list | Where-Object {
             $_.commandline -eq $DefaultPwsh
         }
 
-        if ($pwshProfile) {
-            $json.defaultProfile = $pwshProfile.guid
-            $json | ConvertTo-Json -Depth 10 | Set-Content $WtSettingsPath -Encoding UTF8
+        if (-not $pwshProfile) {
+            $guid = "{"+([guid]::NewGuid())+"}"
+            $pwshProfile = @{
+                guid        = $guid
+                name        = "PowerShell ($PwshType)"
+                commandline = $DefaultPwsh
+            }
+            $json.profiles.list += $pwshProfile
         }
-    } catch {
-        Write-Warn "`nFailed to update Terminal for user: $($User.Name)"
+
+        $json.defaultProfile = $pwshProfile.guid
+        $json | ConvertTo-Json -Depth 10 | Set-Content $SettingsPath -Encoding UTF8
+    }
+    catch {
+        Write-Warn "`nTerminal update failed for user $($User.Name)"
     }
 }
 
 # -------------------------------------------------
 # 5. Windows Terminal - new users
 # -------------------------------------------------
-
 Write-Info "Configuring Windows Terminal default for new users..."
 
 $DefaultUserPath = "C:\Users\Default\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState"
-$DefaultSettingsPath = Join-Path $DefaultUserPath "settings.json"
+$DefaultSettings = Join-Path $DefaultUserPath "settings.json"
 
 if (!(Test-Path $DefaultUserPath)) {
     New-Item -ItemType Directory -Path $DefaultUserPath -Force | Out-Null
 }
 
-if (!(Test-Path $DefaultSettingsPath)) {
-    $Guid = [guid]::NewGuid().ToString()
+if (!(Test-Path $DefaultSettings)) {
+    $guid = "{"+([guid]::NewGuid())+"}"
     @{
-        defaultProfile = "{$Guid}"
+        defaultProfile = $guid
         profiles = @{
             list = @(
                 @{
-                    guid        = "{$Guid}"
+                    guid        = $guid
                     name        = "PowerShell ($PwshType)"
                     commandline = $DefaultPwsh
                 }
             )
         }
     } | ConvertTo-Json -Depth 10 |
-        Set-Content $DefaultSettingsPath -Encoding UTF8
+        Set-Content $DefaultSettings -Encoding UTF8
 }
-
-Write-OK "PowerShell 7 install + smart default configuration completed."
 
 # -------------------------------------------------
 # 6. Replace Win+X menu PowerShell links
@@ -287,3 +313,8 @@ foreach ($User in $UserProfiles) {
     }
 }
 Write-OK "Win+X menu updated to use PowerShell ($PwshType) for all users."
+
+#------------------------------
+# 7. Kill New PowerShell
+#------------------------------
+taskkill /im pwsh.exe /f
