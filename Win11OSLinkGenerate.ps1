@@ -26,17 +26,36 @@ $commonArgs = @(
 # Define both language variants
 $languages = @("English International" , "English")
 
-# Loop through both languages
-foreach ($lang in $languages) {
-    Write-Host "`nDownload Link for language: $lang" -ForegroundColor Cyan
-    $argsWithLang = $commonArgs + ("-Lang", $lang)
-    
-    $downloadOutput = powershell.exe -NoProfile -ExecutionPolicy Bypass -File $fidoPath @argsWithLang
+# ---------------------------------
+# Header
+# ---------------------------------
+$version = "25H2"
 
-    if ($downloadOutput) {
-        Write-Host "`n$lang ISO Info:"
-        $downloadOutput | ForEach-Object { Write-Host $_ }
-    } else {
-        Write-Host "Failed to retrieve download info for $lang." -ForegroundColor Red
+Write-Host "Windows 11, $version Download Link:"
+Write-Host "--------------------------------------------------------------"
+
+# ---------------------------------
+# Loop with REQUIRED output
+# ---------------------------------
+foreach ($lang in $languages) {
+
+    Write-Host ""
+    Write-Host "Download Link for language: $lang"
+
+    $argsWithLang = $commonArgs + ("-Lang", $lang)
+
+    $output = powershell.exe `
+        -NoProfile `
+        -ExecutionPolicy Bypass `
+        -File $fidoPath `
+        @argsWithLang
+
+    $url = $output | Where-Object { $_ -match '^https?://' } | Select-Object -First 1
+
+    if ($lang -eq "English International") {
+        Write-Host "`$isoUrl_EN_GB  = `"$url`""
+    }
+    else {
+        Write-Host "`$isoUrl_EN_US  = `"$url`""
     }
 }
