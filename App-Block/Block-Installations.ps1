@@ -22,7 +22,9 @@ param (
 		"ZoomInstaller*.exe",
 		"Zoom_cm*.exe",
 		"MSTeams*.exe",
-		"Mechanic.exe"
+		"Mechanic.exe",
+		"DCEditor.exe",
+		"FLASHUTIL.EXE"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
@@ -62,6 +64,7 @@ param (
 		"%OSDRIVE%\Users\*\AppData\Local\Programs\edison-shift-reporter\*",
 		"%OSDRIVE%\Users\*\AppData\Local\Grammarly\*",
 		"%OSDRIVE%\Users\*\AppData\Local\Programs\device-controller\*"
+		"D:\EARTHWORKS TRAINING SIMULATOR 2.21.40\SIMULATOR\*"
 
     ),
 
