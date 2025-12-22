@@ -179,6 +179,45 @@ else {
     Write-Warning "No known company matched. Skipping image generation."
 }
 
+# Set the path to the wallpaper image
+$wallpaper = "C:\Windows\web\Wallpaper\Windows\wallpaper.jpg"
+
+# Define the SystemParametersInfo constants
+$SPI_SETDESKWALLPAPER = 0x0014
+$SPIF_UPDATEINIFILE = 0x01
+$SPIF_SENDCHANGE = 0x02
+
+# Load the Wallpaper class with SystemParametersInfo
+Add-Type @"
+    using System;
+    using System.Runtime.InteropServices;
+    public class Wallpaper {
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+    }
+"@
+
+# Function to set the wallpaper for a user profile
+function Set-WallpaperForUser {
+    param (
+        [string]$userSID,
+        [string]$wallpaper
+    )
+
+    # Set the wallpaper for the user profile
+    [Wallpaper]::SystemParametersInfo($SPI_SETDESKWALLPAPER, 0, $wallpaper, $SPIF_UPDATEINIFILE -bor $SPIF_SENDCHANGE)
+}
+
+# Get all user profiles on the system
+$userProfiles = Get-WmiObject Win32_UserProfile | Where-Object { $_.Special -eq $false }
+
+# Set the wallpaper for each user profile
+foreach ($profile in $userProfiles) {
+    $userSID = $profile.LocalPath.Split("\")[-1]
+    $null = Set-WallpaperForUser -userSID $userSID -wallpaperPath $wallpaper
+}
+
+
 # ==========================
 # End of Script
 # ==========================
