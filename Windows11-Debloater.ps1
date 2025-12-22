@@ -832,7 +832,7 @@ Write-OK "Win+X menu updated to use PowerShell ($PwshType) for all users."
 #------------------------------
 # 7. Kill New PowerShell
 #------------------------------
-taskkill /im pwsh.exe /f
+#taskkill /im pwsh.exe /f
 # PowerShell 7 telemetry opt out
 Write-Info "Opting out of PowerShell telemetry..."
 try { 
