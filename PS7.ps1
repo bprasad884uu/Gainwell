@@ -50,17 +50,20 @@ function Get-InstalledPwshVersion {
     param([string]$exePath)
     if (-not (Test-Path $exePath)) { return $null }
     try {
-        $out = & $exePath -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
-        return [Version]$out.Trim()
-    } catch { return $null }
+        $ver = & $exePath -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+        # Return full version object (supports Preview)
+        return $ver
+    }
+    catch {
+        Write-Warn "Failed to run: $exePath. $_"
+        return $null
+    }
 }
 
 $installedStableVer = Get-InstalledPwshVersion -exePath $PwshStable
 
 if ($installedStableVer) {
     Write-Info "Detected PowerShell 7 stable: $installedStableVer"
-} else {
-    Write-Info "PowerShell 7 stable not detected."
 }
 
 $installedPreviewVer = Get-InstalledPwshVersion -exePath $PwshPreview
@@ -162,7 +165,17 @@ if (-not $installedPreviewVer -and (-not $installedStableVer -or $installedStabl
         Write-Warn "`nInstallation failed: $_"
     }
 } else {
-    Write-OK "PowerShell $installedVer is up to date (>= $targetVer). Skipping install."
+	$installedVer = if ($installedPreviewVer) {
+    "Preview $installedPreviewVer"
+    }
+    elseif ($installedStableVer) {
+        "Stable $installedStableVer"
+    }
+    else {
+        "Unknown"
+    }
+
+    Write-OK "PowerShell $installedVer is up to date. Skipping install."
 }
 
 # =================================================
