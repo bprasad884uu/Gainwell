@@ -63,7 +63,13 @@ if ($installedStableVer) {
     Write-Info "PowerShell 7 stable not detected."
 }
 
-if (-not $installedStableVer -or $installedStableVer -lt $targetVer) {
+$installedPreviewVer = Get-InstalledPwshVersion -exePath $PwshPreview
+
+if ($installedPreviewVer) {
+    Write-Info "Detected PowerShell 7 Preview: $installedPreviewVer"
+}
+
+if (-not $installedPreviewVer -and (-not $installedStableVer -or $installedStableVer -lt $targetVer)) {
 
     Write-Info "Installing / upgrading PowerShell 7 stable to $targetVer..."
 
