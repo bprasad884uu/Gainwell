@@ -196,7 +196,7 @@ else {
 
 Write-Info "Using PowerShell $PwshType as system default."
 
-# -------------------------------------------------
+<# -------------------------------------------------
 # 3. All Users PowerShell 5.1 redirect
 # -------------------------------------------------
 Write-Info "Configuring system-wide PowerShell redirect..."
@@ -234,7 +234,7 @@ if (!(Test-Path $AllUsersProfile)) {
 }
 
 Write-OK "PowerShell redirect configured."
-
+#>
 # -------------------------------------------------
 # 4. Windows Terminal - existing users
 # -------------------------------------------------
