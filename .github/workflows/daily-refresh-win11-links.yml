@@ -1,8 +1,9 @@
-name: Refresh Win11 ISO links (24h15m drift)
+name: Refresh Win11 ISO links (daily IST + expiry-safe)
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    # 12:00 AM IST = 18:30 UTC
+    - cron: '30 18 * * *'
   workflow_dispatch: {}
 
 permissions:
@@ -13,84 +14,107 @@ jobs:
     runs-on: windows-latest
 
     steps:
+    # ----------------------------------
+    # Checkout
+    # ----------------------------------
     - name: Checkout
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
-    # -----------------------------
-    # Gate execution (24h15m)
-    # -----------------------------
-    - name: Gate by epoch
-      id: gate
+    # ----------------------------------
+    # Check existing ISO URL expiry
+    # ----------------------------------
+    - name: Check existing ISO URL expiry
+      id: expiry
       shell: pwsh
       run: |
-        $epochFile = ".github/next_run_epoch"
-        $interval  = 87300
-
+        $file = "Windows11Upgrade.ps1"
+        $bufferSeconds = 7200   # 2-hour safety buffer
         $now = [int][DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-        $next = 0
 
-        if (Test-Path $epochFile) {
-          $raw = (Get-Content $epochFile -Raw).Trim()
-          if ($raw -match '^\d+$') { $next = [int]$raw }
+        if (-not (Test-Path $file)) {
+          "force_refresh=true" >> $env:GITHUB_OUTPUT
+          exit 0
         }
 
-        if ($now -ge $next) {
-          $newNext = if ($next -eq 0) { $now + $interval } else {
-            while ($next -le $now) { $next += $interval }
-            $next
+        $content = Get-Content $file -Raw
+
+        function Get-P1($text, $var) {
+          if ($text -match "$var\s*=\s*`".*?P1=(\d+)") {
+            return [int]$matches[1]
           }
-
-          "should_run=true"  >> $env:GITHUB_OUTPUT
-          "next_epoch=$newNext" >> $env:GITHUB_OUTPUT
-        } else {
-          "should_run=false" >> $env:GITHUB_OUTPUT
-          "next_epoch=$next" >> $env:GITHUB_OUTPUT
+          return 0
         }
 
-    # -----------------------------
+        $p1GB = Get-P1 $content '\$isoUrl_EN_GB'
+        $p1US = Get-P1 $content '\$isoUrl_EN_US'
+
+        if ($p1GB -eq 0 -and $p1US -eq 0) {
+          "force_refresh=true" >> $env:GITHUB_OUTPUT
+          exit 0
+        }
+
+        if (
+          ($p1GB -ne 0 -and ($p1GB - $now) -le $bufferSeconds) -or
+          ($p1US -ne 0 -and ($p1US - $now) -le $bufferSeconds)
+        ) {
+          "force_refresh=true" >> $env:GITHUB_OUTPUT
+        } else {
+          "force_refresh=false" >> $env:GITHUB_OUTPUT
+        }
+
+    # ----------------------------------
     # Download generator
-    # -----------------------------
+    # ----------------------------------
     - name: Download generator
-      if: steps.gate.outputs.should_run == 'true'
+      if: steps.expiry.outputs.force_refresh == 'true' || github.event_name != 'schedule'
       shell: pwsh
       run: |
         curl -fsSL -o gen.ps1 https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/Win11OSLinkGenerate.ps1
 
-    # -----------------------------
-    # Run generator (structured parse)
-    # -----------------------------
+    # ----------------------------------
+    # Run generator (fallback-safe)
+    # ----------------------------------
     - name: Run generator
-      if: steps.gate.outputs.should_run == 'true'
+      if: steps.expiry.outputs.force_refresh == 'true' || github.event_name != 'schedule'
       id: gen
       shell: pwsh
       run: |
-        $data = @{}
-        pwsh -NoProfile -File ./gen.ps1 | ForEach-Object {
-          if ($_ -match '^([^=]+)=(.+)$') {
-            $data[$matches[1]] = $matches[2]
-          }
+        $out = pwsh -NoProfile -ExecutionPolicy Bypass -File ./gen.ps1 2>&1
+        $out | ForEach-Object { Write-Host $_ }
+
+        $enGB = $out |
+          Where-Object { $_ -match '^\$isoUrl_EN_GB\s*=' } |
+          ForEach-Object { ($_ -replace '.*?"','') -replace '"$','' }
+
+        $enUS = $out |
+          Where-Object { $_ -match '^\$isoUrl_EN_US\s*=' } |
+          ForEach-Object { ($_ -replace '.*?"','') -replace '"$','' }
+
+        if (-not $enGB -and -not $enUS) {
+          Write-Host "No new ISO URLs detected. Keeping existing links."
+          "found=false" >> $env:GITHUB_OUTPUT
+          exit 0
         }
 
-        $found = $data["FOUND"] -eq "true"
-        "found=$found" >> $env:GITHUB_OUTPUT
+        "found=true" >> $env:GITHUB_OUTPUT
 
-        if ($data["ENGB"]) {
+        if ($enGB) {
           "engb<<EOF" >> $env:GITHUB_OUTPUT
-          $data["ENGB"] >> $env:GITHUB_OUTPUT
+          $enGB >> $env:GITHUB_OUTPUT
           "EOF" >> $env:GITHUB_OUTPUT
         }
 
-        if ($data["ENUS"]) {
+        if ($enUS) {
           "enus<<EOF" >> $env:GITHUB_OUTPUT
-          $data["ENUS"] >> $env:GITHUB_OUTPUT
+          $enUS >> $env:GITHUB_OUTPUT
           "EOF" >> $env:GITHUB_OUTPUT
         }
 
-    # -----------------------------
-    # Replace URLs safely
-    # -----------------------------
+    # ----------------------------------
+    # Update Windows11Upgrade.ps1
+    # ----------------------------------
     - name: Update Windows11Upgrade.ps1
       if: steps.gen.outputs.found == 'true'
       id: replace
@@ -105,7 +129,7 @@ jobs:
           exit 0
         }
 
-        $text = Get-Content $file -Raw
+        $content = Get-Content $file -Raw
         $updated = $false
 
         $patterns = @{
@@ -113,42 +137,41 @@ jobs:
           ENUS = '(?ms)(\$isoUrl_EN_US\s*=\s*)(["'']).*?\2'
         }
 
-        foreach ($k in $patterns.Keys) {
-          $val = $env:$k
-          if ($val) {
-            $new = [regex]::Replace(
-              $text,
-              $patterns[$k],
-              '${1}"' + $val + '"'
-            )
-            if ($new -ne $text) {
-              $text = $new
-              $updated = $true
-            }
+        foreach ($key in @("ENGB","ENUS")) {
+          $val = $env:$key
+          if (-not $val) { continue }
+
+          $new = [regex]::Replace(
+            $content,
+            $patterns[$key],
+            '${1}"' + $val + '"'
+          )
+
+          if ($new -ne $content) {
+            $content = $new
+            $updated = $true
           }
         }
 
         if ($updated) {
-          Set-Content $file $text -Encoding utf8
+          Set-Content $file $content -Encoding utf8
           "updated=true" >> $env:GITHUB_OUTPUT
         } else {
           "updated=false" >> $env:GITHUB_OUTPUT
         }
 
-    # -----------------------------
-    # Commit & push
-    # -----------------------------
+    # ----------------------------------
+    # Commit & push (only when changed)
+    # ----------------------------------
     - name: Commit changes
       if: steps.replace.outputs.updated == 'true'
       shell: pwsh
       run: |
-        $epochFile = ".github/next_run_epoch"
-        Set-Content $epochFile "${{ steps.gate.outputs.next_epoch }}" -Encoding utf8
-
         git config user.name  "github-actions[bot]"
         git config user.email "actions@github.com"
-        git add Windows11Upgrade.ps1 .github/next_run_epoch
 
+        git add Windows11Upgrade.ps1
         git diff --cached --quiet && exit 0
+
         git commit -m "Refresh Win11 ISO links $(Get-Date -Format yyyy-MM-dd_HH:mm)"
         git push
