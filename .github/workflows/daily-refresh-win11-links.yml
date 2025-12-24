@@ -1,4 +1,4 @@
-name: Refresh Win11 ISO links (daily IST + expiry-safe)
+name: Refresh Win11 ISO links (daily IST, expiry-safe, partial updates)
 
 on:
   schedule:
@@ -14,23 +14,23 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    # ----------------------------------
+    # -------------------------------------------------
     # Checkout
-    # ----------------------------------
+    # -------------------------------------------------
     - name: Checkout
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
-    # ----------------------------------
-    # Check existing ISO URL expiry
-    # ----------------------------------
+    # -------------------------------------------------
+    # Check existing ISO URL expiry (P1 based)
+    # -------------------------------------------------
     - name: Check existing ISO URL expiry
       id: expiry
       shell: pwsh
       run: |
         $file = "Windows11Upgrade.ps1"
-        $bufferSeconds = 7200   # 2-hour safety buffer
+        $bufferSeconds = 7200   # 2 hours safety buffer
         $now = [int][DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 
         if (-not (Test-Path $file)) {
@@ -64,18 +64,18 @@ jobs:
           "force_refresh=false" >> $env:GITHUB_OUTPUT
         }
 
-    # ----------------------------------
+    # -------------------------------------------------
     # Download generator
-    # ----------------------------------
+    # -------------------------------------------------
     - name: Download generator
       if: steps.expiry.outputs.force_refresh == 'true' || github.event_name != 'schedule'
       shell: pwsh
       run: |
         curl -fsSL -o gen.ps1 https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/Win11OSLinkGenerate.ps1
 
-    # ----------------------------------
-    # Run generator (fallback-safe)
-    # ----------------------------------
+    # -------------------------------------------------
+    # Run generator (ignore empty values, allow partial)
+    # -------------------------------------------------
     - name: Run generator
       if: steps.expiry.outputs.force_refresh == 'true' || github.event_name != 'schedule'
       id: gen
@@ -84,16 +84,20 @@ jobs:
         $out = pwsh -NoProfile -ExecutionPolicy Bypass -File ./gen.ps1 2>&1
         $out | ForEach-Object { Write-Host $_ }
 
-        $enGB = $out |
-          Where-Object { $_ -match '^\$isoUrl_EN_GB\s*=' } |
-          ForEach-Object { ($_ -replace '.*?"','') -replace '"$','' }
+        function Extract-Url($lines, $var) {
+          $line = $lines | Where-Object { $_ -match "^\$$var\s*=" } | Select-Object -Last 1
+          if (-not $line) { return $null }
 
-        $enUS = $out |
-          Where-Object { $_ -match '^\$isoUrl_EN_US\s*=' } |
-          ForEach-Object { ($_ -replace '.*?"','') -replace '"$','' }
+          $url = ($line -replace '.*?"','') -replace '"$',''
+          if ([string]::IsNullOrWhiteSpace($url)) { return $null }
+          return $url
+        }
+
+        $enGB = Extract-Url $out 'isoUrl_EN_GB'
+        $enUS = Extract-Url $out 'isoUrl_EN_US'
 
         if (-not $enGB -and -not $enUS) {
-          Write-Host "No new ISO URLs detected. Keeping existing links."
+          Write-Host "No usable ISO URLs detected. Keeping existing links."
           "found=false" >> $env:GITHUB_OUTPUT
           exit 0
         }
@@ -112,9 +116,9 @@ jobs:
           "EOF" >> $env:GITHUB_OUTPUT
         }
 
-    # ----------------------------------
-    # Update Windows11Upgrade.ps1
-    # ----------------------------------
+    # -------------------------------------------------
+    # Update Windows11Upgrade.ps1 (partial-safe)
+    # -------------------------------------------------
     - name: Update Windows11Upgrade.ps1
       if: steps.gen.outputs.found == 'true'
       id: replace
@@ -139,7 +143,10 @@ jobs:
 
         foreach ($key in @("ENGB","ENUS")) {
           $val = $env:$key
-          if (-not $val) { continue }
+          if (-not $val) {
+            Write-Host "$key not provided – skipping"
+            continue
+          }
 
           $new = [regex]::Replace(
             $content,
@@ -160,9 +167,9 @@ jobs:
           "updated=false" >> $env:GITHUB_OUTPUT
         }
 
-    # ----------------------------------
+    # -------------------------------------------------
     # Commit & push (only when changed)
-    # ----------------------------------
+    # -------------------------------------------------
     - name: Commit changes
       if: steps.replace.outputs.updated == 'true'
       shell: pwsh
