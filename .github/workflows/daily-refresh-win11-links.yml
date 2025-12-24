@@ -2,231 +2,153 @@ name: Refresh Win11 ISO links (24h15m drift)
 
 on:
   schedule:
-    - cron: '*/30 * * * *'   # poll every 30 minutes
+    - cron: '*/30 * * * *'
   workflow_dispatch: {}
 
 permissions:
   contents: write
 
 jobs:
-  refresh-links:
+  refresh:
     runs-on: windows-latest
+
     steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      - name: Checkout main
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    # -----------------------------
+    # Gate execution (24h15m)
+    # -----------------------------
+    - name: Gate by epoch
+      id: gate
+      shell: pwsh
+      run: |
+        $epochFile = ".github/next_run_epoch"
+        $interval  = 87300
 
-      - name: Determine whether to run now (gate by next_run file)
-        id: gate
-        shell: pwsh
-        run: |
-          $epochFile = Join-Path $env:GITHUB_WORKSPACE '.github/next_run_epoch'
-          $intervalSeconds = 87300   # 24h 15m
+        $now = [int][DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        $next = 0
 
-          $unixEpochStart = (Get-Date "1970-01-01T00:00:00Z").ToUniversalTime()
-          $now = (Get-Date).ToUniversalTime()
-          $nowEpoch = [int][Math]::Floor(($now - $unixEpochStart).TotalSeconds)
-          Write-Host "Now (UTC epoch): $nowEpoch"
+        if (Test-Path $epochFile) {
+          $raw = (Get-Content $epochFile -Raw).Trim()
+          if ($raw -match '^\d+$') { $next = [int]$raw }
+        }
 
-          if (Test-Path $epochFile) {
-            $existing = (Get-Content $epochFile -Raw).Trim()
-            if ($existing -match '^\d+$') {
-              $nextEpoch = [int]$existing
-            } else {
-              $nextEpoch = 0
+        if ($now -ge $next) {
+          $newNext = if ($next -eq 0) { $now + $interval } else {
+            while ($next -le $now) { $next += $interval }
+            $next
+          }
+
+          "should_run=true"  >> $env:GITHUB_OUTPUT
+          "next_epoch=$newNext" >> $env:GITHUB_OUTPUT
+        } else {
+          "should_run=false" >> $env:GITHUB_OUTPUT
+          "next_epoch=$next" >> $env:GITHUB_OUTPUT
+        }
+
+    # -----------------------------
+    # Download generator
+    # -----------------------------
+    - name: Download generator
+      if: steps.gate.outputs.should_run == 'true'
+      shell: pwsh
+      run: |
+        curl -fsSL -o gen.ps1 https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/Win11OSLinkGenerate.ps1
+
+    # -----------------------------
+    # Run generator (structured parse)
+    # -----------------------------
+    - name: Run generator
+      if: steps.gate.outputs.should_run == 'true'
+      id: gen
+      shell: pwsh
+      run: |
+        $data = @{}
+        pwsh -NoProfile -File ./gen.ps1 | ForEach-Object {
+          if ($_ -match '^([^=]+)=(.+)$') {
+            $data[$matches[1]] = $matches[2]
+          }
+        }
+
+        $found = $data["FOUND"] -eq "true"
+        "found=$found" >> $env:GITHUB_OUTPUT
+
+        if ($data["ENGB"]) {
+          "engb<<EOF" >> $env:GITHUB_OUTPUT
+          $data["ENGB"] >> $env:GITHUB_OUTPUT
+          "EOF" >> $env:GITHUB_OUTPUT
+        }
+
+        if ($data["ENUS"]) {
+          "enus<<EOF" >> $env:GITHUB_OUTPUT
+          $data["ENUS"] >> $env:GITHUB_OUTPUT
+          "EOF" >> $env:GITHUB_OUTPUT
+        }
+
+    # -----------------------------
+    # Replace URLs safely
+    # -----------------------------
+    - name: Update Windows11Upgrade.ps1
+      if: steps.gen.outputs.found == 'true'
+      id: replace
+      shell: pwsh
+      env:
+        ENGB: ${{ steps.gen.outputs.engb }}
+        ENUS: ${{ steps.gen.outputs.enus }}
+      run: |
+        $file = "Windows11Upgrade.ps1"
+        if (-not (Test-Path $file)) {
+          "updated=false" >> $env:GITHUB_OUTPUT
+          exit 0
+        }
+
+        $text = Get-Content $file -Raw
+        $updated = $false
+
+        $patterns = @{
+          ENGB = '(?ms)(\$isoUrl_EN_GB\s*=\s*)(["'']).*?\2'
+          ENUS = '(?ms)(\$isoUrl_EN_US\s*=\s*)(["'']).*?\2'
+        }
+
+        foreach ($k in $patterns.Keys) {
+          $val = $env:$k
+          if ($val) {
+            $new = [regex]::Replace(
+              $text,
+              $patterns[$k],
+              '${1}"' + $val + '"'
+            )
+            if ($new -ne $text) {
+              $text = $new
+              $updated = $true
             }
-          } else {
-            $nextEpoch = 0
           }
+        }
 
-          Write-Host "Next scheduled epoch: $nextEpoch"
+        if ($updated) {
+          Set-Content $file $text -Encoding utf8
+          "updated=true" >> $env:GITHUB_OUTPUT
+        } else {
+          "updated=false" >> $env:GITHUB_OUTPUT
+        }
 
-          if ($nowEpoch -ge $nextEpoch) {
-            Write-Host "=== It's time to run ==="
-            if ($nextEpoch -eq 0) {
-              $newNext = $nowEpoch + $intervalSeconds
-            } else {
-              $newNext = $nextEpoch
-              while ($newNext -le $nowEpoch) {
-                $newNext += $intervalSeconds
-              }
-            }
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "should_run=true"
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "next_epoch=$newNext"
-          } else {
-            Write-Host "Not time yet — skipping."
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "should_run=false"
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "next_epoch=$nextEpoch"
-          }
+    # -----------------------------
+    # Commit & push
+    # -----------------------------
+    - name: Commit changes
+      if: steps.replace.outputs.updated == 'true'
+      shell: pwsh
+      run: |
+        $epochFile = ".github/next_run_epoch"
+        Set-Content $epochFile "${{ steps.gate.outputs.next_epoch }}" -Encoding utf8
 
-      - name: Download link-generator script
-        if: steps.gate.outputs.should_run == 'true'
-        shell: pwsh
-        run: |
-          curl -fsSL -o Win11OSLinkGenerate.ps1 https://raw.githubusercontent.com/bprasad884uu/Gainwell/refs/heads/main/Win11OSLinkGenerate.ps1
-          Write-Host "Downloaded Win11OSLinkGenerate.ps1"
+        git config user.name  "github-actions[bot]"
+        git config user.email "actions@github.com"
+        git add Windows11Upgrade.ps1 .github/next_run_epoch
 
-      - name: Run generator and capture output
-        if: steps.gate.outputs.should_run == 'true'
-        id: gen
-        shell: pwsh
-        run: |
-          # Run generator and capture stdout lines
-          $out = pwsh -NoProfile -ExecutionPolicy Bypass -File ./Win11OSLinkGenerate.ps1 2>&1
-          $out | ForEach-Object { Write-Host $_ }
-
-          # Capture exact lines that start with http(s) (full URL lines)
-          $lines = $out | ForEach-Object { $_.Trim() }
-          $urls = $lines | Where-Object { $_ -match '^(https?://)' } | ForEach-Object { $_.Trim() }
-
-          Write-Host "=== Extracted URLs ==="
-          $urls | ForEach-Object { Write-Host "  $_" }
-
-          # Map first to en-GB, second to en-US if present
-          $enGB = $null; $enUS = $null
-          if ($urls.Count -ge 1) { $enGB = $urls[0] }
-          if ($urls.Count -ge 2) { $enUS = $urls[1] }
-
-          # Sanitize (remove stray CR/LF)
-          if ($enGB) { $enGB = ($enGB -replace '[\r\n]+','') }
-          if ($enUS) { $enUS = ($enUS -replace '[\r\n]+','') }
-
-          # --- Write outputs atomically using AppendAllText with UTF8 ---
-          $utf8 = [System.Text.Encoding]::UTF8
-
-          # found boolean
-          [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "found=$($urls.Count -gt 0)`n", $utf8)
-
-          # en-GB block (single atomic write)
-          if ($enGB) {
-            $block = "engb<<EOF`n$enGB`nEOF`n"
-            [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, $block, $utf8)
-          } else {
-            [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "engb=`n", $utf8)
-          }
-
-          # en-US block (single atomic write)
-          if ($enUS) {
-            $block = "enus<<EOF`n$enUS`nEOF`n"
-            [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, $block, $utf8)
-          } else {
-            [System.IO.File]::AppendAllText($env:GITHUB_OUTPUT, "enus=`n", $utf8)
-          }
-
-          Write-Host "Wrote outputs to GITHUB_OUTPUT."
-
-      - name: Debug workflow outputs
-        shell: pwsh
-        run: |
-          Write-Host "should_run=${{ steps.gate.outputs.should_run }}"
-          Write-Host "next_epoch=${{ steps.gate.outputs.next_epoch }}"
-          Write-Host "found=${{ steps.gen.outputs.found }}"
-          Write-Host "engb=${{ steps.gen.outputs.engb }}"
-          Write-Host "enus=${{ steps.gen.outputs.enus }}"
-
-      - name: Replace isoUrl entries in Windows11Upgrade.ps1 (preserve original EOF newline)
-        id: replace
-        if: steps.gate.outputs.should_run == 'true' && steps.gen.outputs.found == 'true'
-        shell: pwsh
-        env:
-          ENGB: ${{ steps.gen.outputs.engb }}
-          ENUS: ${{ steps.gen.outputs.enus }}
-        run: |
-          $file = Join-Path $Env:GITHUB_WORKSPACE 'Windows11Upgrade.ps1'
-          if (-not (Test-Path $file)) {
-            Write-Host "Windows11Upgrade.ps1 not found"
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "updated=false"
-            exit 0
-          }
-
-          # Read original file as raw text (preserves trailing newline if any)
-          $content = Get-Content -Raw -Path $file
-
-          # Detect original trailing-newline style (CRLF, LF, or none)
-          $origTrailing = ""
-          if ($content.EndsWith("`r`n")) {
-            $origTrailing = "`r`n"
-          } elseif ($content.EndsWith("`n")) {
-            $origTrailing = "`n"
-          } else {
-            $origTrailing = ""
-          }
-
-          # New patterns: replace the top-level $isoUrl_EN_GB and $isoUrl_EN_US assignments
-          $patternENGB = '(?ms)(\$isoUrl_EN_GB\s*=\s*)".*?"'
-          $patternENUS = '(?ms)(\$isoUrl_EN_US\s*=\s*)".*?"'
-
-          $new = $content
-          $updated = $false
-
-          if ($Env:ENGB -and $Env:ENGB.Trim()) {
-            $replacement = '${1}"' + $Env:ENGB + '"'
-            $attempt = [System.Text.RegularExpressions.Regex]::Replace($new, $patternENGB, $replacement)
-            if ($attempt -ne $new) { $new = $attempt; $updated = $true; Write-Host "Inserted en-GB URL" } else { Write-Host "en-GB pattern not found; skipping en-GB" }
-          } else {
-            Write-Host "No en-GB URL provided; skipping en-GB replacement"
-          }
-
-          if ($Env:ENUS -and $Env:ENUS.Trim()) {
-            $replacement = '${1}"' + $Env:ENUS + '"'
-            $attempt = [System.Text.RegularExpressions.Regex]::Replace($new, $patternENUS, $replacement)
-            if ($attempt -ne $new) { $new = $attempt; $updated = $true; Write-Host "Inserted en-US URL" } else { Write-Host "en-US pattern not found; skipping en-US" }
-          } else {
-            Write-Host "No en-US URL provided; skipping en-US replacement"
-          }
-
-          if ($updated) {
-            # Remove any trailing CR/LF from the new content, then re-append the original suffix (which may be empty)
-            $trimmed = $new.TrimEnd("`r", "`n")
-            $final = $trimmed + $origTrailing
-
-            # Write deterministically with exact content (preserve original EOF newline behavior)
-            [System.IO.File]::WriteAllText($file, $final, [System.Text.Encoding]::UTF8)
-
-            Write-Host "Windows11Upgrade.ps1 updated (preserved original trailing-newline behavior)"
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "updated=true"
-          } else {
-            Write-Host "No replacements applied"
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "updated=false"
-          }
-
-      - name: Commit and push changes (only when updated)
-        if: steps.replace.outputs.updated == 'true'
-        shell: pwsh
-        run: |
-          $epochFile = Join-Path $env:GITHUB_WORKSPACE '.github/next_run_epoch'
-          $nextEpoch = [int]${{ steps.gate.outputs.next_epoch }}
-
-          if (-not (Test-Path (Split-Path $epochFile))) { New-Item -ItemType Directory -Path (Split-Path $epochFile) -Force | Out-Null }
-          Set-Content -Path $epochFile -Value $nextEpoch -Encoding utf8
-
-          git config user.name "github-actions[bot]"
-          git config user.email "actions@github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
-
-          # Stage changes
-          git add Windows11Upgrade.ps1 .github/next_run_epoch
-
-          # If nothing staged, exit (shouldn't happen when updated==true)
-          git diff --cached --quiet
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "Nothing staged to commit; exiting."
-            exit 0
-          }
-
-          # Commit locally
-          git commit -m "Refresh Win11 ISO links (next: $nextEpoch) $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
-
-          # Fetch remote and rebase then push
-          try {
-            git fetch origin main
-            git rebase origin/main
-            git push origin HEAD:main
-          } catch {
-            Write-Host "Rebase or push failed. Attempting to abort rebase."
-            git rebase --abort 2>$null
-            Write-Error "Failed to rebase/push: $($_.Exception.Message)"
-            exit 1
-          }
+        git diff --cached --quiet && exit 0
+        git commit -m "Refresh Win11 ISO links $(Get-Date -Format yyyy-MM-dd_HH:mm)"
+        git push
