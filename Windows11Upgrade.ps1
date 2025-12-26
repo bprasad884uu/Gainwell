@@ -10,8 +10,8 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 $ErrorActionPreference = "Stop"
 
 # ---------- Config (fill these) ----------
-$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=e927841b-3905-4728-822e-7e9b71170cb9&P1=1766815446&P2=601&P3=2&P4=IqBEu2J4FDrOoDv3F08BstpuflTxGDY5nduc2y0Sre4vlRk6jN08RKQXZSfHpecsfwAsyNjVKHeSpTIC1HkHHV1sUihqruqlx1ypDCvszXu%2ftIc1ULRsbadZ9Wj5uyuY4EuA1IF5D%2bHsB8fCiYKDDI%2bmTfFnkDeSulH7r0XVTs2GLYZrd%2fesARU67dzqMAOtoqkYA6WOJGAHG1jRpnbiSE9M5ARHCOLrZfUV8k8qDbMfxdFqTTdT2OO4VObFC5Zc4ZLvZKvNAkxOhqUGYeq4KD7DSy2C7X92iRRzzCoOSQXSuDstVh1Igc4nzY1YxSin0XBjv%2bu6SmGX2KNy%2bUEoxw%3d%3d"
-$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=a20f9e23-24af-414c-a9c1-217ee30d346d&P1=1766815438&P2=601&P3=2&P4=uFU3EkWMoUIo%2fbqE703Ipo%2f9PaQuueZTnP6dOSsPfLRcFqyZ8xfWkW6HWwzNwdRWSB%2bAwxHK9cKJsVB2mKMiygvo9hSS9h4%2b8AnWPiozH0SFXGf763uApFwvZxlUuwAGS31UNIznzmmQtgQoonmNmQtubUTnfA7Ii%2bMMjVIX%2fsj2CdxDrb9Xnkbm2FJ4UMeMV9IatzW33G%2b1%2fraHItdSGrzOp9HSS0%2bkbuqwBcpjRGBcpiMPAThPP4p6i8E5MYxov%2byokKCBxv9yc15Osx3CmbyOvh2ZqQ%2fa%2fx9lpswuxxAZ%2f80W9kW2kpTua4r0CoNg4%2bA7UPEKfT5G9oAn70eutA%3d%3d"
+$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=ae558010-dfcc-446e-88c6-941a9f209892&P1=1766816022&P2=601&P3=2&P4=I%2fhY3SYLl8DUPYrsBRQ2lHyoRHomTNJFeXvYsonuvsjSz14V%2f6i7r%2b1yzkuKWEna99qcrM%2bQAoEkPlB6zfWBdlSRsIxXSwWZ4X9wUzfSXTN2QdYAb3%2f5TQLuF%2bz923GtxLCWqHIqqZxUbuTFDAs1a3XNOUdFy5VxrVmDXJFTTON34%2fqP%2bcDvG38lWAf2sic1ZtHFOBn%2f7KDAjqS3t8GKgstzbDMf5JjLHzMiBdKDodWMWwcDD7Kw9hJkgZfjte2gJF7pSE0is%2bll2ayJVh3a9NasfWbu011cHoMts9NJfIe315jk%2fjkIZ7%2f%2b36vt0wUH%2fX69CDg3YkMT4RojXGqz9g%3d%3d"
+$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=c39adc4e-a370-4e5d-96b4-be465e0350dd&P1=1766815994&P2=601&P3=2&P4=BbZ9ZvREJEkHjbrBMw6i%2fk1N7fVcZe1OXhDMwH2%2bbm5mE%2bpTeWZvjXST0iqem9u0xyRLHwR8Z91AQJKz89BB5B0zG30HWr5G8K02LDxr9xRY14ncCU8R7lZZ%2bPKNuCJLjrBBmAEOPvtAWmIa0iZZD%2bGx8euIlMBapiyuvjh9oEBji9pErTAaRmKzURfWczeXz4sEaBSKZeHOTCRikQRslBx%2bT5HOtldc5p8FEtb%2fESE6DVDSErt2ypM2xqRYCd5LN8iPthBvmDt0UcttSVTZk5%2babPyWxZm11%2bDLyM%2bvShx8wEbvKpIaLmvMvNFjYg4zvUXdIjeLrNGDjthm40Zv2A%3d%3d"
 
 
 # Minimum free space for temp selection (40 GB default)
@@ -852,5 +852,6 @@ try { $null = Dismount-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContin
 Write-Host "`nWindows 11 upgrade process finished..."
 Write-Host "`nRebooting System..."
 Restart-Computer -Force
+
 
 
