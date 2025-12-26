@@ -53,21 +53,26 @@ if ($enGB_Valid -and $enUS_Valid) {
     exit 0
 }
 
-elseif ($enGB_Valid -or $enUS_Valid) {
+$updated = $false
+$content = Get-Content $UpgradeScript -Raw
 
-    Write-Warning "Only one valid ISO link detected. Update skipped."
+if ($enGB_Valid) {
+    $content = $content -replace '\$isoUrl_EN_GB\s*=\s*".*"', "`$isoUrl_EN_GB  = `"$enGB`"`r`n"
+    Write-Host "Updating ISO link for: EN-GB"
+    $updated = $true
+}
 
-    if ($enGB_Valid) {
-        Write-Host "Valid link found for: EN-GB" -ForegroundColor Cyan
-    }
-    else {
-        Write-Host "Valid link found for: EN-US" -ForegroundColor Cyan
-    }
+if ($enUS_Valid) {
+    $content = $content -replace '\$isoUrl_EN_US\s*=\s*".*"', "`$isoUrl_EN_US  = `"$enUS`""
+    Write-Host "Updating ISO link for: EN-US"
+    $updated = $true
+}
 
+if ($updated) {
+    Set-Content -Path $UpgradeScript -Value $content -Encoding UTF8
+    Write-Host "Link updated successfully."
     exit 0
 }
 
-else {
-    Write-Warning "No valid HTTPS ISO links detected. Update skipped."
-    exit 0
-}
+Write-Warning "No valid HTTPS ISO links detected. Update skipped."
+exit 0
