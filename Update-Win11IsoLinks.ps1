@@ -46,7 +46,7 @@ if ($enGB_Valid -and $enUS_Valid) {
 
     $content = Get-Content $UpgradeScript -Raw
     $content = $content -replace '\$isoUrl_EN_US\s*=\s*".*"', "`$isoUrl_EN_US  = `"$enUS`""
-    $content = $content -replace '\$isoUrl_EN_GB\s*=\s*".*"', "`$isoUrl_EN_GB  = `"$enGB`"`r`n"
+    $content = $content -replace '\$isoUrl_EN_GB\s*=\s*".*"', "`$isoUrl_EN_GB  = `"$enGB`""
     Set-Content -Path $UpgradeScript -Value $content -Encoding UTF8
 
     Write-Host "Link updated successfully." -ForegroundColor Green
