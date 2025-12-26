@@ -1,184 +1,49 @@
-name: Refresh Win11 ISO links (daily IST, expiry-safe, partial updates)
+name: Update Windows 11 ISO Links
 
 on:
   schedule:
     # 12:00 AM IST = 18:30 UTC
     - cron: '30 18 * * *'
-  workflow_dispatch: {}
+  workflow_dispatch:     # manual run option
 
 permissions:
   contents: write
 
 jobs:
-  refresh:
+  update-links:
     runs-on: windows-latest
 
     steps:
-    # -------------------------------------------------
-    # Checkout
-    # -------------------------------------------------
-    - name: Checkout
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    # -------------------------------------------------
-    # Check existing ISO URL expiry (P1 based)
-    # -------------------------------------------------
-    - name: Check existing ISO URL expiry
-      id: expiry
-      shell: pwsh
-      run: |
-        $file = "Windows11Upgrade.ps1"
-        $bufferSeconds = 7200   # 2 hours safety buffer
-        $now = [int][DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+      - name: Run ISO link update script
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -ExecutionPolicy Bypass -File .\Update-Win11IsoLinks.ps1
 
-        if (-not (Test-Path $file)) {
-          "force_refresh=true" >> $env:GITHUB_OUTPUT
-          exit 0
-        }
-
-        $content = Get-Content $file -Raw
-
-        function Get-P1($text, $var) {
-          if ($text -match "$var\s*=\s*`".*?P1=(\d+)") {
-            return [int]$matches[1]
-          }
-          return 0
-        }
-
-        $p1GB = Get-P1 $content '\$isoUrl_EN_GB'
-        $p1US = Get-P1 $content '\$isoUrl_EN_US'
-
-        if ($p1GB -eq 0 -and $p1US -eq 0) {
-          "force_refresh=true" >> $env:GITHUB_OUTPUT
-          exit 0
-        }
-
-        if (
-          ($p1GB -ne 0 -and ($p1GB - $now) -le $bufferSeconds) -or
-          ($p1US -ne 0 -and ($p1US - $now) -le $bufferSeconds)
-        ) {
-          "force_refresh=true" >> $env:GITHUB_OUTPUT
-        } else {
-          "force_refresh=false" >> $env:GITHUB_OUTPUT
-        }
-
-    # -------------------------------------------------
-    # Download generator
-    # -------------------------------------------------
-    - name: Download generator
-      if: steps.expiry.outputs.force_refresh == 'true' || github.event_name != 'schedule'
-      shell: pwsh
-      run: |
-        curl -fsSL -o gen.ps1 https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/Win11OSLinkGenerate.ps1
-
-    # -------------------------------------------------
-    # Run generator (ignore empty values, allow partial)
-    # -------------------------------------------------
-    - name: Run generator
-      if: steps.expiry.outputs.force_refresh == 'true' || github.event_name != 'schedule'
-      id: gen
-      shell: pwsh
-      run: |
-        $out = pwsh -NoProfile -ExecutionPolicy Bypass -File ./gen.ps1 2>&1
-        $out | ForEach-Object { Write-Host $_ }
-
-        function Extract-Url($lines, $var) {
-          $line = $lines | Where-Object { $_ -match "^\$$var\s*=" } | Select-Object -Last 1
-          if (-not $line) { return $null }
-
-          $url = ($line -replace '.*?"','') -replace '"$',''
-          if ([string]::IsNullOrWhiteSpace($url)) { return $null }
-          return $url
-        }
-
-        $enGB = Extract-Url $out 'isoUrl_EN_GB'
-        $enUS = Extract-Url $out 'isoUrl_EN_US'
-
-        if (-not $enGB -and -not $enUS) {
-          Write-Host "No usable ISO URLs detected. Keeping existing links."
-          "found=false" >> $env:GITHUB_OUTPUT
-          exit 0
-        }
-
-        "found=true" >> $env:GITHUB_OUTPUT
-
-        if ($enGB) {
-          "engb<<EOF" >> $env:GITHUB_OUTPUT
-          $enGB >> $env:GITHUB_OUTPUT
-          "EOF" >> $env:GITHUB_OUTPUT
-        }
-
-        if ($enUS) {
-          "enus<<EOF" >> $env:GITHUB_OUTPUT
-          $enUS >> $env:GITHUB_OUTPUT
-          "EOF" >> $env:GITHUB_OUTPUT
-        }
-
-    # -------------------------------------------------
-    # Update Windows11Upgrade.ps1 (partial-safe)
-    # -------------------------------------------------
-    - name: Update Windows11Upgrade.ps1
-      if: steps.gen.outputs.found == 'true'
-      id: replace
-      shell: pwsh
-      env:
-        ENGB: ${{ steps.gen.outputs.engb }}
-        ENUS: ${{ steps.gen.outputs.enus }}
-      run: |
-        $file = "Windows11Upgrade.ps1"
-        if (-not (Test-Path $file)) {
-          "updated=false" >> $env:GITHUB_OUTPUT
-          exit 0
-        }
-
-        $content = Get-Content $file -Raw
-        $updated = $false
-
-        $patterns = @{
-          ENGB = '(?ms)(\$isoUrl_EN_GB\s*=\s*)(["'']).*?\2'
-          ENUS = '(?ms)(\$isoUrl_EN_US\s*=\s*)(["'']).*?\2'
-        }
-
-        foreach ($key in @("ENGB","ENUS")) {
-          $val = $env:$key
-          if (-not $val) {
-            Write-Host "$key not provided – skipping"
-            continue
+      - name: Check for changes
+        id: gitcheck
+        shell: pwsh
+        run: |
+          if ((git status --porcelain).Length -gt 0) {
+            "changed=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "changed=false" >> $env:GITHUB_OUTPUT
           }
 
-          $new = [regex]::Replace(
-            $content,
-            $patterns[$key],
-            '${1}"' + $val + '"'
-          )
+      - name: Commit and push changes
+        if: steps.gitcheck.outputs.changed == 'true'
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "actions@github.com"
 
-          if ($new -ne $content) {
-            $content = $new
-            $updated = $true
-          }
-        }
+          git add Windows11Upgrade.ps1
 
-        if ($updated) {
-          Set-Content $file $content -Encoding utf8
-          "updated=true" >> $env:GITHUB_OUTPUT
-        } else {
-          "updated=false" >> $env:GITHUB_OUTPUT
-        }
+          $ts = (Get-Date -Format "yyyy-MM-dd HH:mm 'IST'")
+          git commit -m "chore: refresh Windows 11 ISO links ($ts)"
 
-    # -------------------------------------------------
-    # Commit & push (only when changed)
-    # -------------------------------------------------
-    - name: Commit changes
-      if: steps.replace.outputs.updated == 'true'
-      shell: pwsh
-      run: |
-        git config user.name  "github-actions[bot]"
-        git config user.email "actions@github.com"
-
-        git add Windows11Upgrade.ps1
-        git diff --cached --quiet && exit 0
-
-        git commit -m "Refresh Win11 ISO links $(Get-Date -Format yyyy-MM-dd_HH:mm)"
-        git push
+          git push
