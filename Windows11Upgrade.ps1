@@ -1,4 +1,4 @@
-﻿<## Ensure PowerShell Runs as Administrator
+<## Ensure PowerShell Runs as Administrator
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
     exit
@@ -10,8 +10,8 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 $ErrorActionPreference = "Stop"
 
 # ---------- Config (fill these) ----------
-$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=2fccdb55-9945-49ed-b308-76e25a3efb8c&P1=1766644081&P2=601&P3=2&P4=JWcdw4brY0pnt2aBquuZskqv5guxqvX7sj0yy7REJIYMHqefWIUW74q0NVf9DBzFBIDFn2IJiOgtyx4y32s1UF7HPm5BvULbYMM49DiDvW6qACOxCoP65nYATSTDhgP3I9by%2blNhndUhSs2xihDpHQF2DCq%2bSeFT9TdYpEJJBNJBc6TwBb58E2kfnWZWw4MI7MCmiSkv5WMv0bvgSReZW81xGUeSVqH5r6Hns0%2bzgfgiHHKGEgBIbo05ecYjBHtB2esbOz%2fm3tYPB2ogjO3vFPLVEuF5ku%2fn1ilIadUwE6jm5QA7ccrbmBo%2bLXcFf9u7OMkuT1Ljr8cdjrokED%2bqoQ%3d%3d"
-$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=39427999-6d8e-4c1f-8a34-f235694d0e93&P1=1766644067&P2=601&P3=2&P4=1hMqRtZ0iPOe83g1hcKwq70gh2cp9kiGmvH7Phux2u0Q95dq9hwm2AOR4fdq1SFYGJv45DnsFLn6XJSwS4I6u5BpnyCKzCEpeoBlFWTRvN3d8NL%2bvOZUdx9EQJa4c5HJq8H1qOfzAQwCWRccsvIRvbGJq3f4SvNZcg06CzF42pv30532IuM42ng1UqcDtjC%2fpjbqVZyLPn8E22G9Bm7lzLcHFnjpYQpSktfL4%2bC7sa959CVBf13tR2bz2NI8C4s7qafzCvtbcBSMLSGa7at6TB1SfHMmpR6L7FFZaY3xhiDRE1Ffx82XccaJoDcMnk7U%2bgndyobaGFeLljV5Bf7pcg%3d%3d"
+$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=e91a4197-2cd3-4055-8268-24d31b6774c5&P1=1766810176&P2=601&P3=2&P4=W%2bXKiKcYEi8jc28HkO%2bpLokqODk72xG3%2fvCr7VsOx561JqGvpDZA73XfVK1sLNP7EwRCRicutIWthf8wVlVtc4ARiFTOyTF3bbWM%2fE%2bHXoIx0SiTaqd8oteZQ%2bYIYI93TFb44t0DWDM66tihOpNDDngqUhSpp5qFWBHEsAJ%2fy%2fUCig0EoUQPqYyzyCs7k1xwtZ7lCsEnTML1WgfevurxKU9YLvitnGGJFd4MVu2F536zW8WAf6c6nm7k7sQrkVl2zealivntPPSjmYBFyoM3kSsI9SdZxSJjtfsoY3h1aDdEjeV5PAVOstjo90BVC2THsiQMoM0%2fWmBnF0SmLbOf5g%3d%3d"
+$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=824b303c-9e9d-41ff-8e98-69d011759f49&P1=1766810165&P2=601&P3=2&P4=PcEQmYw4v%2fwSYvEqc9r2yiYuEIbn1kExszWXtoz9gEfJGPpwZtH6v%2fNcdG5e71YQqVDky5yIhGTCRUopaR238iITczSwJeUKC5f0D9KELWaNT9sg9MmJ3qDQO%2frZffFa0a0vzI7w%2fXkJt0I8rYW4DI1T1Occ7b7c1%2bU19CeMYyKLJZ5nJqbXlHqipIWmRp5TM798vRkYYVQEifCuetlpFGe5TvTnqoZUM4%2b9tYIXnZdrTekLfE1zrkszOSVZWleMILx555UVAeMckgp9ni5a%2fDBKO%2f%2bHd2FK7m610B6d3vaX6Lg6LDKcZdIqZ%2fohdpwtpcjDb9zc0ZRWno4%2fIu3pxw%3d%3d"
 
 # Minimum free space for temp selection (40 GB default)
 $MinimumTempBytes = (40 * 1024 * 1024 * 1024)
@@ -851,3 +851,4 @@ try { $null = Dismount-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContin
 Write-Host "`nWindows 11 upgrade process finished..."
 Write-Host "`nRebooting System..."
 Restart-Computer -Force
+
