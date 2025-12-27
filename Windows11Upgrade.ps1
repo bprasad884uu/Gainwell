@@ -10,7 +10,7 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 $ErrorActionPreference = "Stop"
 
 # ---------- Config (fill these) ----------
-$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=5bb9a93d-07e1-40c7-bba3-12b6e21e7e9f&P1=1766822625&P2=601&P3=2&P4=ZBlpP97MlW9Qk0sSRpv5gY42inH72fZvGsL0pf%2b5YdIvF0Zp21sGU8I77aAro6txCsbT%2fa2UlkDJQ%2fyGXzBWgMAP62ieQwh1aN9M881wF7D7jRhEfZ%2fisP9gdMBqGZpfEnDCCmBuWxozgvNSyVZSY5ywDDta8AS7uUaGEwq2Oo5AkodkifWylFaNX3rk8SIkeotE1WLp1%2b5nY7LDLQsC2%2bAbfT3xFVhWqadQ15p%2b4KqxbYy8btHVon3pAwi%2fuNU4l25tMfFqXonhhtpLJ1QZ1EsPaXFbeIiOlMUmW9bByFJzXtb3fv2BQX35yrPGLfyWq8suxtVfaJ%2f72LBKwVnxfw%3d%3d"
+$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=05003338-ebe9-4793-965f-447db5466edd&P1=1766947842&P2=601&P3=2&P4=aorxBWp57Xpe2BE%2ba6BqW%2bpKCTI0fvf714eCiaU3W8Fdq%2btCVy0S6%2fcsu1sVMuvnhVq67neY1hq8%2baRphPgAWKKqBK%2fu%2bT%2buDQwZoR8LvVsm0s6k3Nbk0H6DtFmA9M9cwxP4w%2fGOAEWImLcXrIdQNLuuOBg887qaO7NhqBfmLD3uszkKHRqOgpRmQGkWjat07H3BTgbTBph7Uu0oPmKZuj601ZhfqF08r%2bfPtEjykAPvRkHbXLD6i%2bNXBcdLExpBDc7exKoG6F7nSb4Qc%2fwR%2bCPAtPhmMUGXRa4Ew9tZdmJMU%2bI2MjYiV%2b9jmLS%2b%2f2%2fDldHmcjOL3VV8O%2bzN121Gjg%3d%3d"
 $isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=03c25a15-0f53-4af0-8d40-6d64c5e14433&P1=1766861491&P2=601&P3=2&P4=F0wfx0IAgbYO3yIR9lA7EdaeKeY3k8klBACC9TGNPWKKDCNm0HAALaIDuBgOQq3Sr2C81sHcs%2b8M0cS5LtoF5L868J01oKvonyRIe7CCRkEsl8Mx6xdrYd4RJC5ml%2fI5B58hLeEt1K%2fFa65ABDmfbb8zNwuRtmsMiHD5vsFiFdbk2YzZO8UVTNgNMnNrfpZY0%2bzKUju4PC%2fbjw56rxe9BNNWCe06iT2g%2b%2buj8%2fT1JLePIKBoAjpd3Qq9A8XA96iputCaRbZ1ONJciKn28rGyMD930OnnAlMldlJ9n4vY%2bNeF7saEwctGFQkFylOrf%2fNE2XCXu6vhasN7A9kKkWu4Wg%3d%3d"
 
 
@@ -852,6 +852,7 @@ try { $null = Dismount-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContin
 Write-Host "`nWindows 11 upgrade process finished..."
 Write-Host "`nRebooting System..."
 Restart-Computer -Force
+
 
 
 
