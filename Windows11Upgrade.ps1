@@ -11,7 +11,8 @@ $ErrorActionPreference = "Stop"
 
 # ---------- Config (fill these) ----------
 $isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=05003338-ebe9-4793-965f-447db5466edd&P1=1766947842&P2=601&P3=2&P4=aorxBWp57Xpe2BE%2ba6BqW%2bpKCTI0fvf714eCiaU3W8Fdq%2btCVy0S6%2fcsu1sVMuvnhVq67neY1hq8%2baRphPgAWKKqBK%2fu%2bT%2buDQwZoR8LvVsm0s6k3Nbk0H6DtFmA9M9cwxP4w%2fGOAEWImLcXrIdQNLuuOBg887qaO7NhqBfmLD3uszkKHRqOgpRmQGkWjat07H3BTgbTBph7Uu0oPmKZuj601ZhfqF08r%2bfPtEjykAPvRkHbXLD6i%2bNXBcdLExpBDc7exKoG6F7nSb4Qc%2fwR%2bCPAtPhmMUGXRa4Ew9tZdmJMU%2bI2MjYiV%2b9jmLS%2b%2f2%2fDldHmcjOL3VV8O%2bzN121Gjg%3d%3d"
-$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=03c25a15-0f53-4af0-8d40-6d64c5e14433&P1=1766861491&P2=601&P3=2&P4=F0wfx0IAgbYO3yIR9lA7EdaeKeY3k8klBACC9TGNPWKKDCNm0HAALaIDuBgOQq3Sr2C81sHcs%2b8M0cS5LtoF5L868J01oKvonyRIe7CCRkEsl8Mx6xdrYd4RJC5ml%2fI5B58hLeEt1K%2fFa65ABDmfbb8zNwuRtmsMiHD5vsFiFdbk2YzZO8UVTNgNMnNrfpZY0%2bzKUju4PC%2fbjw56rxe9BNNWCe06iT2g%2b%2buj8%2fT1JLePIKBoAjpd3Qq9A8XA96iputCaRbZ1ONJciKn28rGyMD930OnnAlMldlJ9n4vY%2bNeF7saEwctGFQkFylOrf%2fNE2XCXu6vhasN7A9kKkWu4Wg%3d%3d"
+$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=4ed4da22-6608-4d28-9e4d-c690f381a9f1&P1=1767034287&P2=601&P3=2&P4=CCbY8uDkRQWFjIESJ%2fkrjXTyiLtgqtTSv%2bU7Wuk9FOpZQqjI7iOUxZzaeoBH1UkYXakWX%2bPkrG%2f%2fqEeS7BLDI86AHMPvuwHU7I%2bupT5m6FMMvPQCiCoCjgXebxilZCjnCVCZO68ifd92KCsxdJEP1ionhoR%2bZ1cg6JcxbKBX10zCXUg9eRUWGt731QW08cBNidh4hLB%2fjZ%2buXN6bQAYSxf8F76GvcpGvDkicF98pPfVyobQ5BWlTHOOzjTyzSCHOuml04%2fbqy4Wo3577HsE5eZn9s9aqg9IeoozkQQxmLLOTCo81ZVN%2bCjq9wRygN0RIFpc18dWwzGUk7I3gr7lZjA%3d%3d"
+
 
 
 # Minimum free space for temp selection (40 GB default)
@@ -852,6 +853,7 @@ try { $null = Dismount-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContin
 Write-Host "`nWindows 11 upgrade process finished..."
 Write-Host "`nRebooting System..."
 Restart-Computer -Force
+
 
 
 
