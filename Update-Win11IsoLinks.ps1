@@ -1,4 +1,10 @@
+param(
+    [switch]$DebugMode
+)
+
+# -------------------------------------------------
 # Paths
+# -------------------------------------------------
 $LinkGenScript = ".\Win11OSLinkGenerate.ps1"
 $UpgradeScript = ".\Windows11Upgrade.ps1"
 
@@ -14,32 +20,45 @@ if (!(Test-Path $UpgradeScript)) {
 
 Write-Host "[INFO] Running link generator..." -ForegroundColor Cyan
 
-# Run link generator and capture output
+# -------------------------------------------------
+# Run generator and capture output
+# -------------------------------------------------
 $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $LinkGenScript 2>&1
+
+if ($DebugMode) {
+    Write-Host "`n[DEBUG] Raw generator output:" -ForegroundColor Yellow
+    $output | ForEach-Object { Write-Host $_ }
+}
 
 # -------------------------------------------------
 # FIX: Join output to handle wrapped URLs
 # -------------------------------------------------
-# Join output to handle wrapped URLs
 $joinedOutput = ($output -join "`n")
 
-# Extract EN-GB
+# -------------------------------------------------
+# Extract links (normalize whitespace)
+# -------------------------------------------------
 if ($joinedOutput -match '\$isoUrl_EN_GB\s*=\s*"([^"]+)"') {
     $enGB = ($matches[1] -replace '\s+', '')
 } else {
     $enGB = ""
 }
 
-# Extract EN-US
 if ($joinedOutput -match '\$isoUrl_EN_US\s*=\s*"([^"]+)"') {
     $enUS = ($matches[1] -replace '\s+', '')
 } else {
     $enUS = ""
 }
 
-# -------------------------
+if ($DebugMode) {
+    Write-Host "`n[DEBUG] Extracted values:" -ForegroundColor Yellow
+    Write-Host "EN-GB Raw: $enGB"
+    Write-Host "EN-US Raw: $enUS"
+}
+
+# -------------------------------------------------
 # Validation
-# -------------------------
+# -------------------------------------------------
 function Test-ValidHttpsUrl {
     param([string]$Url)
 
@@ -51,6 +70,15 @@ function Test-ValidHttpsUrl {
 $enGB_Valid = Test-ValidHttpsUrl $enGB
 $enUS_Valid = Test-ValidHttpsUrl $enUS
 
+if ($DebugMode) {
+    Write-Host "`n[DEBUG] Validation status:" -ForegroundColor Yellow
+    Write-Host "EN-GB Valid: $enGB_Valid"
+    Write-Host "EN-US Valid: $enUS_Valid"
+}
+
+# -------------------------------------------------
+# Update Windows11Upgrade.ps1 (partial-safe)
+# -------------------------------------------------
 $updated = $false
 $content = Get-Content $UpgradeScript -Raw
 
@@ -67,7 +95,7 @@ if ($enUS_Valid) {
 }
 
 if ($updated) {
-    # IMPORTANT: remove extra trailing newlines
+    # IMPORTANT: prevent extra blank line / formatting drift
     $content = $content.TrimEnd("`r", "`n")
 
     Set-Content -Path $UpgradeScript -Value $content -Encoding UTF8
