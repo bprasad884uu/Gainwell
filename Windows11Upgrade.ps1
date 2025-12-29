@@ -13,8 +13,6 @@ $ErrorActionPreference = "Stop"
 $isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=05003338-ebe9-4793-965f-447db5466edd&P1=1766947842&P2=601&P3=2&P4=aorxBWp57Xpe2BE%2ba6BqW%2bpKCTI0fvf714eCiaU3W8Fdq%2btCVy0S6%2fcsu1sVMuvnhVq67neY1hq8%2baRphPgAWKKqBK%2fu%2bT%2buDQwZoR8LvVsm0s6k3Nbk0H6DtFmA9M9cwxP4w%2fGOAEWImLcXrIdQNLuuOBg887qaO7NhqBfmLD3uszkKHRqOgpRmQGkWjat07H3BTgbTBph7Uu0oPmKZuj601ZhfqF08r%2bfPtEjykAPvRkHbXLD6i%2bNXBcdLExpBDc7exKoG6F7nSb4Qc%2fwR%2bCPAtPhmMUGXRa4Ew9tZdmJMU%2bI2MjYiV%2b9jmLS%2b%2f2%2fDldHmcjOL3VV8O%2bzN121Gjg%3d%3d"
 $isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=52fd4b04-5bcc-4f46-b1d0-9a7eff562ba5&P1=1767069340&P2=601&P3=2&P4=tHc1Cwv3jnrygn3CDQRbW8PiKZd5nb9lpbhFo7nkz9L%2b%2f4bGk0p0q6nqtioSVf84gqwqgy%2fcLcMCXeBPpMJ7wcdy2JIxMVfSjGNzm%2fA%2fmXbJVZOEoEeUSkcZk7z59Y32OTImN4Sg4uvCXr7Q0FKYtdbfWEUz%2fyzyF7Yiy7eBYLK1PjxH6O%2f4btT42dhM4T4CW6rgVNV4b9jwRg2QlAiU5kW4nT0AnMO56qmX9NmyzEIW33UKNPqZ4HWB3pG7u9AQ9SciB7uiMLGJjr%2bUjYpzX3gExVqZXKHopcYDquJRBWGdLAp7L0NY3OxdZOTt75d%2bsxbikVAX2djSmR0wII%2fNMg%3d%3d"
 
-
-
 # Minimum free space for temp selection (40 GB default)
 $MinimumTempBytes = (40 * 1024 * 1024 * 1024)
 
@@ -853,11 +851,3 @@ try { $null = Dismount-DiskImage -ImagePath $isoPath -ErrorAction SilentlyContin
 Write-Host "`nWindows 11 upgrade process finished..."
 Write-Host "`nRebooting System..."
 Restart-Computer -Force
-
-
-
-
-
-
-
-
