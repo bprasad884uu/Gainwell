@@ -69,6 +69,9 @@ if ($enUS_Valid) {
 }
 
 if ($updated) {
+    #IMPORTANT: remove extra trailing newlines
+    $content = $content.TrimEnd("`r", "`n")
+
     Set-Content -Path $UpgradeScript -Value $content -Encoding UTF8
     Write-Host "Link updated successfully."
     exit 0
