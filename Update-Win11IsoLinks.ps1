@@ -17,14 +17,25 @@ Write-Host "[INFO] Running link generator..." -ForegroundColor Cyan
 # Run link generator and capture output
 $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $LinkGenScript 2>&1
 
-# Extract links
+# -------------------------------------------------
+# FIX: Join output to handle wrapped URLs
+# -------------------------------------------------
+# Join output to handle wrapped URLs
+$joinedOutput = ($output -join "`n")
+
 # Extract EN-GB
-$matchENGB = $output | Select-String '\$isoUrl_EN_GB\s*=\s*"([^"]+)"'
-$enGB = if ($matchENGB) { $matchENGB.Matches[0].Groups[1].Value } else { "" }
+if ($joinedOutput -match '\$isoUrl_EN_GB\s*=\s*"([^"]+)"') {
+    $enGB = ($matches[1] -replace '\s+', '')
+} else {
+    $enGB = ""
+}
 
 # Extract EN-US
-$matchENUS = $output | Select-String '\$isoUrl_EN_US\s*=\s*"([^"]+)"'
-$enUS = if ($matchENUS) { $matchENUS.Matches[0].Groups[1].Value } else { "" }
+if ($joinedOutput -match '\$isoUrl_EN_US\s*=\s*"([^"]+)"') {
+    $enUS = ($matches[1] -replace '\s+', '')
+} else {
+    $enUS = ""
+}
 
 # -------------------------
 # Validation
@@ -44,19 +55,19 @@ $updated = $false
 $content = Get-Content $UpgradeScript -Raw
 
 if ($enGB_Valid) {
-    $content = $content -replace '\$isoUrl_EN_GB\s*=\s*".*"', "`$isoUrl_EN_GB  = `"$enGB`""
+    $content = $content -replace '\$isoUrl_EN_GB\s*=\s*"[^"]*"', "`$isoUrl_EN_GB  = `"$enGB`""
     Write-Host "Updating ISO link for: EN-GB"
     $updated = $true
 }
 
 if ($enUS_Valid) {
-    $content = $content -replace '\$isoUrl_EN_US\s*=\s*".*"', "`$isoUrl_EN_US  = `"$enUS`""
+    $content = $content -replace '\$isoUrl_EN_US\s*=\s*"[^"]*"', "`$isoUrl_EN_US  = `"$enUS`""
     Write-Host "Updating ISO link for: EN-US"
     $updated = $true
 }
 
 if ($updated) {
-    #IMPORTANT: remove extra trailing newlines
+    # IMPORTANT: remove extra trailing newlines
     $content = $content.TrimEnd("`r", "`n")
 
     Set-Content -Path $UpgradeScript -Value $content -Encoding UTF8
