@@ -57,7 +57,7 @@ $updated = $false
 $content = Get-Content $UpgradeScript -Raw
 
 if ($enGB_Valid) {
-    $content = $content -replace '\$isoUrl_EN_GB\s*=\s*".*"', "`$isoUrl_EN_GB  = `"$enGB`"`r`n"
+    $content = $content -replace '\$isoUrl_EN_GB\s*=\s*".*"', "`$isoUrl_EN_GB  = `"$enGB`""
     Write-Host "Updating ISO link for: EN-GB"
     $updated = $true
 }
