@@ -40,19 +40,6 @@ function Test-ValidHttpsUrl {
 $enGB_Valid = Test-ValidHttpsUrl $enGB
 $enUS_Valid = Test-ValidHttpsUrl $enUS
 
-if ($enGB_Valid -and $enUS_Valid) {
-
-    Write-Host "Both ISO links are valid HTTPS URLs." -ForegroundColor Green
-
-    $content = Get-Content $UpgradeScript -Raw
-    $content = $content -replace '\$isoUrl_EN_US\s*=\s*".*"', "`$isoUrl_EN_US  = `"$enUS`""
-    $content = $content -replace '\$isoUrl_EN_GB\s*=\s*".*"', "`$isoUrl_EN_GB  = `"$enGB`""
-    Set-Content -Path $UpgradeScript -Value $content -Encoding UTF8
-
-    Write-Host "Link updated successfully." -ForegroundColor Green
-    exit 0
-}
-
 $updated = $false
 $content = Get-Content $UpgradeScript -Raw
 
