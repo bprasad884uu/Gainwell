@@ -1,4 +1,4 @@
-﻿<## Ensure PowerShell Runs as Administrator
+<## Ensure PowerShell Runs as Administrator
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
     exit
@@ -10,8 +10,8 @@ if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 $ErrorActionPreference = "Stop"
 
 # ---------- Config (fill these) ----------
-$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=7662666d-819d-4b6a-9a5d-ed1dec9053bb&P1=1766462059&P2=601&P3=2&P4=efBGZdQDVQ5RfGkwwt0tVSwsxDIhohygs8xIUxiDEM12zkk0zS%2brYSyeLSQ%2fmXOabjoj7D0NLa8HGOnoaWRYKciVjg08W6%2b9dmlW84JMDuF1NbVZLCCmGtohE%2bSyBcfX6V02X3pUhqFUV2Vbak6eNRvxZBGpwAD1J%2fSVSnzCfaOoFKq0phAJhL5xlxmbfda%2fG48p9syjJekCUATzSWZIhafGh%2faPutvZv7hvddiQydhqnnhWf57LZLNx1oKjC34V8UUKW41eP83F8kiNlXlcKSHzWYvVpXp%2b%2fJiYCTc2DG%2fn8TyvY8B61HoTruyqzhfHdvdrzWyifz5g6FSnn6PESw%3d%3d"
-$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=181da0fe-072e-4e5d-842e-228da8158d06&P1=1766462048&P2=601&P3=2&P4=eNIO%2bb8ITuGOTGSDyFu0zJNJ44R7BcyoXS%2b5RhbWlP59fnZpw0Ny5m1Lo92ch1ZdyQw1homv4YTGHSszxHZ5qwD3DV957uIa3V9iVGT9vJ8YQEHLRUKjJr3K6sbQzx8R7XuY1vDB2Dgry%2ftLLAGWFw%2bEnvBHZ5A3I9xaM2IGVx%2b2k0nSRzPMFf%2bg5hcQY%2fDPElTbqHDiU1%2fA3eEH6exhwAjEaKLOF6FDk%2b4blSw9q6ybU0zr78TiZY5gWtyg9k9V98f5qb5lUG0W5olmAofO%2bdRpv%2fdZEtDM7f3ZK8%2fqjzLp4evVBLHQQuklauj1hIf%2bppO%2fCSfvjE8cR9qHSi1lxw%3d%3d"
+$isoUrl_EN_GB  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_EnglishInternational_x64.iso?t=37a880ea-d832-4ce3-945f-765958227e06&P1=1767207263&P2=601&P3=2&P4=hM9DxOpR1tzE9nwslCxAoHuBBJpRMqVXlwDXNlG9aEVif3xRL3l6%2fH43YykmYkD%2fc9%2bN18%2bFt5FBvoAf6EVV6Y6JTrnZ0oXbKi3Q%2fqHhmOArBqSDl3z8YWi5ajmOM8Cp8XwQCaMP3pt7a699TiY2dqtez4z7CSHKmqJT5sjUBjcVuxYY4osEFFEWBClqSagcqspI6GN44KxB4PavERyffO8uO4SCQbWcP5aKrN89Zu3A3aeNrNk4o5PSnQcA2Bz1Ska7OZhEYOtKA1nhQxhYP28ivO9BOHRhYwUKOxqvtRGhPfk0XJIUcZcX0V7lvcI0qZbT0XIUJflvDY6pB0Rf6w%3d%3d"
+$isoUrl_EN_US  = "https://software.download.prss.microsoft.com/dbazure/Win11_25H2_English_x64.iso?t=90b039a1-9d86-4f15-8c0e-fa5c457a1213&P1=1767207272&P2=601&P3=2&P4=dQau2zrsLtn665aQdP0MMn0pHVUNj8Yg5Wft6MfIOlANRPHhyBhmtIepYFKLLsUsx9cNgiZrjAKdUwOFEGZdU8bG%2bbiG2%2fKjNLTyuHyVFRZxy26%2bZloZGot5MVevXZhJEn5IdnE0lhWMmUtniPMkyuOK%2fDc8rMOfdmEI6K%2ftEbg5iIOUOAHzP7jcTFszLNfoXGaWFlqS2fbMPNv%2fb2%2fyIq04Nkh3Q38ro37SRDKU%2bNyMFCeoPzRirYT3I8Llg6X95rk0ewzRa%2fIFgp49HowRN%2bJxuVD0HlfPA90wVs9Wm6ZE%2fD2mrfxwVLruTUdmPhBHgoQE%2fs6ealTtQ2xn85cjdg%3d%3d"
 
 # Minimum free space for temp selection (40 GB default)
 $MinimumTempBytes = (40 * 1024 * 1024 * 1024)
