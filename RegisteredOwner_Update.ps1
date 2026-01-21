@@ -73,29 +73,46 @@ function Try-GetFullNameFromLocal($Sam) {
     return $null
 }
 
+function Try-GetFullNameFromPrimaryOwner {
+    try {
+        $cs = Get-CimInstance Win32_ComputerSystem
+        if ($cs.PrimaryOwnerName -and
+            $cs.PrimaryOwnerName -notmatch '\\' -and
+            $cs.PrimaryOwnerName -ne $cs.Name) {
+
+            return $cs.PrimaryOwnerName
+        }
+    } catch {}
+    return $null
+}
+
 function Resolve-FullName {
     param(
         [string]$Domain,
         [string]$Sam
     )
 
-    # 1) Domain without AD module: .NET UserPrincipal
+    # 1) Domain without AD module
     $name = Try-GetFullNameFromUserPrincipal -Domain $Domain -Sam $Sam
     if ($name) { return $name }
 
-    # 2) If AD module present
+    # 2) AD module
     $name = Try-GetFullNameFromADModule -Sam $Sam
     if ($name) { return $name }
 
-    # 3) WMI Win32_UserAccount (works for many domains and locals)
+    # 3) WMI UserAccount
     $name = Try-GetFullNameFromWMI -Domain $Domain -Sam $Sam
     if ($name) { return $name }
 
-    # 4) Local SAM store
+    # 4) Local user
     $name = Try-GetFullNameFromLocal -Sam $Sam
     if ($name) { return $name }
 
-    # 5) Fallback to SAM if nothing else
+    # 5) PrimaryOwnerName (device owner)
+    $name = Try-GetFullNameFromPrimaryOwner
+    if ($name) { return $name }
+
+    # 6) Final fallback
     return $Sam
 }
 
@@ -120,7 +137,7 @@ $fullName = Resolve-FullName -Domain $Domain -Sam $Sam
 $regPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
 try {
     Set-ItemProperty -Path $regPath -Name "RegisteredOwner" -Value $fullName -Force
-    Write-Host "RegisteredOwner set to: $fullName  (from $Domain\$Sam)" -ForegroundColor Green
+    Write-Host "RegisteredOwner set to: $fullName (from $Domain\$Sam)" -ForegroundColor Green
 } catch {
     Write-Host "Failed to set RegisteredOwner: $($_.Exception.Message)" -ForegroundColor Red
 }
