@@ -14,18 +14,6 @@ if ($response.IsSuccessStatusCode) {
     exit 1
 }
 
-# Define common download options
-$commonArgs = @(
-    "-Win", "11",
-    "-Rel", "Latest",
-    "-Ed", "Pro",
-    "-Arch", "x64",
-    "-GetUrl"
-)
-
-# Define both language variants
-$languages = @("English International" , "English")
-
 # ---------------------------------
 # Header
 # ---------------------------------
@@ -34,28 +22,26 @@ $version = "25H2"
 Write-Host "Windows 11, $version Download Link:"
 Write-Host "--------------------------------------------------------------"
 
-# ---------------------------------
-# Loop with REQUIRED output
-# ---------------------------------
-foreach ($lang in $languages) {
+# -------------------------------
+# English US
+# -------------------------------
+$output = powershell.exe -NoProfile -Command `
+    "& '$fidoPath' -Win 11 -Rel Latest -Ed Pro -Arch x64 -GetUrl -Lang English" |
+    Where-Object { $_ -match '^https?://' }
 
-    Write-Host ""
-    Write-Host "Download Link for language: $lang"
+$url = $output | Select-Object -First 1
+if (-not $url) { $url = "" }
 
-    $argsWithLang = $commonArgs + ("-Lang", $lang)
+Write-Host "`$isoUrl_EN_US  = `"$url`""
 
-    $output = powershell.exe `
-        -NoProfile `
-        -ExecutionPolicy Bypass `
-        -File $fidoPath `
-        @argsWithLang
+# -------------------------------
+# English UK (International)
+# -------------------------------
+$output = powershell.exe -NoProfile -Command `
+    "& '$fidoPath' -Win 11 -Rel Latest -Ed Pro -Arch x64 -GetUrl -Lang 'English International'" |
+    Where-Object { $_ -match '^https?://' }
 
-    $url = $output | Where-Object { $_ -match '^https?://' } | Select-Object -First 1
+$url = $output | Select-Object -First 1
+if (-not $url) { $url = "" }
 
-    if ($lang -eq "English International") {
-        Write-Host "`$isoUrl_EN_GB  = `"$url`""
-    }
-    else {
-        Write-Host "`$isoUrl_EN_US  = `"$url`""
-    }
-}
+Write-Host "`$isoUrl_EN_GB  = `"$url`""
