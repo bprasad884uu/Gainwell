@@ -114,7 +114,12 @@ $WritePolicyExe = $true
 
 if (Test-Path $PolicyScriptPath) {
     $Sig = Get-AuthenticodeSignature $PolicyScriptPath
-    if ($Sig.Status -eq 'Valid') {
+
+    if (
+        $Sig.Status -eq 'Valid' -and
+        $Sig.SignerCertificate -and
+        $Sig.SignerCertificate.Subject -eq $CertSubject
+    ) {
         $WritePolicyExe = $false
     }
 }
@@ -122,9 +127,19 @@ if (Test-Path $PolicyScriptPath) {
 if ($WritePolicyExe) {
     [IO.File]::WriteAllBytes($PolicyScriptPath, $PolicyExeBytes)
 
+    Start-Sleep -Seconds 2
     $Sig = Get-AuthenticodeSignature $PolicyScriptPath
-    if ($Sig.Status -ne 'Valid') {
-        throw "WallpaperPolicy.exe signature validation failed after write"
+
+    if (-not $Sig.SignerCertificate) {
+        throw "WallpaperPolicy.exe is not signed"
+    }
+
+    if ($Sig.SignerCertificate.Subject -ne $CertSubject) {
+        throw "WallpaperPolicy.exe signed by unexpected certificate"
+    }
+
+    if ($Sig.Status -in @('HashMismatch','NotSigned')) {
+        throw "WallpaperPolicy.exe signature is invalid: $($Sig.Status)"
     }
 }
 
@@ -136,7 +151,12 @@ $WriteUpdateExe = $true
 
 if (Test-Path $UpdateExePath) {
     $Sig = Get-AuthenticodeSignature $UpdateExePath
-    if ($Sig.Status -eq 'Valid') {
+
+    if (
+        $Sig.Status -eq 'Valid' -and
+        $Sig.SignerCertificate -and
+        $Sig.SignerCertificate.Subject -eq $CertSubject
+    ) {
         $WriteUpdateExe = $false
     }
 }
@@ -144,9 +164,19 @@ if (Test-Path $UpdateExePath) {
 if ($WriteUpdateExe) {
     [IO.File]::WriteAllBytes($UpdateExePath, $UpdateExeBytes)
 
+    Start-Sleep -Seconds 2
     $Sig = Get-AuthenticodeSignature $UpdateExePath
-    if ($Sig.Status -ne 'Valid') {
-        throw "WallpaperUpdate.exe signature validation failed after write"
+
+    if (-not $Sig.SignerCertificate) {
+        throw "WallpaperUpdate.exe is not signed"
+    }
+
+    if ($Sig.SignerCertificate.Subject -ne $CertSubject) {
+        throw "WallpaperUpdate.exe signed by unexpected certificate"
+    }
+
+    if ($Sig.Status -in @('HashMismatch','NotSigned')) {
+        throw "WallpaperUpdate.exe signature is invalid: $($Sig.Status)"
     }
 }
 
