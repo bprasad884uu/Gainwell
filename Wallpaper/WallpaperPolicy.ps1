@@ -76,8 +76,6 @@ if ($NeedsRenewal) {
     Import-Certificate -FilePath $CerPath `
         -CertStoreLocation "Cert:\LocalMachine\TrustedPublisher" | Out-Null
     }
-
-    return
 }
 
 Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned -Force
