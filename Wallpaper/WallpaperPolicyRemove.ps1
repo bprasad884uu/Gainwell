@@ -4,17 +4,17 @@ $ErrorActionPreference = "SilentlyContinue"
 # CONFIG
 # ============================================================
 
-$wallpaper = "C:\Windows\Web\Wallpaper\Windows\img19.jpg"
+$DefaultWallpaper = "C:\Windows\Web\Wallpaper\Windows\img19.jpg"
+$SpotlightAssets  = "C:\Windows\SystemApps\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\DesktopSpotlight\Assets\Images"
 
-$TaskUpdateName   = "Wallpaper Update Schedule"
-$TaskPolicyName   = "Wallpaper Policy"
+$IsWindows11 = ([Environment]::OSVersion.Version.Build -ge 22000)
 
-$BaseDir          = "C:\ProgramData\Acceleron\Wallpaper"
-$WallpaperPolicy  = Join-Path $env:SystemRoot "System32\WallpaperPolicy.vbs"
-$SetWallpaper     = Join-Path $env:SystemRoot "System32\SetWallpaper.vbs"
+# EXE (same directory as script)
+$ScriptDir = "C:\ProgramData\Acceleron\Wallpaper"
+$ExePath   = Join-Path $ScriptDir "WallpaperUpdate.exe"
 
 # ============================================================
-# REVERT WALLPAPER SETTINGS FOR ALL USER PROFILES
+# PROCESS ALL USER PROFILES (HKU SAFE)
 # ============================================================
 
 $userProfiles = Get-CimInstance Win32_UserProfile
@@ -22,29 +22,77 @@ $userProfiles = Get-CimInstance Win32_UserProfile
 foreach ($profile in $userProfiles) {
 
     $UserHive = "Registry::HKEY_USERS\$($profile.SID)"
+    if (-not (Test-Path $UserHive)) { continue }
 
-    if (-not (Test-Path $UserHive)) {
+    $DesktopKey = "$UserHive\Control Panel\Desktop"
+    if (-not (Test-Path $DesktopKey)) { continue }
+
+    # --------------------------------------------------------
+    # REMOVE USER WALLPAPER POLICIES
+    # --------------------------------------------------------
+    Remove-ItemProperty "$UserHive\Software\Microsoft\Windows\CurrentVersion\Policies\System" `
+        -Name Wallpaper,WallpaperStyle,NoDispBackgroundPage `
+        -ErrorAction SilentlyContinue
+
+    Remove-ItemProperty "$UserHive\Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop" `
+        -Name NoChangingWallPaper `
+        -ErrorAction SilentlyContinue
+
+    $cdmKey = "$UserHive\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
+
+    # ========================================================
+    # WINDOWS 10 (NO CDM)
+    # ========================================================
+    if (-not (Test-Path $cdmKey)) {
+
+        Set-ItemProperty `
+            -Path  $DesktopKey `
+            -Name  Wallpaper `
+            -Value $DefaultWallpaper `
+            -Force
+
         continue
     }
 
-    $DesktopKey  = "$UserHive\Control Panel\Desktop"
-    $PolicyKey   = "$UserHive\Software\Microsoft\Windows\CurrentVersion\Policies\System"
-    $ActiveDesk  = "$UserHive\Software\Microsoft\Windows\CurrentVersion\Policies\ActiveDesktop"
+    # ========================================================
+    # WINDOWS 11 (CDM PRESENT)
+    # ========================================================
 
-    # Reset wallpaper
-    if (Test-Path $DesktopKey) {
-        Set-ItemProperty -Path $DesktopKey -Name Wallpaper -Value $wallpaper -Force
+    # Enable Desktop Spotlight
+    $spotKey = "$UserHive\Software\Microsoft\Windows\CurrentVersion\DesktopSpotlight\Settings"
+    if (-not (Test-Path $spotKey)) {
+        New-Item -Path $spotKey -Force | Out-Null
     }
+    Set-ItemProperty $spotKey -Name EnabledState -Type DWord -Value 1
 
-    # Remove enforced policies
-    Remove-ItemProperty -Path $PolicyKey  -Name Wallpaper              -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path $PolicyKey  -Name WallpaperStyle         -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path $PolicyKey  -Name NoDispBackgroundPage   -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path $ActiveDesk -Name NoChangingWallPaper    -ErrorAction SilentlyContinue
+    # CDM – values only
+    Set-ItemProperty $cdmKey -Name ContentDeliveryAllowed          -Type DWord -Value 1
+    Set-ItemProperty $cdmKey -Name RotatingLockScreenEnabled        -Type DWord -Value 1
+    Set-ItemProperty $cdmKey -Name RotatingLockScreenOverlayEnabled -Type DWord -Value 1
+    Set-ItemProperty $cdmKey -Name SubscribedContent-338389Enabled  -Type DWord -Value 1
+
+    # Spotlight seed image (instant fallback)
+    $SpotlightImage = Get-ChildItem $SpotlightAssets -Filter *.jpg -ErrorAction SilentlyContinue |
+                      Select-Object -First 1
+
+    if ($SpotlightImage) {
+        Set-ItemProperty `
+            -Path  $DesktopKey `
+            -Name  Wallpaper `
+            -Value $SpotlightImage.FullName `
+            -Force
+    }
+    else {
+        Set-ItemProperty `
+            -Path  $DesktopKey `
+            -Name  Wallpaper `
+            -Value $DefaultWallpaper `
+            -Force
+    }
 }
 
 # ============================================================
-# REMOVE MACHINE-LEVEL WALLPAPER / LOCKSCREEN POLICIES
+# MACHINE LEVEL CLEANUP
 # ============================================================
 
 Remove-Item "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP" `
@@ -54,55 +102,26 @@ Remove-Item "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Personalization" `
     -Recurse -Force -ErrorAction SilentlyContinue
 
 # ============================================================
-# REMOVE SCHEDULED TASKS
-# ============================================================
-
-Unregister-ScheduledTask -TaskName $TaskUpdateName  -Confirm:$false -ErrorAction SilentlyContinue
-Unregister-ScheduledTask -TaskName $TaskPolicyName  -Confirm:$false -ErrorAction SilentlyContinue
-
-# ============================================================
-# REMOVE DEPLOYED FILES
-# ============================================================
-
-Remove-Item -Path $WallpaperPolicy -Force -ErrorAction SilentlyContinue
-Remove-Item -Path $SetWallpaper -Force -ErrorAction SilentlyContinue
-Remove-Item $BaseDir -Recurse -Force -ErrorAction SilentlyContinue
-
-# ============================================================
-# REFRESH GROUP POLICY
+# REFRESH (CURRENT LOGGED-IN USER IF ANY)
 # ============================================================
 
 gpupdate /force | Out-Null
+rundll32.exe user32.dll,UpdatePerUserSystemParameters
 
 # ============================================================
-# FORCE DESKTOP REFRESH (CURRENT SESSION)
+# RUN WallpaperUpdate.exe AND DELETE IT
 # ============================================================
 
-$SPI_SETDESKWALLPAPER = 0x0014
-$SPIF_UPDATEINIFILE  = 0x01
-$SPIF_SENDCHANGE     = 0x02
+if (Test-Path $ExePath) {
 
-if (-not ([System.Management.Automation.PSTypeName]'Wallpaper').Type) {
-    Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-public class Wallpaper {
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    public static extern int SystemParametersInfo(
-        int uAction,
-        int uParam,
-        string lpvParam,
-        int fuWinIni
-    );
+    try {
+        Start-Process -FilePath $ExePath -Wait -WindowStyle Hidden
+        Start-Sleep -Seconds 2
+        Remove-Item -Path $ScriptDir -Recurse -Force
+    }
+    catch {
+        # Silent by design
+    }
 }
-"@
-}
-
-[Wallpaper]::SystemParametersInfo(
-    $SPI_SETDESKWALLPAPER,
-    0,
-    $wallpaper,
-    $SPIF_UPDATEINIFILE -bor $SPIF_SENDCHANGE
-) | Out-Null
 
 Write-Host "Wallpaper policy removed and default wallpaper restored successfully."
