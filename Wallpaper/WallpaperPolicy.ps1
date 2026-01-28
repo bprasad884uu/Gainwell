@@ -3,22 +3,26 @@
 
 $ErrorActionPreference = "Stop"
 
-# ---------------- CONFIG ----------------
+# ============================================================
+# CONFIG
+# ============================================================
 
-$BaseDir = "C:\ProgramData\Acceleron\Wallpaper"
+$BaseDir            = "C:\ProgramData\Acceleron\Wallpaper"
 
 $PolicyScriptPath   = "$BaseDir\WallpaperPolicy.exe"
 $UpdateExePath      = "$BaseDir\WallpaperUpdate.exe"
-$CerPath = "$BaseDir\GainwellWallpaper.cer"
+$CerPath            = "$BaseDir\GainwellWallpaper.cer"
 
 $PolicyTaskName     = "Wallpaper Policy"
 $UpdateTaskName     = "Wallpaper Update Schedule"
+$RenewTaskName      = "Wallpaper Certificate AutoRenew"
 
 $CertSubject        = "CN=Gainwell Wallpaper Automation"
 
-$TriggerInterval = 5
-
-# --------------------------------------
+$RenewBeforeDays    = 30
+$TriggerInterval    = 5
+$Now                = Get-Date
+$IsSystem           = ([Security.Principal.WindowsIdentity]::GetCurrent().IsSystem)
 
 # ============================================================
 # ENSURE BASE DIRECTORY
@@ -32,12 +36,25 @@ if (-not (Test-Path $BaseDir)) {
 # CERTIFICATE: CREATE + TRUST (ONCE)
 # ============================================================
 
+if ($IsSystem) {
 $Cert = Get-ChildItem Cert:\LocalMachine\My |
-        Where-Object Subject -eq $CertSubject |
+        Where-Object {
+            $_.Subject -like "*$($CertSubject.Replace('CN=',''))*" -and
+            $_.NotAfter -gt $Now
+        } |
         Sort-Object NotAfter -Descending |
         Select-Object -First 1
+		
+$NeedsRenewal = $true
 
-if (-not $Cert) {
+if ($Cert) {
+    $DaysLeft = ($Cert.NotAfter - $Now).Days
+    if ($DaysLeft -gt $RenewBeforeDays) {
+        $NeedsRenewal = $false
+    }
+}
+
+if ($NeedsRenewal) {
 
     $Cert = New-SelfSignedCertificate `
         -Type CodeSigningCert `
@@ -45,15 +62,22 @@ if (-not $Cert) {
         -CertStoreLocation "Cert:\LocalMachine\My" `
         -KeyAlgorithm RSA `
         -KeyLength 2048 `
-        -NotAfter (Get-Date).AddYears(5)
+        -NotAfter $Now.AddYears(5)
 
-    Export-Certificate -Cert $Cert -FilePath $CerPath | Out-Null
+    if (-not $Cert) {
+        throw "Certificate creation failed. Run script as Administrator or SYSTEM."
+    }
+
+    Export-Certificate -Cert $Cert -FilePath $CerPath -Force | Out-Null
 
     Import-Certificate -FilePath $CerPath `
         -CertStoreLocation "Cert:\LocalMachine\Root" | Out-Null
 
     Import-Certificate -FilePath $CerPath `
         -CertStoreLocation "Cert:\LocalMachine\TrustedPublisher" | Out-Null
+    }
+
+    return
 }
 
 Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned -Force
@@ -64,12 +88,13 @@ Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned -Force
 
 Get-ScheduledTask $PolicyTaskName -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
 Get-ScheduledTask $UpdateTaskName -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
+Get-ScheduledTask $RenewTaskName  -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
 
 Remove-Item "C:\Windows\System32\WallpaperPolicy.vbs" -Force -ErrorAction SilentlyContinue
 Remove-Item "C:\Windows\System32\SetWallpaper.vbs" -Force -ErrorAction SilentlyContinue
 
 # ============================================================
-# EMBEDDED SCRIPTS (BASE64)
+# EMBEDDED BINARIES (BASE64)
 # ============================================================
 
 $WallpaperPolicyExeBase64 = @'
@@ -85,7 +110,7 @@ $PolicyExeBytes = [Convert]::FromBase64String($WallpaperPolicyExeBase64)
 $UpdateExeBytes = [Convert]::FromBase64String($WallpaperUpdateExeBase64)
 
 # ============================================================
-# GENERATE WALLPAPER POLICY SCRIPT
+# WRITE POLICY SCRIPT (SYSTEM)
 # ============================================================
 $WritePolicyExe = $true
 
@@ -106,7 +131,7 @@ if ($WritePolicyExe) {
 }
 
 # ============================================================
-# GENERATE WALLPAPER UPDATE SCRIPT
+# WRITE UPDATE SCRIPT (USER / SYSTEM DUAL MODE)
 # ============================================================
 
 $WriteUpdateExe = $true
