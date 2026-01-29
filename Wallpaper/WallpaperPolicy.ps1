@@ -35,9 +35,15 @@ if (-not (Test-Path $BaseDir)) {
 # CLEAN OLD TASKS (SAFE)
 # ============================================================
 
+# Kill running wallpaper processes if active
+Get-Process -Name "WallpaperWatcher" -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name "WallpaperUpdate"  -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# Remove scheduled tasks
 Get-ScheduledTask $PolicyTaskName -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
 Get-ScheduledTask $UpdateTaskName -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
 
+# Remove old helper files
 Remove-Item "C:\Windows\System32\WallpaperPolicy.vbs" -Force -ErrorAction SilentlyContinue
 Remove-Item "C:\Windows\System32\SetWallpaper.vbs" -Force -ErrorAction SilentlyContinue
 Remove-Item $CertPath -Force -ErrorAction SilentlyContinue
