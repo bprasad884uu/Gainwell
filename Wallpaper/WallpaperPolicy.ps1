@@ -78,8 +78,8 @@ if ($IsSystem -or $IsAdmin) {
     }
 
     foreach ($store in @(
-        "Cert:\LocalMachine\Root",
-        "Cert:\LocalMachine\TrustedPublisher"
+        "Root",
+        "TrustedPublisher"
     )) {
         if (-not (certutil -store $store | Select-String $PinnedThumbprint)) {
             & certutil.exe -addstore $store $CertPath | Out-Null
