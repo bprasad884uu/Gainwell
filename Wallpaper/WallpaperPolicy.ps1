@@ -192,7 +192,7 @@ $null = Register-ScheduledTask -Action $actionPolicy -Trigger $triggersPolicy -T
 $action = New-ScheduledTaskAction -Execute $UpdateExePath
 
 # Create the time-based trigger
-$timeTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5)
+$timeTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)
 
 # Create the logon-based trigger
 $logonTrigger = New-ScheduledTaskTrigger -AtLogOn
