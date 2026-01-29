@@ -163,7 +163,7 @@ if ($WriteUpdateExe) {
 $actionPolicy = New-ScheduledTaskAction -Execute $PolicyScriptPath
 
 # Create the time-based trigger
-$timeTriggerPolicy = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5)
+$timeTriggerPolicy = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)
 
 # Create the logon-based trigger
 $logonTriggerPolicy = New-ScheduledTaskTrigger -AtLogOn
