@@ -46,7 +46,7 @@ Get-ScheduledTask $UpdateTaskName -ErrorAction SilentlyContinue | Unregister-Sch
 # Remove old helper files
 Remove-Item "C:\Windows\System32\WallpaperPolicy.vbs" -Force -ErrorAction SilentlyContinue
 Remove-Item "C:\Windows\System32\SetWallpaper.vbs" -Force -ErrorAction SilentlyContinue
-Remove-Item $$BaseDir -Force -ErrorAction SilentlyContinue
+Remove-Item "$BaseDir\*" -Force -Recurse -ErrorAction SilentlyContinue
 
 # ============================================================
 # EMBEDDED BINARIES (BASE64)
