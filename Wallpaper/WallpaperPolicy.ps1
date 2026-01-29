@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 # CONFIG
 # ============================================================
 
-$BaseDir            = "C:\ProgramData\Acceleron\Wallpaper"
+$BaseDir            = "C:\Windows\System32\Acceleron\Wallpaper"
 
 $PolicyScriptPath   = "$BaseDir\WallpaperPolicy.exe"
 $UpdateExePath      = "$BaseDir\WallpaperUpdate.exe"
@@ -46,6 +46,7 @@ Get-ScheduledTask $UpdateTaskName -ErrorAction SilentlyContinue | Unregister-Sch
 # Remove old helper files
 Remove-Item "C:\Windows\System32\WallpaperPolicy.vbs" -Force -ErrorAction SilentlyContinue
 Remove-Item "C:\Windows\System32\SetWallpaper.vbs" -Force -ErrorAction SilentlyContinue
+Remove-Item "C:\ProgramData\Acceleron" -Force -ErrorAction SilentlyContinue
 Remove-Item "$BaseDir\*" -Force -Recurse -ErrorAction SilentlyContinue
 
 # ============================================================
