@@ -15,6 +15,7 @@ param (
     [string[]]$WhitelistedApps = @(
 		"Diagsmart.exe",
 		"Uninstall*.exe",
+		"uninst.exe",
 		"Generic RBI Converter*.EXE",	#for Accounts
 		"On-premises data gateway*.exe",
 		"PROSCAN.exe",
@@ -24,7 +25,9 @@ param (
 		"MSTeams*.exe",
 		"Mechanic.exe",
 		"DCEditor.exe",
-		"FLASHUTIL.EXE"
+		"FLASHUTIL.EXE",
+		"ASCENT.exe",
+		"firefox.exe"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
