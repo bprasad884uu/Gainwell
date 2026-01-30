@@ -27,7 +27,8 @@ param (
 		"DCEditor.exe",
 		"FLASHUTIL.EXE",
 		"ASCENT.exe",
-		"firefox.exe"
+		"firefox.exe",
+		"*.ica"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
@@ -67,7 +68,8 @@ param (
 		"%OSDRIVE%\Users\*\AppData\Local\Programs\edison-shift-reporter\*",
 		"%OSDRIVE%\Users\*\AppData\Local\Grammarly\*",
 		"%OSDRIVE%\Users\*\AppData\Local\Programs\device-controller\*",
-		"D:\EARTHWORKS TRAINING SIMULATOR 2.21.40\SIMULATOR\*"
+		"D:\EARTHWORKS TRAINING SIMULATOR 2.21.40\SIMULATOR\*",
+		"%OSDRIVE%\Users\*\AppData\Local\CITRIX\*"
 
     ),
 
