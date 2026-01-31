@@ -15,6 +15,7 @@ param (
     [string[]]$WhitelistedApps = @(
 		"Diagsmart.exe",
 		"Uninstall*.exe",
+		"uninst.exe",
 		"Generic RBI Converter*.EXE",	#for Accounts
 		"On-premises data gateway*.exe",
 		"PROSCAN.exe",
@@ -24,7 +25,10 @@ param (
 		"MSTeams*.exe",
 		"Mechanic.exe",
 		"DCEditor.exe",
-		"FLASHUTIL.EXE"
+		"FLASHUTIL.EXE",
+		"ASCENT.exe",
+		"firefox.exe",
+		"*.ica"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
@@ -65,7 +69,9 @@ param (
 		"%OSDRIVE%\Users\*\AppData\Local\Grammarly\*",
 		"%OSDRIVE%\Users\*\AppData\Local\Programs\device-controller\*",
 		"D:\EARTHWORKS TRAINING SIMULATOR 2.21.40\SIMULATOR\*",
+		"%OSDRIVE%\Users\*\AppData\Local\CITRIX\*",
 		"%OSDRIVE%\g0xin\*"
+
 
     ),
 
