@@ -28,7 +28,8 @@ param (
 		"FLASHUTIL.EXE",
 		"ASCENT.exe",
 		"firefox.exe",
-		"*.ica"
+		"*.ica",
+		"hrmstipl.exe"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
