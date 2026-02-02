@@ -98,9 +98,10 @@ $newHostsContent = @"
 
 127.0.0.1       	localhost
 ##AMT
-10.131.17.36	AMT-APP
-10.131.17.37	AMT-DB
-10.131.17.38	GCPL-AZ-AMTTST
+10.131.17.36      AMT-APP
+10.131.17.37      AMT-DB
+10.131.17.38      GCPL-AZ-AMTTST
+10.131.44.226     amt-test        amt_test.gainwellindia.com
 ##PI Production Systems
 10.131.51.167 px1tiplscs px1tiplscs.tiplindia.com
 ##ERP Production Systems
