@@ -27,7 +27,6 @@ param (
 		"DCEditor.exe",
 		"FLASHUTIL.EXE",
 		"ASCENT.exe",
-		"firefox.exe",
 		"*.ica",
 		"hrmstipl.exe"
     ),
