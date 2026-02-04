@@ -82,8 +82,7 @@ if ([string]::IsNullOrWhiteSpace($domain)) {
 $CompanyConfig = @(
     @{ Name = "GCPL"; Domains = @("gainwellindia.com");			HostnamePatterns = @("GCPL", "ASPL") },
 	@{ Name = "GTPL"; Domains = @("");       					HostnamePatterns = @("GTPL") },
-    @{ Name = "GEPL"; Domains = @("gainwellengineering.com");   HostnamePatterns = @("GEPL", "GESPL") },
-    @{ Name = "TIL";	Domains = @("tiplindia.com");			HostnamePatterns = @("TIL") }
+    @{ Name = "GEPL"; Domains = @("gainwellengineering.com");   HostnamePatterns = @("GEPL", "GESPL") }
 )
 
 # ==========================
@@ -155,15 +154,6 @@ if ($company -in @("GTPL", "GEPL")) {
         Write-Host "$company Image Applied"
     } else {
         #Write-Warning "GTPL/GEPL detected but source image not found: $source"
-    }
-}
-elseif ($company -eq "TIL") {
-    # Use the TIL Base64 string and save with a TIL-specific name
-    $saved = Save-Base64Image -Base64String $base64ImageTIL -OutputFolder $outputFolder -BaseName "Wallpaper"
-    if ($saved) {
-        Write-Host "$company wallpaper created."
-    } else {
-        #Write-Warning "Failed to create $company wallpaper."
     }
 }
 elseif ($company) {
