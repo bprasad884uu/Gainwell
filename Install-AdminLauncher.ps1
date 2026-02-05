@@ -436,11 +436,7 @@ try{
 }
 
 Write-Host ""
-Write-Host ("Install complete.`n - Credential store: {0}`n - Launcher: {1}`n - Request wrapper: {2}`n - Hidden wrapper: {3}" -f $credFile, $launcherPath, $requestVbsPath, $vbsWrapperPath)
+Write-Host ("Install complete.")
 Write-Host ""
 Write-Host "Example usage (no elevation needed):"
-Write-Host "  $launcherPath `"C:\Windows\System32\notepad.exe`""
-Write-Host "  $launcherPath `"C:\Program Files\MyApp\app.exe`" /silent /install"
-Write-Host ""
-Write-Host "To use the request runner (silent run via scheduled task trigger):"
-Write-Host "  $requestVbsPath `"C:\Path\To\App.exe`" arg1 arg2"
+Write-Host "  $vbsWrapperPath `"C:\Windows\System32\notepad.exe`""
