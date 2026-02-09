@@ -28,8 +28,7 @@ param (
 		"FLASHUTIL.EXE",
 		"ASCENT.exe",
 		"*.ica",
-		"hrmstipl.exe",
-		"PresentationLauncher.exe"
+		"hrmstipl.exe"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
@@ -71,7 +70,8 @@ param (
 		"%OSDRIVE%\Users\*\AppData\Local\Programs\device-controller\*",
 		"D:\EARTHWORKS TRAINING SIMULATOR 2.21.40\SIMULATOR\*",
 		"%OSDRIVE%\Users\*\AppData\Local\CITRIX\*",
-		"%OSDRIVE%\g0xin\*"
+		"%OSDRIVE%\g0xin\*",
+		"%OSDRIVE%\Users\*\AppData\Roaming\Yealink\Yealink Wireless Presentation Pod\*"
     ),
 
     [string[]]$WhitelistedPublishers = @(
