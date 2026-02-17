@@ -1,78 +1,36 @@
 # Function to check if Winget is installed and perform actions
 function Check-WingetAndUpgrade {
     Write-Output "Checking if Winget is installed..."
+
+    # Define the installation folder path for Winget
     $appInstallerPath = "C:\Program Files\WindowsApps"
     $searchPattern = "Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe"
     $installerFolder = Get-ChildItem -Path $appInstallerPath -Filter $searchPattern -ErrorAction SilentlyContinue | Select-Object -First 1
+
     if ($installerFolder) {
+        # Winget installation folder found
         $wingetExePath = Join-Path -Path $installerFolder.FullName -ChildPath 'winget.exe'
+
         if (Test-Path $wingetExePath) {
-            Write-Output "Winget found. Fetching upgradable packages..."
+            Write-Output "Winget found. Upgrading apps..."
             try {
-                $rawOutput = & $wingetExePath upgrade --accept-source-agreements 2>$null
-
-                # Find the header line
-                $headerLineIndex = ($rawOutput | Select-String "^Name\s+Id\s+").LineNumber - 1
-
-                if ($headerLineIndex -ge 0) {
-                    $headerLine = $rawOutput[$headerLineIndex]
-                    $idIndex = $headerLine.IndexOf("Id")
-
-                    # Skip header and separator lines, get only data lines
-                    $dataLines = $rawOutput | Select-Object -Skip ($headerLineIndex + 2)
-
-                    # Build upgrade list excluding Java packages
-                    $packagesToUpgrade = foreach ($line in $dataLines) {
-                        if ($line -match "^\s*$" -or $line -match "upgrades available") { continue }
-                        if ($line.Length -gt $idIndex) {
-                            $rest = $line.Substring($idIndex).Trim()
-                            $packageId = ($rest -split '\s+')[0]
-                            if ($packageId -match "\." -and
-                                $packageId -notmatch "java|jdk|jre|temurin|adoptium" -and
-                                $packageId.Length -gt 3) {
-                                $packageId
-                            }
-                        }
+                # Find Java packages and blocking pin them permanently
+                $installedList = & $wingetExePath list --accept-source-agreements 2>$null
+                $javaPackages = foreach ($line in $installedList) {
+                    if ($line -match "java|jdk|jre|temurin|adoptium") {
+                        $parts = $line -split '\s{2,}'
+                        $pkg = $parts | Where-Object { $_ -match "\." } | Select-Object -First 1
+                        if ($pkg -and $pkg.Length -gt 3) { $pkg.Trim() }
                     }
-
-                    if ($packagesToUpgrade) {
-                        # Display table with Java rows removed
-                        Write-Output ""
-                        Write-Output "Packages to be upgraded (Java excluded):"
-                        Write-Output $rawOutput[$headerLineIndex]        # Header row
-                        Write-Output $rawOutput[$headerLineIndex + 1]    # Separator row
-
-                        foreach ($line in $dataLines) {
-                            if ($line -match "^\s*$" -or $line -match "upgrades available") { continue }
-                            if ($line.Length -gt $idIndex) {
-                                $rest = $line.Substring($idIndex).Trim()
-                                $packageId = ($rest -split '\s+')[0]
-                                if ($packageId -match "\." -and
-                                    $packageId -notmatch "java|jdk|jre|temurin|adoptium" -and
-                                    $packageId.Length -gt 3) {
-                                    Write-Output $line
-                                }
-                            }
-                        }
-
-                        Write-Output ""
-                        Write-Output "Upgrading $($packagesToUpgrade.Count) packages..."
-
-                        # Upgrade each package individually
-                        foreach ($pkg in $packagesToUpgrade) {
-                            Write-Output ""
-                            Write-Output "--- Upgrading: $pkg ---"
-                            & $wingetExePath upgrade --id $pkg --accept-source-agreements --accept-package-agreements --silent
-                        }
-
-                        Write-Output ""
-                        Write-Output "Upgrade completed successfully!"
-                    } else {
-                        Write-Output "No packages to upgrade."
-                    }
-                } else {
-                    Write-Output "Could not parse winget output."
                 }
+
+                foreach ($pkg in $javaPackages) {
+                    Write-Output "Blocking Java package from upgrade: $pkg"
+                    & $wingetExePath pin add --id $pkg --blocking --accept-source-agreements 2>$null
+                }
+
+                & $wingetExePath upgrade --all --accept-source-agreements --accept-package-agreements --silent
+                Write-Output "Upgrade completed successfully!"
 
             } catch {
                 Write-Output "Failed to upgrade apps. Error: $_"
@@ -90,9 +48,14 @@ function Check-WingetAndUpgrade {
 # Function to install Winget if not found
 function Install-Winget {
     Write-Host "Winget not found. Installing Winget..." -ForegroundColor Yellow
+
     $progressPreference = 'SilentlyContinue'
+
+    # Define the download URL and destination path
     $downloadUrl = "https://aka.ms/getwinget"
     $outputPath = "$env:USERPROFILE\Downloads\AppInstaller.msixbundle"
+
+    # Download the App Installer package
     Write-Host "Downloading App Installer from $downloadUrl..." -ForegroundColor Yellow
     try {
         Invoke-WebRequest -Uri $downloadUrl -OutFile $outputPath -ErrorAction Stop
@@ -101,6 +64,8 @@ function Install-Winget {
         Write-Host "Failed to download App Installer. Error: $_" -ForegroundColor Red
         exit
     }
+
+    # Install the App Installer package
     Write-Host "Installing App Installer..." -ForegroundColor Yellow
     try {
         Add-AppxPackage -Path $outputPath -ErrorAction Stop
@@ -109,6 +74,8 @@ function Install-Winget {
         Write-Host "Failed to install App Installer. Error: $_" -ForegroundColor Red
         exit
     }
+
+    # Verify installation
     Write-Host "Verifying installation of Winget..." -ForegroundColor Yellow
     if (Get-Command winget -ErrorAction SilentlyContinue) {
         Write-Host "Winget is successfully installed and ready to use!" -ForegroundColor Green
@@ -116,8 +83,12 @@ function Install-Winget {
         Write-Host "Winget installation failed or is not recognized in the PATH." -ForegroundColor Red
         exit
     }
+
+    # Cleanup
     Write-Host "Cleaning up downloaded file..." -ForegroundColor Yellow
     Remove-Item -Path $outputPath -Force -ErrorAction SilentlyContinue
+
+    # Retry upgrading apps after installation
     Write-Host "Retrying upgrade process now that Winget is installed..."
     Check-WingetAndUpgrade
 }
