@@ -11,37 +11,67 @@ function Check-WingetAndUpgrade {
             try {
                 $rawOutput = & $wingetExePath upgrade --accept-source-agreements 2>$null
 
-                $headerLine = $rawOutput | Where-Object { $_ -match "\bId\b" } | Select-Object -First 1
-                $idIndex = $headerLine.IndexOf("Id")
+                # Find the header line
+                $headerLineIndex = ($rawOutput | Select-String "^Name\s+Id\s+").LineNumber - 1
 
-                $upgradeList = $rawOutput | Where-Object {
-                    $_ -notmatch "^\s*$" -and
-                    $_ -notmatch "^-+$" -and
-                    $_ -notmatch "^Name" -and
-                    $_ -notmatch "upgrades available" -and
-                    $_ -notmatch "Copyright" -and
-                    $_ -notmatch "Windows Package"
-                }
+                if ($headerLineIndex -ge 0) {
+                    $headerLine = $rawOutput[$headerLineIndex]
+                    $idIndex = $headerLine.IndexOf("Id")
 
-                $packagesToUpgrade = foreach ($line in $upgradeList) {
-                    if ($line.Length -gt $idIndex) {
-                        $rest = $line.Substring($idIndex).Trim()
-                        $packageId = ($rest -split '\s+')[0]
-                        if ($packageId -match "\." -and $packageId -notmatch "java|jdk|jre|temurin|adoptium" -and $packageId.Length -gt 3) {
-                            $packageId
+                    # Skip header and separator lines, get only data lines
+                    $dataLines = $rawOutput | Select-Object -Skip ($headerLineIndex + 2)
+
+                    # Build upgrade list excluding Java packages
+                    $packagesToUpgrade = foreach ($line in $dataLines) {
+                        if ($line -match "^\s*$" -or $line -match "upgrades available") { continue }
+                        if ($line.Length -gt $idIndex) {
+                            $rest = $line.Substring($idIndex).Trim()
+                            $packageId = ($rest -split '\s+')[0]
+                            if ($packageId -match "\." -and
+                                $packageId -notmatch "java|jdk|jre|temurin|adoptium" -and
+                                $packageId.Length -gt 3) {
+                                $packageId
+                            }
                         }
                     }
-                }
 
-                if ($packagesToUpgrade) {
-                    Write-Output "Upgrading $($packagesToUpgrade.Count) packages (Java excluded)..."
-                    foreach ($pkg in $packagesToUpgrade) {
-                        Write-Output "Upgrading: $pkg"
-                        & $wingetExePath upgrade --id $pkg --accept-source-agreements --accept-package-agreements --silent
+                    if ($packagesToUpgrade) {
+                        # Display table with Java rows removed
+                        Write-Output ""
+                        Write-Output "Packages to be upgraded (Java excluded):"
+                        Write-Output $rawOutput[$headerLineIndex]        # Header row
+                        Write-Output $rawOutput[$headerLineIndex + 1]    # Separator row
+
+                        foreach ($line in $dataLines) {
+                            if ($line -match "^\s*$" -or $line -match "upgrades available") { continue }
+                            if ($line.Length -gt $idIndex) {
+                                $rest = $line.Substring($idIndex).Trim()
+                                $packageId = ($rest -split '\s+')[0]
+                                if ($packageId -match "\." -and
+                                    $packageId -notmatch "java|jdk|jre|temurin|adoptium" -and
+                                    $packageId.Length -gt 3) {
+                                    Write-Output $line
+                                }
+                            }
+                        }
+
+                        Write-Output ""
+                        Write-Output "Upgrading $($packagesToUpgrade.Count) packages..."
+
+                        # Upgrade each package individually
+                        foreach ($pkg in $packagesToUpgrade) {
+                            Write-Output ""
+                            Write-Output "--- Upgrading: $pkg ---"
+                            & $wingetExePath upgrade --id $pkg --accept-source-agreements --accept-package-agreements --silent
+                        }
+
+                        Write-Output ""
+                        Write-Output "Upgrade completed successfully!"
+                    } else {
+                        Write-Output "No packages to upgrade."
                     }
-                    Write-Output "Upgrade completed successfully!"
                 } else {
-                    Write-Output "No packages to upgrade (or all were Java packages)."
+                    Write-Output "Could not parse winget output."
                 }
 
             } catch {
