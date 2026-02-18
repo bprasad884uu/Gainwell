@@ -29,7 +29,8 @@ param (
 		"ASCENT.exe",
 		"*.ica",
 		"hrmstipl.exe",
-		"PresentationLauncher.exe"
+		"PresentationLauncher.exe",
+		"WinSCP.exe"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
