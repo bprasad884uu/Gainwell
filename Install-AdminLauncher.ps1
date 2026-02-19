@@ -43,6 +43,12 @@ $requestsFolder = Join-Path $installFolder 'Requests'
 $credFile       = Join-Path $installFolder 'cred.dat'
 $launcherPath   = "$env:windir\System32\ADMPASS.ps1"
 $exeWrapperPath = "$env:windir\System32\ADMPASS.exe"
+$vbsWrapperPath = "$env:windir\System32\ADMPASS.vbs"
+
+# ====================================
+# Cleaning
+Remove-Item $vbsWrapperPath -Force -ErrorAction SilentlyContinue
+# ====================================
 
 # ============================================================
 # Install Code Signing Certificate (Auto - No UAC needed)
@@ -232,27 +238,28 @@ $enc = [System.Convert]::ToBase64String($protectedBytes)
 # Save
 $json = @{ User = $adminUser; Password = $enc } | ConvertTo-Json
 try { Set-Content -Path $credFile -Value $json -Encoding UTF8 -Force } catch { Write-Error ("Failed to write credential file {0}: {1}" -f $credFile, $_); exit 1 }
-Write-Host ("Stored encrypted credential to {0}" -f $credFile)
+#Write-Host ("Stored encrypted credential to {0}" -f $credFile)
 
 # Write launcher (ADMPASS.ps1) to System32
 $launcherScript = @'
 <#
 ADMPASS.ps1
-Launch a program using stored admin credentials.
+Launch a program using stored admin credentials,
+or update the stored password.
 
 Usage examples:
   ADMPASS.ps1 "C:\Path\To\App.exe" arg1 arg2
   ADMPASS.ps1 "C:\Path\To\App.exe" arg1 --hidden
-
-If the last argument is --hidden the launcher will attempt to start the process with a hidden window.
+  ADMPASS.ps1 -UpdatePassword
 #>
 
 param(
-    [Parameter(Mandatory=$true, Position=0)] [string] $FilePath,
-    [Parameter(ValueFromRemainingArguments=$true)] [string[]] $RemainingArgs
+    [Parameter(Mandatory=$false, Position=0)] [string] $FilePath,
+    [Parameter(ValueFromRemainingArguments=$true)] [string[]] $RemainingArgs,
+    [switch] $UpdatePassword
 )
 
-# Load DPAPIWrapper type if not already loaded (same definition as used by installer)
+# Load DPAPIWrapper
 if (-not ([System.Management.Automation.PSTypeName]'DPAPIWrapper').Type) {
     $dpApiCs = @"
 using System;
@@ -262,47 +269,26 @@ using System.Runtime.InteropServices;
 public static class DPAPIWrapper
 {
     [StructLayout(LayoutKind.Sequential)]
-    private struct DATA_BLOB
-    {
-        public int cbData;
-        public IntPtr pbData;
-    }
+    private struct DATA_BLOB { public int cbData; public IntPtr pbData; }
 
     [DllImport("crypt32.dll", SetLastError=true, CharSet=CharSet.Auto)]
-    private static extern bool CryptProtectData(
-        ref DATA_BLOB pDataIn,
-        string szDataDescr,
-        IntPtr pOptionalEntropy,
-        IntPtr pvReserved,
-        IntPtr pPromptStruct,
-        int dwFlags,
-        ref DATA_BLOB pDataOut);
+    private static extern bool CryptProtectData(ref DATA_BLOB pDataIn, string szDataDescr, IntPtr pOptionalEntropy, IntPtr pvReserved, IntPtr pPromptStruct, int dwFlags, ref DATA_BLOB pDataOut);
 
     [DllImport("crypt32.dll", SetLastError=true, CharSet=CharSet.Auto)]
-    private static extern bool CryptUnprotectData(
-        ref DATA_BLOB pDataIn,
-        System.Text.StringBuilder pszDataDescr,
-        IntPtr pOptionalEntropy,
-        IntPtr pvReserved,
-        IntPtr pPromptStruct,
-        int dwFlags,
-        ref DATA_BLOB pDataOut);
+    private static extern bool CryptUnprotectData(ref DATA_BLOB pDataIn, System.Text.StringBuilder pszDataDescr, IntPtr pOptionalEntropy, IntPtr pvReserved, IntPtr pPromptStruct, int dwFlags, ref DATA_BLOB pDataOut);
 
     private const int CRYPTPROTECT_UI_FORBIDDEN = 0x1;
     private const int CRYPTPROTECT_LOCAL_MACHINE = 0x4;
 
     public static byte[] Protect(byte[] plainBytes)
     {
-        DATA_BLOB inBlob = new DATA_BLOB();
-        DATA_BLOB outBlob = new DATA_BLOB();
+        DATA_BLOB inBlob = new DATA_BLOB(); DATA_BLOB outBlob = new DATA_BLOB();
         inBlob.cbData = plainBytes.Length;
         inBlob.pbData = Marshal.AllocHGlobal(plainBytes.Length);
         Marshal.Copy(plainBytes, 0, inBlob.pbData, plainBytes.Length);
-
         bool success = CryptProtectData(ref inBlob, null, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, CRYPTPROTECT_UI_FORBIDDEN | CRYPTPROTECT_LOCAL_MACHINE, ref outBlob);
         Marshal.FreeHGlobal(inBlob.pbData);
         if (!success) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-
         byte[] outBytes = new byte[outBlob.cbData];
         Marshal.Copy(outBlob.pbData, outBytes, 0, outBlob.cbData);
         Marshal.FreeHGlobal(outBlob.pbData);
@@ -311,17 +297,14 @@ public static class DPAPIWrapper
 
     public static byte[] Unprotect(byte[] cipherBytes)
     {
-        DATA_BLOB inBlob = new DATA_BLOB();
-        DATA_BLOB outBlob = new DATA_BLOB();
+        DATA_BLOB inBlob = new DATA_BLOB(); DATA_BLOB outBlob = new DATA_BLOB();
         inBlob.cbData = cipherBytes.Length;
         inBlob.pbData = Marshal.AllocHGlobal(cipherBytes.Length);
         Marshal.Copy(cipherBytes, 0, inBlob.pbData, cipherBytes.Length);
-
         StringBuilder descr = new StringBuilder();
         bool success = CryptUnprotectData(ref inBlob, descr, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, CRYPTPROTECT_UI_FORBIDDEN | CRYPTPROTECT_LOCAL_MACHINE, ref outBlob);
         Marshal.FreeHGlobal(inBlob.pbData);
         if (!success) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-
         byte[] outBytes = new byte[outBlob.cbData];
         Marshal.Copy(outBlob.pbData, outBytes, 0, outBlob.cbData);
         Marshal.FreeHGlobal(outBlob.pbData);
@@ -335,6 +318,50 @@ public static class DPAPIWrapper
 $installFolder = 'C:\ProgramData\AdminLauncher'
 $credFile = Join-Path $installFolder 'cred.dat'
 
+# ============================================================
+# UPDATE PASSWORD MODE
+# ============================================================
+if ($UpdatePassword) {
+
+    if (-not (Test-Path $credFile)) {
+        Write-Error "Credential file not found. Run installer first."
+        exit 1
+    }
+
+    # Prompt new credentials
+    $adminUser = Read-Host "Admin User"
+    if ([string]::IsNullOrWhiteSpace($adminUser)) { Write-Error "Admin user cannot be empty."; exit 1 }
+
+    $newSecure = Read-Host "Enter Password" -AsSecureString
+    if ($newSecure.Length -eq 0) { Write-Error "Password cannot be empty."; exit 1 }
+
+    # Encrypt and save
+    try {
+        $ptr = [System.Runtime.InteropServices.Marshal]::SecureStringToGlobalAllocUnicode($newSecure)
+        try { $plain = [System.Runtime.InteropServices.Marshal]::PtrToStringUni($ptr) }
+        finally { [System.Runtime.InteropServices.Marshal]::ZeroFreeGlobalAllocUnicode($ptr) }
+
+        $plainBytes     = [System.Text.Encoding]::UTF8.GetBytes($plain)
+        $protectedBytes = [DPAPIWrapper]::Protect($plainBytes)
+        $enc            = [System.Convert]::ToBase64String($protectedBytes)
+        $json           = @{ User = $adminUser; Password = $enc } | ConvertTo-Json
+        Set-Content -Path $credFile -Value $json -Encoding UTF8 -Force
+        Write-Host "Credential updated successfully." -ForegroundColor Green
+    } catch {
+        Write-Error ("Failed to update credential: {0}" -f $_)
+        exit 1
+    }
+    exit 0
+}
+
+# ============================================================
+# LAUNCH MODE (normal usage)
+# ============================================================
+if (-not $FilePath) {
+    Write-Error "Usage: ADMPASS.ps1 -UpdatePassword"
+    exit 1
+}
+
 if (-not (Test-Path $credFile)) {
     Write-Error "Credential file not found. Ask admin to run installer."
     exit 1
@@ -347,58 +374,41 @@ try {
     exit 1
 }
 
-if (-not $json.Password) {
-    Write-Error "Credential file missing password field."
-    exit 1
-}
+if (-not $json.Password) { Write-Error "Credential file missing password field."; exit 1 }
 
-# Decrypt password
 try {
-    $cipher = [System.Convert]::FromBase64String($json.Password)
+    $cipher     = [System.Convert]::FromBase64String($json.Password)
     $plainBytes = [DPAPIWrapper]::Unprotect($cipher)
-    $plain = [System.Text.Encoding]::UTF8.GetString($plainBytes)
+    $plain      = [System.Text.Encoding]::UTF8.GetString($plainBytes)
 } catch {
     Write-Error ("Failed to decrypt stored password: {0}" -f $_)
     exit 1
 }
 
-# Build credential
 $secure = ConvertTo-SecureString -String $plain -AsPlainText -Force
-$cred = New-Object System.Management.Automation.PSCredential($json.User, $secure)
+$cred   = New-Object System.Management.Automation.PSCredential($json.User, $secure)
 
-# Handle --hidden flag (if present as the last argument)
+# Handle --hidden flag
 $hidden = $false
 if ($RemainingArgs -and $RemainingArgs.Count -gt 0) {
     if ($RemainingArgs[-1] -eq '--hidden') {
         $hidden = $true
-        if ($RemainingArgs.Count -gt 1) {
-            $RemainingArgs = $RemainingArgs[0..($RemainingArgs.Count - 2)]
-        } else {
-            $RemainingArgs = @()
-        }
+        $RemainingArgs = if ($RemainingArgs.Count -gt 1) { $RemainingArgs[0..($RemainingArgs.Count - 2)] } else { @() }
     }
 }
 
-# Clean up remaining args (remove null/empty)
 $cleanArgs = @()
 if ($null -ne $RemainingArgs) {
     $cleanArgs = $RemainingArgs | Where-Object { $_ -ne $null -and $_.Trim().Length -gt 0 }
 }
 
-# Determine Start-Process parameters
 try {
     if ($hidden) {
-        if ($cleanArgs -and $cleanArgs.Count -gt 0) {
-            Start-Process -FilePath $FilePath -ArgumentList $cleanArgs -Credential $cred -WorkingDirectory (Split-Path $FilePath -Parent) -WindowStyle Hidden
-        } else {
-            Start-Process -FilePath $FilePath -Credential $cred -WorkingDirectory (Split-Path $FilePath -Parent) -WindowStyle Hidden
-        }
+        if ($cleanArgs.Count -gt 0) { Start-Process -FilePath $FilePath -ArgumentList $cleanArgs -Credential $cred -WorkingDirectory (Split-Path $FilePath -Parent) -WindowStyle Hidden }
+        else                         { Start-Process -FilePath $FilePath -Credential $cred -WorkingDirectory (Split-Path $FilePath -Parent) -WindowStyle Hidden }
     } else {
-        if ($cleanArgs -and $cleanArgs.Count -gt 0) {
-            Start-Process -FilePath $FilePath -ArgumentList $cleanArgs -Credential $cred -WorkingDirectory (Split-Path $FilePath -Parent)
-        } else {
-            Start-Process -FilePath $FilePath -Credential $cred -WorkingDirectory (Split-Path $FilePath -Parent)
-        }
+        if ($cleanArgs.Count -gt 0) { Start-Process -FilePath $FilePath -ArgumentList $cleanArgs -Credential $cred -WorkingDirectory (Split-Path $FilePath -Parent) }
+        else                         { Start-Process -FilePath $FilePath -Credential $cred -WorkingDirectory (Split-Path $FilePath -Parent) }
     }
 } catch {
     Write-Error ("Failed to start process as stored admin: {0}" -f $_)
@@ -408,7 +418,7 @@ try {
 
 try {
     Set-Content -Path $launcherPath -Value $launcherScript -Encoding UTF8 -Force
-    Write-Host ("ADMPASS.ps1 written to {0}" -f $launcherPath)
+    #Write-Host ("ADMPASS.ps1 written to {0}" -f $launcherPath)
 } catch {
     Write-Error ("Failed to write launcher to {0}: {1}" -f $launcherPath, $_)
     exit 1
@@ -429,7 +439,7 @@ $admpExeBase64 = "TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 try {
     $exeBytes = [Convert]::FromBase64String($admpExeBase64)
     [System.IO.File]::WriteAllBytes($exeWrapperPath, $exeBytes)
-    Write-Host ("ADMPASS.exe written to {0}" -f $exeWrapperPath)
+    #Write-Host ("ADMPASS.exe written to {0}" -f $exeWrapperPath)
 } catch {
     Write-Error ("Failed to write ADMPASS.exe: {0}" -f $_)
     exit 1
@@ -443,7 +453,7 @@ try {
     $aclExe.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule("BUILTIN\Administrators", "FullControl",    "Allow")))
     $aclExe.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule("NT AUTHORITY\SYSTEM",   "FullControl",    "Allow")))
     Set-Acl -Path $exeWrapperPath -AclObject $aclExe
-    Write-Host "ACL set on ADMPASS.exe"
+    #Write-Host "ACL set on ADMPASS.exe"
 } catch {
     Write-Warning ("Warning: Failed to set ACL on ADMPASS.exe: {0}" -f $_)
 }
@@ -478,12 +488,12 @@ try {
     $credFile = 'C:\ProgramData\AdminLauncher\cred.dat'
     $acl = Get-Acl $credFile
     $acl.SetAccessRuleProtection($true, $false)
-    $acl.Access | ForEach-Object { $acl.RemoveAccessRule($_) }
+    $acl.Access | ForEach-Object { $acl.RemoveAccessRule($_) | Out-Null }
     $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule("Users",                 "ReadAndExecute,Read", "Allow")))
     $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule("BUILTIN\Administrators","FullControl",         "Allow")))
     $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule("NT AUTHORITY\SYSTEM",  "FullControl",         "Allow")))
     Set-Acl -Path $credFile -AclObject $acl
-    Write-Host "Updated ACL: Users can read $credFile"
+    #Write-Host "Updated ACL: Users can read $credFile"
 } catch {
     Write-Warning ("Warning: failed to set ACL on cred file: {0}" -f $_)
 }
