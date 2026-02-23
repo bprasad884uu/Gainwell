@@ -236,4 +236,5 @@ Set-Content -Path "$targetFolder\SAPUILandscape.xml" -Value $SAPUILandscapeConte
 $SAPUILandscapeGlobalContent = '<?xml version="1.0" encoding="UTF-8"?><Landscape><Messageservers/></Landscape>'
 Set-Content -Path "$targetFolder\SAPUILandscapeGlobal.xml" -Value $SAPUILandscapeGlobalContent -Encoding UTF8
 
+taskkill /im saplogon.exe /f
 Write-Host "Files created in: $targetFolder"
