@@ -4,11 +4,13 @@ $outlook = New-Object -ComObject Outlook.Application
 # Create a new mail item
 $mail = $outlook.CreateItem(0)  # 0 = olMailItem
 
-# Display the mail temporarily to load the default signature
-$mail.Display()
+# ✅ Silently load the default signature (without any popup)
+$inspector = $mail.GetInspector
+# Release the inspector object, it was only needed to trigger signature loading
+[System.Runtime.InteropServices.Marshal]::ReleaseComObject($inspector) | Out-Null
 
 # Specify the account to send from (leave empty to use default)
-$mailID = ""  
+$mailID = ""
 
 # Set the account to send from
 if (![string]::IsNullOrWhiteSpace($mailID)) {
@@ -22,10 +24,10 @@ if (![string]::IsNullOrWhiteSpace($mailID)) {
 
 # Set the email properties
 $mail.To = "servicedesk@acceleronsolutions.io"
-#$mail.CC = "cc.recipient@domain.com"  # Add CC recipients here
+#$mail.CC = "cc.recipient@domain.com"
 $mail.Subject = "Subject"
 
-# Prepend your message above the signature
+# Prepend your custom message above the default signature
 $mail.HTMLBody = @"
 <p>Dear Team,</p>
 <p>Email Body.</p>
@@ -33,5 +35,4 @@ $mail.HTMLBody = @"
 
 # Send the email
 $mail.Send()
-
 Write-Output "Email sent successfully!"
