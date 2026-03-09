@@ -80,7 +80,7 @@ if ([string]::IsNullOrWhiteSpace($domain)) {
 
 # Dynamic company config
 $CompanyConfig = @(
-    @{ Name = "GCPL"; Domains = @("gainwellindia.com");			HostnamePatterns = @("GCPL", "ASPL") },
+    @{ Name = "GCPL"; Domains = @("gainwellindia.com");			HostnamePatterns = @("GCPL", "ASPL", "ITPL") },
 	@{ Name = "GTPL"; Domains = @("");       					HostnamePatterns = @("GTPL") },
     @{ Name = "GEPL"; Domains = @("gainwellengineering.com");   HostnamePatterns = @("GEPL", "GESPL") }
 )
