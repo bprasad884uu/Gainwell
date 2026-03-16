@@ -30,9 +30,7 @@ param (
 		"*.ica",
 		"hrmstipl.exe",
 		"PresentationLauncher.exe",
-		"WinSCP.exe",
-		"CBDT BULK CONVERTER 4.0.exe",
-		"g0xin.exe"
+		"WinSCP.exe"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
@@ -324,15 +322,6 @@ $xml += "  <RuleCollection Type=`"Appx`" EnforcementMode=`"$EnforcementMode`">`n
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow Local Admins - All (Appx)`" Description=`"Local Administrators allowed everywhere for Appx`" UserOrGroupSid=`"$AdministratorsSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
-
-# Block Microsoft Store for standard Users
-$xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Deny Microsoft Store for Users`" Description=`"Block Microsoft Store for standard users`" UserOrGroupSid=`"$UsersSid`" Action=`"Deny`">`n"
-$xml += "      <Conditions>`n"
-$xml += "        <FilePublisherCondition PublisherName=`"CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US`" ProductName=`"Microsoft.WindowsStore`" BinaryName=`"*`">`n"
-$xml += "          <BinaryVersionRange LowSection=`"0.0.0.0`" HighSection=`"65535.65535.65535.65535`" />`n"
-$xml += "        </FilePublisherCondition>`n"
-$xml += "      </Conditions>`n"
-$xml += "    </FilePublisherRule>`n"
 
 # Allow signed Appx for Everyone
 $xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - All Signed Appx`" Description=`"Allow signed packaged apps`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
