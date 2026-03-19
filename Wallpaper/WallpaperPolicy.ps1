@@ -186,7 +186,7 @@ $taskSettingsPolicy.ExecutionTimeLimit = "PT0S"
 $triggersPolicy = @($timeTriggerPolicy, $logonTriggerPolicy)
 
 # Define the task principal
-$taskPrincipalPolicy = New-ScheduledTaskPrincipal -GroupId "NT AUTHORITY\INTERACTIVE" -RunLevel Highest
+$taskPrincipalPolicy = New-ScheduledTaskPrincipal -GroupId "NT AUTHORITY\SYSTEM" -RunLevel Highest
 
 # Register the scheduled task
 $null = Register-ScheduledTask -Action $actionPolicy -Trigger $triggersPolicy -TaskName $PolicyTaskName -Settings $taskSettingsPolicy -Principal $taskPrincipalPolicy -Force
