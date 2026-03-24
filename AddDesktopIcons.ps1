@@ -12,19 +12,21 @@ Set-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer
 # Add User's Profile to the desktop
 Set-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel" -Name "{59031A47-3F72-44A7-89C5-5595FE6B30EE}" -Value 0
 
-# Set desktop icons to display as small icons
-#$null = New-Item -Path "HKCU:\Software\Microsoft\Windows\Shell\Bags\1\Desktop" -Force
-# Set the path to the registry key
-$registryPath = "HKCU:\Software\Microsoft\Windows\Shell\Bags\1\Desktop"
+# Apply IconSize for ALL users
+$UserSIDs = Get-ChildItem "Registry::HKEY_USERS" |
+    Where-Object { $_.Name -match "S-1-5-21-" }  # filters real user profiles
 
-# Set the name of the property
-$propertyName = "IconSize"
+foreach ($sid in $UserSIDs) {
+    $registryPath = "Registry::HKEY_USERS\$($sid.PSChildName)\Software\Microsoft\Windows\Shell\Bags\1\Desktop"
 
-# Set the value for small icons
-$propertyValue = 32
+    # Create key if not exists
+    if (-not (Test-Path $registryPath)) {
+        New-Item -Path $registryPath -Force | Out-Null
+    }
 
-# Set the property value
-Set-ItemProperty -Path $registryPath -Name $propertyName -Value $propertyValue
+    # Set small icon size
+    Set-ItemProperty -Path $registryPath -Name "IconSize" -Value 32
+}
 
 # Restart explorer.exe to apply the changes
 Stop-Process -Name explorer -Force
