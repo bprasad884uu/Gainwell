@@ -127,7 +127,6 @@ if ($IsSystem -or $IsAdmin) {
 # WRITE POLICY SCRIPT (SYSTEM)
 # ============================================================
 $WritePolicyExe = $true
-Import-Module Microsoft.PowerShell.Security -ErrorAction SilentlyContinue
 
 if (Test-Path $PolicyScriptPath) {
 

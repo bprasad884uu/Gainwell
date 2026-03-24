@@ -141,7 +141,6 @@ if ($WritePolicyExe) {
 # ============================================================
 
 $WriteUpdateExe = $true
-Import-Module Microsoft.PowerShell.Security -ErrorAction SilentlyContinue
 
 if (Test-Path $UpdateExePath) {
 
