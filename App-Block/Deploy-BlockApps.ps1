@@ -7,8 +7,9 @@ $ErrorActionPreference = "Stop"
 # CONFIG
 # ============================================================
 
-$BaseDir            = "C:\Windows\System32\Acceleron\Appblocker"
-$CertDir            = Join-Path $BaseDir "Certificate"
+$MainDir            = "C:\Windows\System32\Acceleron"
+$BaseDir            = Join-Path $MainDir "Appblocker"
+$CertDir            = Join-Path $MainDir "Certificate"
 
 $PolicyScriptPath   = Join-Path $BaseDir "Appblocker.exe"
 $JsonPath           = Join-Path $BaseDir "Blocked-apps.json"

@@ -7,8 +7,9 @@ $ErrorActionPreference = "Stop"
 # CONFIG
 # ============================================================
 
-$BaseDir            = "C:\Windows\System32\Acceleron\Wallpaper"
-$CertDir            = Join-Path $BaseDir "Certificate"
+$MainDir            = "C:\Windows\System32\Acceleron\"
+$BaseDir            = Join-Path $MainDir "Appblocker"
+$CertDir            = Join-Path $MainDir "Certificate"
 
 $PolicyScriptPath   = Join-Path $BaseDir "WallpaperPolicy.exe"
 $UpdateExePath      = Join-Path $BaseDir "WallpaperUpdate.exe"
