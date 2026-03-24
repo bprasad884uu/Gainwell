@@ -11,7 +11,7 @@ $BaseDir            = "C:\Windows\System32\Acceleron\Appblocker"
 
 $PolicyScriptPath   = "$BaseDir\Appblocker.exe"
 $JsonPath           = "$BaseDir\Blocked-apps.json"
-$CertPath           = "$BaseDir\GainwellWallpaper.cer"
+$CertPath           = "$BaseDir\Certificate\GainwellWallpaper.cer"
 
 $PolicyTaskName     = "App Blocker Policy"
 

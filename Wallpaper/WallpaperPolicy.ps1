@@ -11,7 +11,7 @@ $BaseDir            = "C:\Windows\System32\Acceleron\Wallpaper"
 
 $PolicyScriptPath   = "$BaseDir\WallpaperPolicy.exe"
 $UpdateExePath      = "$BaseDir\WallpaperUpdate.exe"
-$CertPath           = "$BaseDir\GainwellWallpaper.cer"
+$CertPath           = "$BaseDir\Certificate\GainwellWallpaper.cer"
 
 $PolicyTaskName     = "Wallpaper Policy"
 $UpdateTaskName     = "Wallpaper Update Schedule"
