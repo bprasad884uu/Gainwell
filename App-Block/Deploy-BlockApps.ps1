@@ -8,10 +8,11 @@ $ErrorActionPreference = "Stop"
 # ============================================================
 
 $BaseDir            = "C:\Windows\System32\Acceleron\Appblocker"
+$CertDir            = Join-Path $BaseDir "Certificate"
 
-$PolicyScriptPath   = "$BaseDir\Appblocker.exe"
-$JsonPath           = "$BaseDir\Blocked-apps.json"
-$CertPath           = "$BaseDir\Certificate\GainwellWallpaper.cer"
+$PolicyScriptPath   = Join-Path $BaseDir "Appblocker.exe"
+$JsonPath           = Join-Path $BaseDir "Blocked-apps.json"
+$CertPath           = Join-Path $CertDir "GainwellWallpaper.cer"
 
 $PolicyTaskName     = "App Blocker Policy"
 
@@ -26,8 +27,14 @@ $IsAdmin            = ([Security.Principal.WindowsPrincipal] `
 # ENSURE BASE DIRECTORY
 # ============================================================
 
+# Create base directory if not exists
 if (-not (Test-Path $BaseDir)) {
     New-Item -Path $BaseDir -ItemType Directory -Force | Out-Null
+}
+
+# Create certificate directory if not exists
+if (-not (Test-Path $CertDir)) {
+    New-Item -Path $CertDir -ItemType Directory -Force | Out-Null
 }
 
 # ============================================================

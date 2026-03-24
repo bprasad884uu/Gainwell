@@ -8,10 +8,11 @@ $ErrorActionPreference = "Stop"
 # ============================================================
 
 $BaseDir            = "C:\Windows\System32\Acceleron\Wallpaper"
+$CertDir            = Join-Path $BaseDir "Certificate"
 
-$PolicyScriptPath   = "$BaseDir\WallpaperPolicy.exe"
-$UpdateExePath      = "$BaseDir\WallpaperUpdate.exe"
-$CertPath           = "$BaseDir\Certificate\GainwellWallpaper.cer"
+$PolicyScriptPath   = Join-Path $BaseDir "WallpaperPolicy.exe"
+$UpdateExePath      = Join-Path $BaseDir "WallpaperUpdate.exe"
+$CertPath           = Join-Path $CertDir "GainwellWallpaper.cer"
 
 $PolicyTaskName     = "Wallpaper Policy"
 $UpdateTaskName     = "Wallpaper Update Schedule"
@@ -27,8 +28,14 @@ $IsAdmin            = ([Security.Principal.WindowsPrincipal] `
 # ENSURE BASE DIRECTORY
 # ============================================================
 
+# Create base directory if not exists
 if (-not (Test-Path $BaseDir)) {
     New-Item -Path $BaseDir -ItemType Directory -Force | Out-Null
+}
+
+# Create certificate directory if not exists
+if (-not (Test-Path $CertDir)) {
+    New-Item -Path $CertDir -ItemType Directory -Force | Out-Null
 }
 
 # ============================================================
