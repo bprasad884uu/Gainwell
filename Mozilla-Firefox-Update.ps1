@@ -89,7 +89,6 @@ function Download-LatestInstaller {
         }
     }
 
-    # Debug the constructed URL
     if ([string]::IsNullOrEmpty($url)) {
         Write-Host "Download URL is blank for $Application." -ForegroundColor Red
         return $null
@@ -97,7 +96,6 @@ function Download-LatestInstaller {
         Write-Host "Download $Application $Architecture Installer..." -ForegroundColor Green
     }
 
-    # Construct the output file path
     $outputPath = "$env:TEMP\$Application" + "_$Architecture.exe"
 
     try {
@@ -109,7 +107,6 @@ function Download-LatestInstaller {
     }
 }
 
-
 # Function to install the application
 function Install-Application {
     param (
@@ -118,13 +115,46 @@ function Install-Application {
 
     Start-Process -FilePath $InstallerPath -ArgumentList "/S /PreventRebootRequired=true" -Wait
 
-    # Delete the installer after installation
     if (Test-Path -Path $InstallerPath) {
         Remove-Item -Path $InstallerPath -Force
     }
 }
 
-# Initialize flag for found applications
+# ================================
+# Remove User-level Mozilla Apps (All Profiles)
+# ================================
+$userMozillaInstalled = $false
+
+$profiles = Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue | Where-Object {
+    $_.Name -notin @("Public", "Default", "Default User", "All Users")
+}
+
+foreach ($profile in $profiles) {
+
+    # Firefox
+    $firefoxPath = "$($profile.FullName)\AppData\Local\Mozilla Firefox\uninstall\helper.exe"
+    if (Test-Path $firefoxPath) {
+        Write-Host "User-level Firefox detected for user: $($profile.Name)"
+        $userMozillaInstalled = $true
+
+        Write-Host "Uninstalling Firefox for user: $($profile.Name)..."
+        Start-Process $firefoxPath -ArgumentList "/S" -Wait
+        Write-Host "Removed Firefox for user: $($profile.Name)"
+    }
+
+    # Thunderbird
+    $thunderbirdPath = "$($profile.FullName)\AppData\Local\Thunderbird\uninstall\helper.exe"
+    if (Test-Path $thunderbirdPath) {
+        Write-Host "User-level Thunderbird detected for user: $($profile.Name)"
+        $userMozillaInstalled = $true
+
+        Write-Host "Uninstalling Thunderbird for user: $($profile.Name)..."
+        Start-Process $thunderbirdPath -ArgumentList "/S" -Wait
+        Write-Host "Removed Thunderbird for user: $($profile.Name)"
+    }
+}
+
+# Initialize flag
 $mozillaProductFound = $false
 
 Write-Host "Checking for Mozilla applications..."
@@ -139,26 +169,29 @@ $products = @(
 foreach ($product in $products) {
     $info = Get-ApplicationInstallation -AppName $product.DisplayName
     if ($info.Installed) {
-        $mozillaProductFound = $true  # Mark that at least one product is found
+        $mozillaProductFound = $true
+
         $latestVersion = Get-LatestMozillaVersion -ProductName $product.Json -Key $product.Key
+
         if ($latestVersion) {
             if ($info.Version -eq $latestVersion) {
                 Write-Host "$($product.DisplayName) is up to date (Version: $($info.Version), Architecture: $($info.Architecture))."
             } else {
                 Write-Host "$($product.DisplayName) is outdated (Installed: $($info.Version), Architecture: $($info.Architecture), Latest: $latestVersion)."
+
                 $installer = Download-LatestInstaller -Application $product.DownloadName -Architecture $info.Architecture
+
                 if ($installer) {
                     Install-Application -InstallerPath $installer
 
-                    # Recheck version after installation
                     $updatedInfo = Get-ApplicationInstallation -AppName $product.DisplayName
                     if ($updatedInfo.Version -eq $latestVersion) {
-                        Write-Host "$($product.DisplayName) has been updated to version $($info.Version), Architecture: $($info.Architecture)."
+                        Write-Host "$($product.DisplayName) has been updated to version $($updatedInfo.Version), Architecture: $($updatedInfo.Architecture)."
                     } else {
                         Write-Host "$($product.DisplayName) is not able to update." -ForegroundColor Red
                     }
                 } else {
-                    Write-Host "Installer file not found for $($product.DisplayName). Skipping installation." -ForegroundColor Yellow
+                    Write-Host "Installer file not found for $($product.DisplayName)." -ForegroundColor Yellow
                 }
             }
         } else {
@@ -167,7 +200,7 @@ foreach ($product in $products) {
     }
 }
 
-# Check if no Mozilla products were found and display message
-if (-not $mozillaProductFound) {
+# Final check
+if (-not $mozillaProductFound -and -not $userMozillaInstalled) {
     Write-Host "No Mozilla product found." -ForegroundColor Yellow
 }
