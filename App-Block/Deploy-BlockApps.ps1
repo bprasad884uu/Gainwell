@@ -11,7 +11,7 @@ $MainDir            = "C:\Windows\System32\Acceleron"
 $BaseDir            = Join-Path $MainDir "Appblocker"
 $CertDir            = Join-Path $MainDir "Certificate"
 
-$PolicyScriptPath   = Join-Path $BaseDir "Appblocker.exe"
+$PolicyExePath   = Join-Path $BaseDir "Appblocker.exe"
 $JsonPath           = Join-Path $BaseDir "Blocked-apps.json"
 $CertPath           = Join-Path $CertDir "GainwellWallpaper.cer"
 
@@ -47,7 +47,7 @@ Get-Process -Name "AppBlocker" -ErrorAction SilentlyContinue | Stop-Process -For
 Get-ScheduledTask $PolicyTaskName -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
 Get-ScheduledTask "BlockAnyDeskTask Policy" -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false
 
-Remove-Item $PolicyScriptPath  -Force -ErrorAction SilentlyContinue
+Remove-Item $PolicyExePath  -Force -ErrorAction SilentlyContinue
 Remove-Item $CertPath -Force -ErrorAction SilentlyContinue
 Remove-Item "C:\Windows\Block-Anydesk.ps1" -Force -ErrorAction SilentlyContinue
 Remove-Item "C:\Windows\Block-WindowsStore.ps1" -Force -ErrorAction SilentlyContinue
@@ -128,9 +128,9 @@ if ($IsSystem -or $IsAdmin) {
 # ============================================================
 $WritePolicyExe = $true
 
-if (Test-Path $PolicyScriptPath) {
+if (Test-Path $PolicyExePath) {
 
-    $Sig = Get-AuthenticodeSignature $PolicyScriptPath
+    $Sig = Get-AuthenticodeSignature $PolicyExePath
 
     if (
         $Sig.SignerCertificate -and
@@ -142,10 +142,10 @@ if (Test-Path $PolicyScriptPath) {
 
 if ($WritePolicyExe) {
 
-    [IO.File]::WriteAllBytes($PolicyScriptPath, $PolicyExeBytes)
+    [IO.File]::WriteAllBytes($PolicyExePath, $PolicyExeBytes)
 
     Start-Sleep 2
-    $Sig = Get-AuthenticodeSignature $PolicyScriptPath
+    $Sig = Get-AuthenticodeSignature $PolicyExePath
 
     if (
         -not $Sig.SignerCertificate -or
