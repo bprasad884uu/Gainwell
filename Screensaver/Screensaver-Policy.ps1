@@ -277,7 +277,7 @@ foreach ($key in $filteredKeys) {
             Remove-ItemProperty -Path $photoViewerPath -Name "Speed" -ErrorAction SilentlyContinue
 
             # Set screensaver settings
-			Set-ItemProperty -Path $photoViewerPath -Name "Delay" -Value ([int]20) -Type DWord
+			Set-ItemProperty -Path $photoViewerPath -Name "Delay" -Value ([int]60) -Type DWord
             Set-ItemProperty -Path $desktopPath -Name "ScreenSaveTimeOut" -Value 300 -Type String
             Set-ItemProperty -Path $desktopPath -Name "ScreenSaveActive" -Value 1 -Type String
             Set-ItemProperty -Path $desktopPath -Name "ScreenSaverIsSecure" -Value 1 -Type String
