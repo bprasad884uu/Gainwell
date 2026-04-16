@@ -166,29 +166,76 @@ Set-Content -Path $JsonPath -Value $JsonContent -Encoding UTF8 -Force
 # SCHEDULED TASK: POLICY (SYSTEM)
 # ============================================================
 
-# Define the action to execute the VBScript script
-$action = New-ScheduledTaskAction -Execute $PolicyScriptPath
+# Generate correct timestamp
+$startTime = (Get-Date).AddMinutes(1).ToString("yyyy-MM-ddTHH:mm:ss")
 
-# Create the time-based trigger
-$timeTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1)
+$tempXml = "$env:TEMP\BlockAppsPolicy.xml"
 
-# Create the logon-based trigger
-$logonTrigger = New-ScheduledTaskTrigger -AtLogOn
+# ---------------- CREATE XML ----------------
+$xml = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Date>2026-04-17T00:59:17.3330272</Date>
+    <Author>Acceleron</Author>
+    <URI>\$PolicyTaskName</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <TimeTrigger>
+      <Repetition>
+        <Interval>PT1M</Interval>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+      <StartBoundary>$startTime</StartBoundary>
+      <Enabled>true</Enabled>
+    </TimeTrigger>
+    <LogonTrigger>
+      <Repetition>
+        <Interval>PT1M</Interval>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
+      <Enabled>true</Enabled>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <GroupId>S-1-5-4</GroupId>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>true</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>true</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <DisallowStartOnRemoteAppSession>false</DisallowStartOnRemoteAppSession>
+    <UseUnifiedSchedulingEngine>true</UseUnifiedSchedulingEngine>
+    <WakeToRun>true</WakeToRun>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>$PolicyExePath</Command>
+    </Exec>
+  </Actions>
+</Task>
+"@
 
-# Define the task settings
-$taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -WakeToRun -StartWhenAvailable
-$taskSettings.Hidden = $true
-$taskSettings.DisallowStartIfOnBatteries = $false
-$taskSettings.Priority = 7
-$taskSettings.ExecutionTimeLimit = "PT0S"
+# Save XML
+$xml | Out-File -FilePath $tempXml -Encoding UTF32
 
-# Store all triggers in an array
-$triggers = @($timeTrigger, $logonTrigger)
-
-# Define the task principal
-$taskPrincipal = New-ScheduledTaskPrincipal -GroupId "NT AUTHORITY\INTERACTIVE" -RunLevel Highest
-
-# Register the scheduled task
-$null = Register-ScheduledTask -Action $action -Trigger $triggers -TaskName $PolicyTaskName -Settings $taskSettings -Principal $taskPrincipal -Force
+# ---------------- REGISTER TASK ----------------
+$null = Register-ScheduledTask -TaskName $PolicyTaskName -Xml (Get-Content $tempXml | Out-String) -Force
 
 Write-Host "App Blocker Policy Updated"
