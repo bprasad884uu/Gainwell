@@ -10,8 +10,10 @@ $SpotlightAssets  = "C:\Windows\SystemApps\MicrosoftWindows.Client.CBS_cw5n1h2tx
 $IsWindows11 = ([Environment]::OSVersion.Version.Build -ge 22000)
 
 # EXE (same directory as script)
-$ScriptDir = "C:\ProgramData\Acceleron\Wallpaper"
-$ExePath   = Join-Path $ScriptDir "WallpaperUpdate.exe"
+$MainDir            = "C:\Windows\System32\Acceleron\"
+$BaseDir            = Join-Path $MainDir "Wallpaper"
+$PolicyExePath      = Join-Path $BaseDir "WallpaperPolicy.exe"
+$UpdateExePath      = Join-Path $BaseDir "WallpaperUpdate.exe"
 
 # ============================================================
 # PROCESS ALL USER PROFILES (HKU SAFE)
@@ -112,15 +114,30 @@ rundll32.exe user32.dll,UpdatePerUserSystemParameters
 # RUN WallpaperUpdate.exe AND DELETE IT
 # ============================================================
 
-if (Test-Path $ExePath) {
-
+if ($BaseDir -and (Test-Path $BaseDir)) {
     try {
-        Start-Process -FilePath $ExePath -Wait -WindowStyle Hidden
+        $exeName = "WallpaperUpdate"
+
+        # 1. Kill the process if it is already running
+        Stop-Process -Name $exeName -Force -ErrorAction SilentlyContinue
+
+        # 2. Start the executable
+        $process = Start-Process -FilePath $UpdateExePath -PassThru -WindowStyle Hidden
+
+        # 3. Wait briefly to allow the process to do its work (adjust if needed)
         Start-Sleep -Seconds 2
-        Remove-Item -Path $ScriptDir -Recurse -Force
+
+        # 4. Kill the process again if it is still running
+        if ($process -and !$process.HasExited) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        }
+
+        # 5. Delete the base directory
+        Remove-Item -Path $BaseDir -Recurse -Force
     }
     catch {
-        # Silent by design
+        # Log the error for debugging
+        Write-Error $_
     }
 }
 
