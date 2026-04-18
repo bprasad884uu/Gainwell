@@ -30,7 +30,8 @@ param (
 		"*.ica",
 		"hrmstipl.exe",
 		"PresentationLauncher.exe",
-		"WinSCP.exe"
+		"WinSCP.exe",
+		"cardPresso*.exe"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
@@ -73,7 +74,9 @@ param (
 		"D:\EARTHWORKS TRAINING SIMULATOR 2.21.40\SIMULATOR\*",
 		"%OSDRIVE%\Users\*\AppData\Local\CITRIX\*",
 		"%OSDRIVE%\g0xin\*",
-		"%OSDRIVE%\Users\*\AppData\Roaming\Yealink\Yealink Wireless Presentation Pod\*"
+		"%OSDRIVE%\Users\*\AppData\Roaming\Yealink\Yealink Wireless Presentation Pod\*",
+		"D:\TRIAL\*",
+		"%OSDRIVE%\CADNEST\*"
     ),
 
     [string[]]$WhitelistedPublishers = @(
