@@ -76,7 +76,8 @@ param (
 		"%OSDRIVE%\g0xin\*",
 		"%OSDRIVE%\Users\*\AppData\Roaming\Yealink\Yealink Wireless Presentation Pod\*",
 		"D:\TRIAL\*",
-		"%OSDRIVE%\CADNEST\*"
+		"%OSDRIVE%\CADNEST\*",
+		"%OSDRIVE%\QUEST SOFTWARE\*"
     ),
 
     [string[]]$WhitelistedPublishers = @(
