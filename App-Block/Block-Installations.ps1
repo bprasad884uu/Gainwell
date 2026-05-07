@@ -31,11 +31,13 @@ param (
 		"hrmstipl.exe",
 		"PresentationLauncher.exe",
 		"WinSCP.exe",
-		"cardPresso*.exe"
+		"cardPresso*.exe",
+		"Etk.exe"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
-		"DataMovement.PersonalGatewayComponents.msi"
+		"DataMovement.PersonalGatewayComponents.msi",
+		"e-Filing_F145-F146_V1.0.msi"
 	),
 
     [string[]]$WhitelistedPaths = @(
@@ -78,7 +80,8 @@ param (
 		"D:\TRIAL\*",
 		"%OSDRIVE%\CADNEST\*",
 		"%OSDRIVE%\QUEST SOFTWARE\*",
-		"%OSDRIVE%\USERS\*\APPDATA\ROAMING\QUEST SOFTWARE\*"
+		"%OSDRIVE%\USERS\*\APPDATA\ROAMING\QUEST SOFTWARE\*",
+		"%OSDRIVE%\USERS\*\Desktop\HDFC BANK\"
     ),
 
     [string[]]$WhitelistedPublishers = @(
