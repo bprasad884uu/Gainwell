@@ -36,6 +36,37 @@ param(
     [switch]$ForceDownload = $false
 )
 
+# ---------------------------
+# AES Encrypted CID
+# ---------------------------
+
+$EncryptedCID = "dZ1PeOW3tW0kJwCbHYcsmLGX5NKQ1+cJrFk7lIazMQKuIuw3qZVVLXTEA+CyjYG8"
+
+# AES Key / IV
+$KeyBase64 = "9IJWXVERkspUYB7SsoaBZtNrQ50BxB8o31HSx6Xl3/k="
+$IVBase64  = "MqLxTnWcAeuPLUOSdSKFGw=="
+
+$Key = [Convert]::FromBase64String($KeyBase64)
+$IV  = [Convert]::FromBase64String($IVBase64)
+
+# Create AES Object
+$AES = [System.Security.Cryptography.Aes]::Create()
+$AES.Key = $Key
+$AES.IV  = $IV
+
+# Decrypt
+$Decryptor = $AES.CreateDecryptor()
+
+$EncryptedBytes = [Convert]::FromBase64String($EncryptedCID)
+
+$DecryptedBytes = $Decryptor.TransformFinalBlock(
+    $EncryptedBytes,
+    0,
+    $EncryptedBytes.Length
+)
+
+$CID = [System.Text.Encoding]::UTF8.GetString($DecryptedBytes)
+
 function Info { param($m) Write-Output "[INFO]  $m" }
 function Warn { param($m) Write-Output "[WARN]  $m" }
 function OK   { param($m) Write-Output "[OK]    $m" }
@@ -224,7 +255,7 @@ function Ensure-Installer {
 # ---------------------------
 # Run installer
 # ---------------------------
-$InstallArgs = '/quiet /norestart CID=48906A261FF14523938183CA12D77D9B-BE ProvNoWait=1'
+$InstallArgs = "/quiet /norestart CID=$CID ProvNoWait=1"
 
 function Run-Installer {
     param($ExePath, $Arguments)
