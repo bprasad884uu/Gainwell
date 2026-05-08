@@ -32,7 +32,8 @@ param (
 		"PresentationLauncher.exe",
 		"WinSCP.exe",
 		"cardPresso*.exe",
-		"Etk.exe"
+		"Etk.exe",
+		"DIAGWINFORMS.EXE"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
@@ -81,7 +82,11 @@ param (
 		"%OSDRIVE%\CADNEST\*",
 		"%OSDRIVE%\QUEST SOFTWARE\*",
 		"%OSDRIVE%\USERS\*\APPDATA\ROAMING\QUEST SOFTWARE\*",
-		"%OSDRIVE%\USERS\*\Desktop\HDFC BANK\"
+		"%OSDRIVE%\USERS\*\Desktop\HDFC BANK\*",
+		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\PROGRAMS\ITDE-FILING_F145-F146\*",
+		"%OSDRIVE%\USERS\*\APPDATA\ROAMING\LeroySome\*",
+		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\DROPBOX\*",
+		"%OSDRIVE%\USERS\*\APPDATA\ROAMING\DROPBOX\*"
     ),
 
     [string[]]$WhitelistedPublishers = @(
