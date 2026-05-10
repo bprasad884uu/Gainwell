@@ -26,6 +26,7 @@ if ($CurrentVersion) {
 }
 else {
     Write-Host "Notepad++ is not installed."
+	return
 }
 
 # Temp folder
