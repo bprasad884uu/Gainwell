@@ -33,7 +33,8 @@ param (
 		"WinSCP.exe",
 		"cardPresso*.exe",
 		"Etk.exe",
-		"DIAGWINFORMS.EXE"
+		"DIAGWINFORMS.EXE",
+		"CRISSIGNER.EXE"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
