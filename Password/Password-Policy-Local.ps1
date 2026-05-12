@@ -19,37 +19,34 @@ if (-not $currentAdmin) {
 
 $currentName = $currentAdmin.Name
 
-# Run activation + rename only if not already renamed
+# Rename account first
 if ($currentName -ne $WinOSAdmin) {
-
-    # Enable account
-    Enable-LocalUser -Name $currentName -ErrorAction SilentlyContinue
-
-    # Set Full Name
-    Set-LocalUser -Name $currentName -FullName "Gainwell Administrator" -ErrorAction SilentlyContinue
-
-    # Rename only if target name not in use
+	
+    # Check if target name already exists
     $exists = Get-LocalUser -Name $WinOSAdmin -ErrorAction SilentlyContinue
+	
     if (-not $exists) {
         Rename-LocalUser -Name $currentName -NewName $WinOSAdmin -ErrorAction SilentlyContinue
         $currentName = $WinOSAdmin
+		Write-Host "Administrator Account Renamed."
     }
-    Write-Host "Administrator Account Activated."
 }
+
+# Enable account after rename
+Enable-LocalUser -Name $currentName -ErrorAction SilentlyContinue
+
+# Set Full Name
+Set-LocalUser -Name $currentName -FullName "Gainwell Administrator" -ErrorAction SilentlyContinue
+
+Write-Host "Administrator Account Enabled."
 
 # Prompt user for a secure password
 $pass = Read-Host 'Enter Password' -AsSecureString
-#$Password = ConvertTo-SecureString $pass -AsPlainText -Force
-
-# Convert the SecureString to BSTR and then to a plain text string
-#$BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($pass)
-#$PlainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
 
 # Set the new password for the Administrator account
-Set-LocalUser -Name $WinOSAdmin -Password $pass -ErrorAction Stop
-#net user $WinOSAdmin $PlainPassword
-#Set-LocalUser -Name '$AdminUser' -Password '$ecure@2k24'
-Write-Host "Password has been reset for Administrator account."
+Set-LocalUser -Name $currentName -Password $pass -ErrorAction Stop
+
+Write-Host "Password has been reset successfully"
 
 # Exclusions (names + SID patterns)
 $ExcludeList = @($WinOSAdmin, 'Administrator', 'DefaultAccount', 'DefaultUser0', 'Guest', 'WDAGUtilityAccount', 'SYSTEM', 'LOCAL SERVICE', 'NETWORK SERVICE', 'corpadmin', 'Domain Admins')
