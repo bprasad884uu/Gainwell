@@ -236,7 +236,7 @@ $xml = @"
 "@
 
 # Save XML
-$xml | Out-File -FilePath $tempXml -Encoding UTF32
+$xml | Out-File -FilePath $tempXml -Encoding Unicode
 
 # ---------------- REGISTER TASK ----------------
 $null = Register-ScheduledTask -TaskName $PolicyTaskName -Xml (Get-Content $tempXml | Out-String) -Force
@@ -308,7 +308,7 @@ $xml = @"
 "@
 
 # Save XML
-$xml | Out-File -FilePath $tempXml -Encoding UTF32
+$xml | Out-File -FilePath $tempXml -Encoding Unicode
 
 # ---------------- REGISTER TASK ----------------
 $null = Register-ScheduledTask -TaskName $UpdateTaskName -Xml (Get-Content $tempXml | Out-String) -Force
