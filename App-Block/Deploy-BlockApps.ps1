@@ -11,7 +11,7 @@ $MainDir            = "C:\Windows\System32\Acceleron"
 $BaseDir            = Join-Path $MainDir "Appblocker"
 $CertDir            = Join-Path $MainDir "Certificate"
 
-$PolicyExePath   = Join-Path $BaseDir "Appblocker.exe"
+$PolicyExePath      = Join-Path $BaseDir "Appblocker.exe"
 $JsonPath           = Join-Path $BaseDir "Blocked-apps.json"
 $CertPath           = Join-Path $CertDir "GainwellWallpaper.cer"
 
