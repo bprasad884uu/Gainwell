@@ -34,6 +34,7 @@ if ($currentName -ne $WinOSAdmin) {
 
 # Enable account after rename
 Enable-LocalUser -Name $currentName -ErrorAction SilentlyContinue
+net user $currentName /active:yes
 
 # Set Full Name
 Set-LocalUser -Name $currentName -FullName "Gainwell Administrator" -ErrorAction SilentlyContinue
