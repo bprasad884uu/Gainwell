@@ -421,12 +421,9 @@ $xml += "  </RuleCollection>`n"
 # close xml
 $xml += "</AppLockerPolicy>`n"
 
-# Write XML to disk (no explicit Deny rules included)
+# Write XML to disk
 try {
     $dir = Split-Path $OutXmlPath -Parent
-	#Reset to default
-	Copy-Item -Path $dir\FullReset.xml $OutXmlPath -Force -ErrorAction SilentlyContinue | Out-Null
-
     if (-not (Test-Path $dir)) { New-Item -Path $dir -ItemType Directory -Force | Out-Null }
     $xml | Out-File -FilePath $OutXmlPath -Encoding UTF8 -Force
     Write-Host "`nWrote AppLocker XML to $OutXmlPath"
@@ -448,30 +445,41 @@ try {
     Write-Warning "Failed to add MSI context menu: $_"
 }
 
-# Apply policy (reset then apply recommended if you want to force clean baseline)
+# Apply policy — reset first for a clean baseline, then apply new policy
 try {
-    # Optional safe reset: write a minimal reset file and apply it first (comment out if not desired)
-    $resetXml = @'
-<AppLockerPolicy Version="1" />
-'@
     $appLockerDir = Join-Path $env:ProgramData "AppLocker"
     if (-not (Test-Path $appLockerDir)) { New-Item -Path $appLockerDir -ItemType Directory -Force | Out-Null }
+
+    # Step 1: Create blank XML and save to disk
+    $resetXml = '<AppLockerPolicy Version="1" />'
     $resetPath = Join-Path $appLockerDir "FullReset.xml"
     $resetXml | Out-File -FilePath $resetPath -Encoding UTF8 -Force
+
+    # Step 2: Clear the previously applied policy
     try {
         Set-AppLockerPolicy -XmlPolicy $resetPath -ErrorAction Stop
         Write-Host "`nAppLocker reset applied (FullReset.xml)."
     } catch {
-        Write-Warning "`nAppLocker reset failed (continuing to apply new policy): $($_.Exception.Message)"
+        Write-Warning "`nAppLocker reset failed (continuing): $($_.Exception.Message)"
     }
 
+    # Step 3: Apply the new policy
     Write-Host "`nApplying new AppLocker policy..."
     Set-AppLockerPolicy -XmlPolicy $OutXmlPath -ErrorAction Stop
 
     gpupdate /force | Out-Null
     sc.exe config appidsvc start= auto | Out-Null
-    try { Restart-Service -Name AppIDSvc -Force -ErrorAction Stop; Write-Host "`nAppIDSvc restarted." } catch { Write-Warning "`nCould not restart AppIDSvc; reboot may be required." }
-
+    try {
+       if ((Get-Service AppIDSvc).Status -ne "Running") {
+            Start-Service AppIDSvc -ErrorAction Stop
+        } else {
+            Restart-Service AppIDSvc -Force -ErrorAction Stop
+        }
+        Write-Host "`nAppIDSvc restarted."
+    } catch {
+        Write-Warning "`nCould not restart AppIDSvc — reboot may be required."
+    }
+	
     Write-Host "`nAppLocker policy applied. Check Event Viewer > Applications and Services Logs > Microsoft > Windows > AppLocker for events."
 } catch {
     Write-Error "`nFailed to apply AppLocker policy: $_"
