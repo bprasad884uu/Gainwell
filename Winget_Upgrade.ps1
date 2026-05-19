@@ -146,7 +146,7 @@ Set-Content -Path $JsonPath -Value $JsonContent -Encoding UTF8 -Force
 # ============================================================
 
 # Random time (9 AM – 5 PM)
-$hour = Get-Random -Minimum 9 -Maximum 17
+$hour = Get-Random -Minimum 10 -Maximum 16
 $minute = Get-Random -Minimum 0 -Maximum 59
 
 $startTime = (Get-Date).Date.AddHours($hour).AddMinutes($minute)
