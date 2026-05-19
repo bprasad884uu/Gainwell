@@ -13,7 +13,7 @@ param (
     [string]$EnforcementMode = "Enabled",    # Start with AuditOnly for testing
 
     [string[]]$WhitelistedApps = @(
-		"Diagsmart.exe",
+		"Diagsmart*.exe",
 		"Uninstall*.exe",
 		"uninst.exe",
 		"Generic RBI Converter*.EXE",	#for Accounts
@@ -27,14 +27,16 @@ param (
 		"DCEditor.exe",
 		"FLASHUTIL.EXE",
 		"ASCENT.exe",
-		"*.ica",
 		"hrmstipl.exe",
 		"PresentationLauncher.exe",
 		"WinSCP.exe",
 		"cardPresso*.exe",
 		"Etk.exe",
 		"DIAGWINFORMS.EXE",
-		"CRISSIGNER.EXE"
+		"CRISSIGNER.EXE",
+		"REM_RC_Desktop_v1.85.3.2.exe",
+		"EOWP.19.2.91.0.EXE",
+		"msiexec.exe"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
@@ -47,6 +49,10 @@ param (
 		"E:\ManageEngine*\*",
 		"%OSDRIVE%\Siemens\*",
 		"%OSDRIVE%\Java\*",
+		"%ProgramFiles%\WindowsApps\*",
+        "%OSDRIVE%\Users\*\AppData\Local\Microsoft\Teams\*",
+        "%OSDRIVE%\Users\*\AppData\Local\Programs\*",
+        "%ProgramData%\Microsoft\Windows\Start Menu\Programs\*",
 		"%OSDRIVE%\Users\*\.SWT\*",
 		"%OSDRIVE%\Users\*\TEAMCENTER\*",
 		"%OSDRIVE%\DEVSUITEHOME*\*",
@@ -87,16 +93,44 @@ param (
 		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\PROGRAMS\ITDE-FILING_F145-F146\*",
 		"%OSDRIVE%\USERS\*\APPDATA\ROAMING\LeroySome\*",
 		"%OSDRIVE%\USERS\*\APPDATA\LOCAL\DROPBOX\*",
-		"%OSDRIVE%\USERS\*\APPDATA\ROAMING\DROPBOX\*"
+		"%OSDRIVE%\USERS\*\APPDATA\ROAMING\DROPBOX\*",
+		"%OSDRIVE%\GSTARSOFT\DWGFASTVIEW\*",
+		"%OSDRIVE%\USERS\*\APPDATA\ROAMING\LEROYSOMER\*",
+		"E:\OneDrive - Gainwell Commosales Private Limited\D Drive of old Laptop\D colon folders\Training modules all\*",
+		"D:\Program Files (x86)\diagsmart\*"
     ),
 
     [string[]]$WhitelistedPublishers = @(
-		"CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
-		"CN=Microsoft Windows, O=Microsoft Corporation, L=Redmond, S=Washington, C=US",
-		"CN=Google LLC, O=Google LLC, L=Mountain View, S=California, C=US",
-		'CN="Oracle America, Inc.", O="Oracle America, Inc.", L=Redwood City, S=California, C=US',
-		"CN=ZOHO Corporation Private Limited, O=ZOHO Corporation Private Limited, L=Chennai, S=Tamil Nadu, C=IN",
-		"CN=Adobe Inc., OU=Acrobat DC, O=Adobe Inc., L=San Jose, S=ca, C=US"
+		# Microsoft
+		"O=MICROSOFT CORPORATION, L=REDMOND, S=WASHINGTON, C=US",
+		# Google
+		"O=GOOGLE LLC, L=MOUNTAIN VIEW, S=CALIFORNIA, C=US",
+		# Oracle
+		"O=ORACLE AMERICA, INC., L=REDWOOD CITY, S=CALIFORNIA, C=US",
+		# Adobe
+		"O=ADOBE INC., L=SAN JOSE, S=CALIFORNIA, C=US",
+		# Zoho
+		"O=ZOHO CORPORATION PRIVATE LIMITED, L=CHENNAI, S=TAMIL NADU, C=IN",
+		# VMware
+		"O=VMWARE, INC., L=PALO ALTO, S=CALIFORNIA, C=US",
+		# Cisco
+		"O=CISCO SYSTEMS, INC., L=SAN JOSE, S=CALIFORNIA, C=US",
+		# Citrix
+		"O=CITRIX SYSTEMS, INC., L=FORT LAUDERDALE, S=FLORIDA, C=US",
+		# Zoom
+		"O=ZOOM VIDEO COMMUNICATIONS, INC., L=SAN JOSE, S=CALIFORNIA, C=US",
+		# HP
+		"O=HP INC., L=PALO ALTO, S=CALIFORNIA, C=US",
+		# Dell
+		"O=DELL INC, L=ROUND ROCK, S=TEXAS, C=US",
+		# Lenovo
+		"O=LENOVO (SINGAPORE) PTE. LTD., L=SINGAPORE, C=SG",
+		# Intel
+		"O=INTEL CORPORATION, L=SANTA CLARA, S=CALIFORNIA, C=US",
+		# NVIDIA
+		"O=NVIDIA CORPORATION, L=SANTA CLARA, S=CALIFORNIA, C=US",
+		# AMD
+		"O=ADVANCED MICRO DEVICES, INC., L=SANTA CLARA, S=CALIFORNIA, C=US"
     ),
 
     [string[]]$WhitelistedScripts = @(
@@ -105,7 +139,8 @@ param (
 		"%OSDRIVE%\Users\*\AppData\Local\TEMP\__PSSCRIPTPOLICYTEST*.ps*",
 		"%OSDRIVE%\Users\*\AppData\Local\Temp\IPW*.*",
 		"%OSDRIVE%\Users\*\AppData\Local\TEMP\*\START.BAT",			#For Xentry Software Installation
-		"D:\Outlook_Mail_Merge_Attachment_v1.1.9_BETA\Outlook Mail Merge Attachment.vbs"
+		"D:\Outlook_Mail_Merge_Attachment_v1.1.9_BETA\Outlook Mail Merge Attachment.vbs",
+		"*.ica",
     )
 )
 
@@ -172,6 +207,21 @@ $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - ProgramD
 $xml += "      <Conditions><FilePathCondition Path=`"%ProgramData%\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
 
+# Windows Installer cache EXEs
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Windows Installer Cache EXE`" Description=`"Allow EXEs from Windows Installer cache`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%WINDIR%\Installer\*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
+# Package Cache EXEs (Burn/Visual C++/Edge/WebView2/etc.)
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Package Cache EXE`" Description=`"Allow EXEs from Package Cache`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%ProgramData%\Package Cache\*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
+# Config.Msi temp transaction folder
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Config.Msi EXE`" Description=`"Allow EXEs from Config.Msi`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%OSDRIVE%\Config.Msi\*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
 # Whitelisted filenames anywhere (EXE)
 foreach ($app in $WhitelistedApps) {
     $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - $app`" Description=`"Allow $app anywhere`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
@@ -191,6 +241,7 @@ foreach ($p in $WhitelistedPaths) {
     $xml += "    </FilePathRule>`n"
 }
 
+# ---------------- Publisher rules ----------------
 # Publisher allow rules (EXE) - useful but maintain exact Subject strings
 foreach ($pub in $WhitelistedPublishers) {
     $pubEsc = XmlEscape($pub)
@@ -326,6 +377,23 @@ $xml += "    </FilePathRule>`n"
 $xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Windows Installer Cache`" Description=`"Allow MSIs from %WINDIR%\Installer`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
 $xml += "      <Conditions><FilePathCondition Path=`"%WINDIR%\Installer\*`"/></Conditions>`n"
 $xml += "    </FilePathRule>`n"
+
+# Config.Msi MSI transactions
+$xml += "    <FilePathRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow - Config.Msi MSI`" Description=`"Allow MSIs from Config.Msi`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
+$xml += "      <Conditions><FilePathCondition Path=`"%OSDRIVE%\Config.Msi\*`"/></Conditions>`n"
+$xml += "    </FilePathRule>`n"
+
+# Publisher allow rules (MSI)
+foreach ($pub in $WhitelistedPublishers) {
+    $pubEsc = XmlEscape($pub)
+    $xml += "    <FilePublisherRule Id=`"" + (New-RuleGuid) + "`" Name=`"Allow MSI Publisher - $pubEsc`" Description=`"Allow signed MSI from $pubEsc`" UserOrGroupSid=`"$EveryoneSid`" Action=`"Allow`">`n"
+    $xml += "      <Conditions>`n"
+    $xml += "        <FilePublisherCondition PublisherName=`"$pubEsc`" ProductName=`"*`" BinaryName=`"*`">`n"
+    $xml += "          <BinaryVersionRange LowSection=`"0.0.0.0`" HighSection=`"65535.65535.65535.65535`" />`n"
+    $xml += "        </FilePublisherCondition>`n"
+    $xml += "      </Conditions>`n"
+    $xml += "    </FilePublisherRule>`n"
+}
 
 $xml += "  </RuleCollection>`n"
 
