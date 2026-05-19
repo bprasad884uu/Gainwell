@@ -1,7 +1,7 @@
 # Set security protocol
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$updateUrl = "https://chromiumdash.appspot.com/fetch_releases?channel=Stable&platform=Windows&num=1"
+$updateUrl = "https://chromiumdash.appspot.com/fetch_releases?channel=Stable&platform=Windows"
 
 # Function to check if Chrome is installed (System-wide)
 function Test-ChromeInstalled {
@@ -77,7 +77,11 @@ try {
 
         # Get latest version
         $json = Invoke-RestMethod -Uri $updateUrl -ErrorAction Stop
-        $chromeVersion = $json.version
+        $chromeVersion = (
+            $json |
+            Sort-Object {[version]$_.version} -Descending |
+            Select-Object -First 1
+        ).version
 
         $installedVersion = Get-ChromeVersion
 
