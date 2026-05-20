@@ -143,7 +143,7 @@ param (
 		"%OSDRIVE%\Users\*\AppData\Local\Temp\IPW*.*",
 		"%OSDRIVE%\Users\*\AppData\Local\TEMP\*\START.BAT",			#For Xentry Software Installation
 		"D:\Outlook_Mail_Merge_Attachment_v1.1.9_BETA\Outlook Mail Merge Attachment.vbs",
-		"*.ica",
+		"*.ica"
     )
 )
 
@@ -478,7 +478,7 @@ try {
         }
         Write-Host "`nAppIDSvc restarted."
     } catch {
-        Write-Warning "`nCould not restart AppIDSvc — reboot may be required."
+        Write-Warning "`nCould not restart AppIDSvc - reboot may be required."
     }
 	
     Write-Host "`nAppLocker policy applied. Check Event Viewer > Applications and Services Logs > Microsoft > Windows > AppLocker for events."
