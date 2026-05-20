@@ -36,7 +36,8 @@ param (
 		"CRISSIGNER.EXE",
 		"REM_RC_Desktop_v1.85.3.2.exe",
 		"EOWP.19.2.91.0.EXE",
-		"msiexec.exe"
+		"msiexec.exe",
+		"GSTSigner.exe"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
