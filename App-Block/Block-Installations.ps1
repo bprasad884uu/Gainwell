@@ -37,7 +37,8 @@ param (
 		"REM_RC_Desktop_v1.85.3.2.exe",
 		"EOWP.19.2.91.0.EXE",
 		"msiexec.exe",
-		"GSTSigner.exe"
+		"GSTSigner.exe",
+		"MB_RELAY_FRONTEND.EXE"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
