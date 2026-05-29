@@ -483,20 +483,17 @@ Write-Info "Disabled Windows low disk space notifications."
 # -------------------------------
 # Legacy: cleanmgr.exe
 # -------------------------------
-$drives = Get-PSDrive -PSProvider FileSystem | Where-Object { Test-Path $_.Root }
+$drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Free -ne $null -and (Test-Path $_.Root) }
+
+cleanmgr.exe /sageset:100
 
 foreach ($drive in $drives) {
     try {
-        Write-Host "`n[*] Cleaning drive $($drive.Root)" -ForegroundColor Cyan
-
-        # Configure a temporary registry key to store cleanup settings for this drive
-        $sageName = "SilentClean_$($drive.Name.TrimEnd(':'))"
-        $regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches"
-
-        # Run cleanmgr silently using /VERYLOWDISK
-        Start-Process -FilePath "cleanmgr.exe" -ArgumentList "/d $($drive.Root.TrimEnd('\')) /VERYLOWDISK /sagerun:$sageName" -Wait -NoNewWindow
-    } catch {
-        Write-Warning "Failed Disk Cleanup on $($drive.Root): $($_.Exception.Message)"
+        Write-Host "`n[*] Cleaning drive $($drive.Name):" -ForegroundColor Cyan
+        Start-Process -FilePath "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList "/d $($drive.Name) /sagerun:100" -Wait -NoNewWindow
+    }
+    catch {
+        Write-Warning "Failed Disk Cleanup on $($drive.Name): $($_.Exception.Message)"
     }
 }
 
