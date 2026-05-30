@@ -450,7 +450,6 @@ secedit /export /cfg .\secpol.cfg > $null 2>&1
 # Read + modify
 $secpolContent = Get-Content .\secpol.cfg -ErrorAction SilentlyContinue
 $secpolContent = $secpolContent -replace 'LockoutBadCount = 0', 'LockoutBadCount = 3' `
- -replace 'AllowAdministratorLockout = 1', 'AllowAdministratorLockout = 0' `
  -replace 'PasswordComplexity = 0', 'PasswordComplexity = 1' `
  -replace 'MinimumPasswordAge = 0', 'MinimumPasswordAge = 1' `
  -replace 'MaximumPasswordAge = .*', 'MaximumPasswordAge = 90' `

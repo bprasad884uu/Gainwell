@@ -121,7 +121,7 @@ foreach ($user in $localUsers) {
 Write-Host "Applying Security policy ....."
 secedit /export /cfg .\secpol.cfg
 $secpolContent = Get-Content .\secpol.cfg
-$secpolContent = $secpolContent -replace 'LockoutBadCount = 0', 'LockoutBadCount = 3' -replace 'AllowAdministratorLockout = 1', 'AllowAdministratorLockout = 0' -replace 'PasswordComplexity = 0', 'PasswordComplexity = 1' -replace 'MinimumPasswordAge = 0', 'MinimumPasswordAge = 1' -replace 'MaximumPasswordAge = .*', 'MaximumPasswordAge = 90' -replace 'MinimumPasswordLength = .*', 'MinimumPasswordLength = 8' -replace 'PasswordHistorySize = .*', 'PasswordHistorySize = 5' -replace 'ResetLockoutCount = .*', 'ResetLockoutCount = 10' -replace 'LockoutDuration = .*', 'LockoutDuration = 10' -replace 'AllowAdministratorLockout = .*', 'AllowAdministratorLockout = 0'
+$secpolContent = $secpolContent -replace 'LockoutBadCount = 0', 'LockoutBadCount = 3' -replace 'PasswordComplexity = 0', 'PasswordComplexity = 1' -replace 'MinimumPasswordAge = 0', 'MinimumPasswordAge = 1' -replace 'MaximumPasswordAge = .*', 'MaximumPasswordAge = 90' -replace 'MinimumPasswordLength = .*', 'MinimumPasswordLength = 8' -replace 'PasswordHistorySize = .*', 'PasswordHistorySize = 5' -replace 'ResetLockoutCount = .*', 'ResetLockoutCount = 10' -replace 'LockoutDuration = .*', 'LockoutDuration = 10' -replace 'AllowAdministratorLockout = .*', 'AllowAdministratorLockout = 0'
 $secpolContent | Out-File .\secpol.cfg -Force
 
 secedit /configure /db $env:SystemDrive\windows\security\local.sdb /cfg .\secpol.cfg /areas SECURITYPOLICY
