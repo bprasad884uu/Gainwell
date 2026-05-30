@@ -38,7 +38,10 @@ param (
 		"EOWP.19.2.91.0.EXE",
 		"msiexec.exe",
 		"GSTSigner.exe",
-		"MB_RELAY_FRONTEND.EXE"
+		"MB_RELAY_FRONTEND.EXE",
+		"AU_.EXE",
+		"KSOLAUNCH.EXE",
+		"KSOMISC.EXE"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
