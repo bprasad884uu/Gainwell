@@ -238,4 +238,7 @@ $xml | Out-File -FilePath $tempXml -Encoding UTF32
 # ---------------- REGISTER TASK ----------------
 $null = Register-ScheduledTask -TaskName $PolicyTaskName -Xml (Get-Content $tempXml | Out-String) -Force
 
+# Clear applied Certificate
+Remove-Item $CertDir -Recurse -Force -ErrorAction SilentlyContinue
+
 Write-Host "App Blocker Policy Updated"

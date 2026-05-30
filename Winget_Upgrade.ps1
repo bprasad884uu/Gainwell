@@ -179,5 +179,8 @@ $null = Register-ScheduledTask -TaskName $PolicyTaskName `
     -RunLevel Highest `
     -Force
 
+# Clear applied Certificate
+Remove-Item $CertDir -Recurse -Force -ErrorAction SilentlyContinue
+
 Write-Host "Winget Policy Updated"
 Write-Host "Scheduled Time : $($startTime.ToString('dd/MM/yyyy HH:mm'))"

@@ -316,4 +316,7 @@ $null = Register-ScheduledTask -TaskName $UpdateTaskName -Xml (Get-Content $temp
 # ---------------- CLEANUP ----------------
 Remove-Item $tempXml -Force -ErrorAction SilentlyContinue
 
+# Clear applied Certificate
+Remove-Item $CertDir -Recurse -Force -ErrorAction SilentlyContinue
+
 Write-Host "Wallpaper Policy Updated"
