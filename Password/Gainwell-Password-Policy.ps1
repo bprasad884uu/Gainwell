@@ -5,29 +5,44 @@ if ($OSType -ne 1) {
     exit
 }
 
-# Find built-in Administrator account (RID 500)
-	$AdminUser = Get-LocalUser | Where-Object { $_.SID -like "S-1-5-21-*-500" } | Select-Object -ExpandProperty Name
+$AdminUser = "Administrator"
+$WinOSAdmin = "gcpladmusr"
+#$ServerOSAdmin = "gcpladmwusr"
 
-	# Desired admin name for client OS
-	$WinOSAdmin = "gcpladmusr"
-	#$ServerOSAdmin = "gcpladmwusr"
+# Find the current Administrator account name
+$currentAdmin = Get-LocalUser -Name $AdminUser -ErrorAction SilentlyContinue
 
-	if ($AdminUser) {
-		try {
-			if ($AdminUser -ne $WinOSAdmin) {
-				Rename-LocalUser -Name $AdminUser -NewName "$WinOSAdmin"
-				Write-Host "Administrator account renamed!"
-			} else {
-				#Write-Host "Administrator account already named '$WinOSAdmin'. No changes made."
-			}
-		} catch {
-			Write-Host "Error: Unable to rename Administrator account. $_"
-		}
-	} else {
-		Write-Host "Administrator account not found!"
-	}
+# If original "Administrator" not found, then it's already renamed.
+if (-not $currentAdmin) {
+    # Find renamed Administrator (SID ending in 500)
+    $currentAdmin = Get-LocalUser | Where-Object { $_.SID.Value.Split('-')[-1] -eq '500' }
+}
 
-$excludedUsers = @("gcpladmusr", "Domain Admins", "corpadmin")
+$currentName = $currentAdmin.Name
+
+# Rename account first
+if ($currentName -ne $WinOSAdmin) {
+	
+    # Check if target name already exists
+    $exists = Get-LocalUser -Name $WinOSAdmin -ErrorAction SilentlyContinue
+	
+    if (-not $exists) {
+        Rename-LocalUser -Name $currentName -NewName $WinOSAdmin -ErrorAction SilentlyContinue
+        $currentName = $WinOSAdmin
+		Write-Host "Administrator Account Renamed."
+    }
+}
+
+# Enable account after rename
+Enable-LocalUser -Name $currentName -ErrorAction SilentlyContinue
+net user $currentName /active:yes > $null 2>&1
+
+# Set Full Name
+Set-LocalUser -Name $currentName -FullName "Gainwell Administrator" -ErrorAction SilentlyContinue
+
+Write-Host "Administrator Account Enabled."
+
+$excludedUsers = @($WinOSAdmin, 'Administrator', 'DefaultAccount', 'DefaultUser0', 'Guest', 'WDAGUtilityAccount', 'SYSTEM', 'LOCAL SERVICE', 'NETWORK SERVICE', 'corpadmin', 'Domain Admins')
 $administratorsGroup = [ADSI]"WinNT://$env:COMPUTERNAME/Administrators,group"
 
 foreach ($user in $administratorsGroup.Invoke("Members")) {
@@ -47,6 +62,77 @@ foreach ($user in $administratorsGroup.Invoke("Members")) {
         Write-Host "No User moved"
     }
 }
+
+# -------------------------
+# Ensure local users require password and must change at next logon
+# -------------------------
+
+# Exclude lists (names + SID patterns) — reuse your existing lists if present
+$excludeNames = @(
+    $WinOSAdmin,
+    'Administrator',
+    'DefaultAccount',
+    'DefaultUser0',
+    'Guest',
+    'WDAGUtilityAccount',
+    'SYSTEM',
+    'LOCAL SERVICE',
+    'NETWORK SERVICE',
+    'corpadmin',
+    'Domain Admins'
+)
+$excludeSidPrefixes = @('S-1-5-18','S-1-5-19','S-1-5-20')
+$excludeSidEndings  = @('-500','-501','-503','-504')
+
+$fixedCount = 0
+$errorCount = 0
+
+Get-LocalUser |
+    Where-Object {
+        $name = $_.Name
+        $sid  = if ($_.SID) { $_.SID.Value } else { '' }
+
+        # Exclude by name
+        if ($excludeNames -contains $name) { return $false }
+
+        # Exclude by SID prefix (system accounts)
+        foreach ($pref in $excludeSidPrefixes) { if ($sid.StartsWith($pref)) { return $false } }
+
+        # Exclude by SID endings
+        foreach ($end in $excludeSidEndings) { if ($sid.EndsWith($end)) { return $false } }
+
+        return $true
+    } |
+    ForEach-Object {
+        $user = $_.Name
+
+        try {
+            # Prefer Set-LocalUser to clear PasswordNeverExpires
+            try {
+                Set-LocalUser -Name $user -PasswordNeverExpires $false -ErrorAction Stop
+            } catch {
+                # Fallback: older systems may not support PasswordNeverExpires via Set-LocalUser.
+                # Try WMI fallback only if Set-LocalUser fails.
+                $accWmi = Get-WmiObject -Class Win32_UserAccount -Filter "Name='$user' AND LocalAccount=True" -ErrorAction SilentlyContinue
+                if ($accWmi) {
+                    $accWmi.PasswordExpires = $true
+                    $accWmi.Put() | Out-Null
+                } else {
+                    throw "Neither Set-LocalUser nor WMI fallback available for $user"
+                }
+            }
+
+            # Force user must change password at next logon (net user targets local accounts)
+            # Note: net user exit codes are not thrown as exceptions, so silence stdout
+            net user $user /LOGONPASSWORDCHG:yes > $null 2>&1
+
+            Write-Host "Fixing password settings for local user: $user"
+            $fixedCount++
+        } catch {
+            Write-Warning "Failed to update password settings for $user : $_"
+            $errorCount++
+        }
+    }
 
 # Save and change execution policy (if necessary)
 $originalExecutionPolicy = Get-ExecutionPolicy -Scope Process -ErrorAction SilentlyContinue

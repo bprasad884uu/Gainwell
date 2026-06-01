@@ -7,6 +7,7 @@ if ($OSType -ne 1) {
 
 $AdminUser = "Administrator"
 $WinOSAdmin = "gcpladmusr"
+#$ServerOSAdmin = "gcpladmwusr"
 
 # Find the current Administrator account name
 $currentAdmin = Get-LocalUser -Name $AdminUser -ErrorAction SilentlyContinue
