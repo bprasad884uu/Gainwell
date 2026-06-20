@@ -13,7 +13,7 @@ param (
     [string]$EnforcementMode = "Enabled",    # Start with AuditOnly for testing
 
     [string[]]$WhitelistedApps = @(
-		"Diagsmart*.exe",
+		"DIAGSMART*.exe",
 		"Uninstall*.exe",
 		"uninst.exe",
 		"Generic RBI Converter*.EXE",	#for Accounts
@@ -41,7 +41,10 @@ param (
 		"MB_RELAY_FRONTEND.EXE",
 		"AU_.EXE",
 		"KSOLAUNCH.EXE",
-		"KSOMISC.EXE"
+		"KSOMISC.EXE",
+		"CrisSigner.exe",
+		"hexcal_3.52.exe",
+		"PCM_DOWNLOADER.EXE"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
@@ -102,7 +105,9 @@ param (
 		"%OSDRIVE%\GSTARSOFT\DWGFASTVIEW\*",
 		"%OSDRIVE%\USERS\*\APPDATA\ROAMING\LEROYSOMER\*",
 		"E:\OneDrive - Gainwell Commosales Private Limited\D Drive of old Laptop\D colon folders\Training modules all\*",
-		"D:\Program Files (x86)\diagsmart\*"
+		"D:\Program Files (x86)\diagsmart\*",
+		"%OSDRIVE%\PDS Connector\*",
+		"%OSDRIVE%\CrisSigner\CrisSigner\*"
     ),
 
     [string[]]$WhitelistedPublishers = @(
