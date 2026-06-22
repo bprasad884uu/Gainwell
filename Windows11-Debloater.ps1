@@ -485,11 +485,12 @@ Write-Info "Disabled Windows low disk space notifications."
 # -------------------------------
 $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Free -ne $null -and (Test-Path $_.Root) }
 
+cleanmgr.exe /sageset:100
+
 foreach ($drive in $drives) {
     try {
         Write-Host "`n[*] Cleaning drive $($drive.Name):" -ForegroundColor Cyan
-
-        Start-Process -FilePath "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList "/d $($drive.Name) /sagerun:100" -Wait -WindowStyle Hidden
+        Start-Process -FilePath "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList "/d $($drive.Name) /sagerun:100" -Wait -NoNewWindow
     }
     catch {
         Write-Warning "Failed Disk Cleanup on $($drive.Name): $($_.Exception.Message)"
