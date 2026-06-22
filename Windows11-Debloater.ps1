@@ -483,22 +483,12 @@ Write-Info "Disabled Windows low disk space notifications."
 # -------------------------------
 # Legacy: cleanmgr.exe
 # -------------------------------
-$VolumeCaches = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches"
-
-Get-ChildItem $VolumeCaches | ForEach-Object {
-    New-ItemProperty `
-        -Path $_.PSPath `
-        -Name StateFlags0100 `
-        -Value 2 `
-        -PropertyType DWord `
-        -Force | Out-Null
-}
-
 $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Free -ne $null -and (Test-Path $_.Root) }
 
 foreach ($drive in $drives) {
     try {
         Write-Host "`n[*] Cleaning drive $($drive.Name):" -ForegroundColor Cyan
+
         Start-Process -FilePath "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList "/d $($drive.Name) /sagerun:100" -Wait -WindowStyle Hidden
     }
     catch {
