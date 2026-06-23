@@ -44,7 +44,8 @@ param (
 		"KSOMISC.EXE",
 		"CrisSigner.exe",
 		"hexcal_3.52.exe",
-		"PCM_DOWNLOADER.EXE"
+		"PCM_DOWNLOADER.EXE",
+		"FSLIB.APP.UTILITIES.EXE"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
