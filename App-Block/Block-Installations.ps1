@@ -45,7 +45,9 @@ param (
 		"CrisSigner.exe",
 		"hexcal_3.52.exe",
 		"PCM_DOWNLOADER.EXE",
-		"FSLIB.APP.UTILITIES.EXE"
+		"FSLIB.APP.UTILITIES.EXE",
+		"USW*.EXE",
+		"FLASHTOOL.EXE"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
