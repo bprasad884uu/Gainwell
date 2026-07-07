@@ -853,8 +853,16 @@ $Categories = @(
                             } catch { }
                         }
                     }
-                    if (-not $Script:DryRun) {
-                        try { Clear-RecycleBin -Force -ErrorAction SilentlyContinue } catch { }
+                        if (-not $Script:DryRun) {
+                            try {
+                                $sidFolders = Get-ChildItem -Path $rbPath -Directory -Force -ErrorAction SilentlyContinue
+                                foreach ($sidFolder in $sidFolders) {
+                                    try {
+                                        Get-ChildItem -Path $sidFolder.FullName -Force -ErrorAction SilentlyContinue |
+                                            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+                                    } catch { }
+                                }
+                            } catch { }
                     }
                     return @{ Bytes = $totalBytes; Files = $totalFiles }
                 }
