@@ -40,6 +40,15 @@ $ExeWrapperPath   = Join-Path $BaseDir "ADMPASS.exe"
 $CertPath         = Join-Path $CertDir "GainwellWallpaper.cer"
 $LogFile          = Join-Path $BaseDir "install.log"
 
+$AppName         = "Admin Launcher"
+$AppVersion      = (Get-Item $ExeWrapperPath).VersionInfo.FileVersion
+
+$RegPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\AdminLauncher"
+
+# Calculate folder size in KB
+$EstimatedSize = [math]::Ceiling(((Get-ChildItem $BaseDir -Recurse -File | Measure-Object Length -Sum).Sum) / 1KB)
+
+
 $PinnedThumbprint = "ECACA66CD84B620E80C8329A253DE85149666D6E"
 
 $IsSystem = ([Security.Principal.WindowsIdentity]::GetCurrent().IsSystem)
@@ -310,6 +319,23 @@ else {
         Write-Host ("Installation failed: {0}" -f $_) -ForegroundColor Red
     }
 }
+
+# Register application
+
+New-Item -Path $RegPath -Force | Out-Null
+
+New-ItemProperty $RegPath DisplayName      -Value $AppName        -PropertyType String -Force | Out-Null
+New-ItemProperty $RegPath DisplayVersion   -Value $AppVersion     -PropertyType String -Force | Out-Null
+New-ItemProperty $RegPath Publisher        -Value "Acceleron - Bishnu Prasad Panigrahi" -PropertyType String -Force | Out-Null
+New-ItemProperty $RegPath InstallLocation  -Value $BaseDir        -PropertyType String -Force | Out-Null
+New-ItemProperty $RegPath DisplayIcon      -Value $ExeWrapperPath -PropertyType String -Force | Out-Null
+New-ItemProperty $RegPath NoModify         -Value 1               -PropertyType DWord -Force | Out-Null
+New-ItemProperty $RegPath NoRepair         -Value 1               -PropertyType DWord -Force | Out-Null
+New-ItemProperty $RegPath EstimatedSize    -Value $EstimatedSize  -PropertyType DWord -Force | Out-Null
+
+$UninstallCmd = 'powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "Remove-Item -LiteralPath ''C:\Windows\System32\Acceleron\AdminLauncher'' -Recurse -Force; Remove-Item ''HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\AdminLauncher'' -Recurse -Force"'
+
+New-ItemProperty $RegPath UninstallString -Value $UninstallCmd -PropertyType String -Force | Out-Null
 
 Write-Host "A system restart is required for the changes to take effect." -ForegroundColor DarkYellow
 
