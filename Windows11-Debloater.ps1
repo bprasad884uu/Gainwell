@@ -167,6 +167,12 @@ function Write-HeadingProgress {
         [int]$BarWidth = 36,
         [ConsoleColor]$Color = [ConsoleColor]::White
     )
+
+    if (:IsOutputRedirected) {return}	
+	
+    # Skip progress rendering when no interactive console is available
+    try {$null = $Host.UI.RawUI.CursorPosition} catch {return}
+
     if ($PercentComplete -lt 0) { $PercentComplete = 0 }
     if ($PercentComplete -gt 100) { $PercentComplete = 100 }
 
