@@ -439,6 +439,23 @@ function Ensure-Key {
     } catch { }
 }
 
+function Reset-ConsoleIfAvailable {
+    try {
+        $Host.UI.RawUI.CursorPosition = @{ X = 0; Y = 0 }
+    } catch {
+        # No console handle available (e.g. running non-interactively under
+        # ManageEngine / SYSTEM context). Safe to ignore.
+    }
+}
+
+function Clear-HostSafe {
+    try {
+        Clear-Host
+    } catch {
+        # Same reason as above - no real console buffer to clear.
+    }
+}
+
 function Format-Speed {
     param([double]$BytesPerSecond)
     if ($BytesPerSecond -ge 1GB) { return ("{0:N2} GB/s" -f ($BytesPerSecond / 1GB)) }
@@ -1306,7 +1323,7 @@ $Categories = @(
 # Main execution
 # ===========================================================================
 
-Clear-Host
+Clear-HostSafe
 Write-Host "===============================================================" -ForegroundColor Cyan
 Write-Host "  System Cleanup Utility" -ForegroundColor Cyan
 if ($Script:DryRun) {
