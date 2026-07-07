@@ -282,12 +282,13 @@ New-Item -Path $RegPath -Force | Out-Null
 
 New-ItemProperty $RegPath DisplayName      -Value $AppName        -PropertyType String -Force | Out-Null
 New-ItemProperty $RegPath DisplayVersion   -Value $AppVersion     -PropertyType String -Force | Out-Null
-New-ItemProperty $RegPath Publisher        -Value "Acceleron - Bishnu" -PropertyType String -Force | Out-Null
+New-ItemProperty $RegPath Publisher        -Value "Acceleron Solutions Pvt Ltd." -PropertyType String -Force | Out-Null
 New-ItemProperty $RegPath InstallLocation  -Value $BaseDir        -PropertyType String -Force | Out-Null
 New-ItemProperty $RegPath DisplayIcon      -Value $ExeWrapperPath -PropertyType String -Force | Out-Null
 New-ItemProperty $RegPath NoModify         -Value 1               -PropertyType DWord -Force | Out-Null
 New-ItemProperty $RegPath NoRepair         -Value 1               -PropertyType DWord -Force | Out-Null
 New-ItemProperty $RegPath EstimatedSize    -Value $EstimatedSize  -PropertyType DWord -Force | Out-Null
+New-ItemProperty $RegPath Comments         -Value "Bishnu Prasad Panigrahi"  -PropertyType String -Force | Out-Null
 
 $UninstallCmd = 'powershell.exe -ExecutionPolicy Bypass -NoProfile -Command "Remove-Item -LiteralPath ''C:\Windows\System32\Acceleron\AdminLauncher'' -Recurse -Force; Remove-Item ''HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\AdminLauncher'' -Recurse -Force"'
 
