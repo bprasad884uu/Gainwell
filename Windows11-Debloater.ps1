@@ -902,7 +902,7 @@ $Categories = @(
                             try {
                                 $s = Get-Service -Name $svc -ErrorAction SilentlyContinue
                                 if ($s -and $s.Status -eq 'Running') {
-                                    Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
+                                    $null = Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
                                     $stoppedServices += $svc
                                 }
                             } catch { }
