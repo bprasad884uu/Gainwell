@@ -902,7 +902,7 @@ $Categories = @(
                             try {
                                 $s = Get-Service -Name $svc -ErrorAction SilentlyContinue 
                                 if ($s -and $s.Status -eq 'Running') {
-                                    Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue | Out-Null
+                                    Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue | Out-Null
                                     $stoppedServices += $svc
                                 }
                             } catch { }
@@ -913,7 +913,7 @@ $Categories = @(
                     } finally {
                         # Always try to restart whatever we stopped, even if cleaning failed.
                         foreach ($svc in $stoppedServices) {
-                            try { Start-Service -Name $svc -ErrorAction SilentlyContinue | Out-Null } catch { }
+                            try { Start-Service -Name $svc -ErrorAction SilentlyContinue -WarningAction SilentlyContinue | Out-Null } catch { }
                         }
                     }
                     return $result
