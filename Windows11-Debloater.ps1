@@ -21,8 +21,8 @@
       - Runs TRIM on SSD volumes (skips HDDs automatically).
 
     Usage:
-      .\SystemCleanup.ps1            -> actually cleans
-      .\SystemCleanup.ps1 -DryRun    -> only measures, deletes nothing
+      .\Windows11-Debloater.ps1            -> actually cleans
+      .\Windows11-Debloater.ps1 -DryRun    -> only measures, deletes nothing
 
     Notes:
       - Run as Administrator for best results. Without elevation, some items
@@ -900,9 +900,9 @@ $Categories = @(
                     if (-not $Script:DryRun) {
                         foreach ($svc in @("wuauserv", "usosvc", "bits")) {
                             try {
-                                $s = Get-Service -Name $svc -ErrorAction SilentlyContinue
+                                $s = Get-Service -Name $svc -ErrorAction SilentlyContinue 
                                 if ($s -and $s.Status -eq 'Running') {
-                                    $null = Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
+                                    Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue | Out-Null
                                     $stoppedServices += $svc
                                 }
                             } catch { }
@@ -913,7 +913,7 @@ $Categories = @(
                     } finally {
                         # Always try to restart whatever we stopped, even if cleaning failed.
                         foreach ($svc in $stoppedServices) {
-                            try { Start-Service -Name $svc -ErrorAction SilentlyContinue } catch { }
+                            try { Start-Service -Name $svc -ErrorAction SilentlyContinue | Out-Null } catch { }
                         }
                     }
                     return $result
