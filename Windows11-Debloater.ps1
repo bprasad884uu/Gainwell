@@ -751,41 +751,41 @@ $Categories = @(
             # --- Edge Chromium ---
             @{ Name = "Internet Cache";          ReportCategory = "Edge Chromium"; Type = "Files"; Paths = @("$EdgeBase\*\Cache\Cache_Data\*", "$EdgeBase\*\Code Cache\*", "$EdgeBase\*\GPUCache\*") }
             @{ Name = "Cookies";                 ReportCategory = "Edge Chromium"; Type = "Files"; Paths = @("$EdgeBase\*\Network\Cookies", "$EdgeBase\*\Network\Cookies-journal") }
-            @{ Name = "Internet History";        ReportCategory = "Edge Chromium"; Type = "Files"; Paths = @("$EdgeBase\*\History", "$EdgeBase\*\History-journal") }
-            @{ Name = "Download History";        ReportCategory = "Edge Chromium"; Type = "Files"; Paths = @("$EdgeBase\*\Network\Downloads") }
+            #@{ Name = "Internet History";        ReportCategory = "Edge Chromium"; Type = "Files"; Paths = @("$EdgeBase\*\History", "$EdgeBase\*\History-journal") }
+            #@{ Name = "Download History";        ReportCategory = "Edge Chromium"; Type = "Files"; Paths = @("$EdgeBase\*\Network\Downloads") }
             @{ Name = "Last Download Location";  ReportCategory = "Edge Chromium"; Type = "Files"; Paths = @() }
-            @{ Name = "Session";                 ReportCategory = "Edge Chromium"; Type = "Files"; Paths = @("$EdgeBase\*\Sessions\*", "$EdgeBase\*\Current Session", "$EdgeBase\*\Current Tabs", "$EdgeBase\*\Last Session", "$EdgeBase\*\Last Tabs") }
+            #@{ Name = "Session";                 ReportCategory = "Edge Chromium"; Type = "Files"; Paths = @("$EdgeBase\*\Sessions\*", "$EdgeBase\*\Current Session", "$EdgeBase\*\Current Tabs", "$EdgeBase\*\Last Session", "$EdgeBase\*\Last Tabs") }
             # Saved Form Information: only stale journal file removed, real Web Data
             # (autofill) left untouched on purpose, same caution as passwords.
-            @{ Name = "Saved Form Information";  ReportCategory = "Edge Chromium"; Type = "Files"; Paths = @("$EdgeBase\*\Web Data-journal") }
-            @{ Name = "Compact Databases";        ReportCategory = "Edge Chromium"; Type = "Files"; Paths = @("$EdgeBase\*\*-journal") }
+            #@{ Name = "Saved Form Information";  ReportCategory = "Edge Chromium"; Type = "Files"; Paths = @("$EdgeBase\*\Web Data-journal") }
+            #@{ Name = "Compact Databases";        ReportCategory = "Edge Chromium"; Type = "Files"; Paths = @("$EdgeBase\*\*-journal") }
             @{ Name = "Metrics Temp Files";       ReportCategory = "Edge Chromium"; Type = "Files"; Paths = @("$EdgeBase\BrowserMetrics*", "$EdgeBase\*\BrowserMetrics*") }
             @{ Name = "Bookmarks Backup";         ReportCategory = "Edge Chromium"; Type = "Files"; Paths = @("$EdgeBase\*\Bookmarks.bak") }
 
             # --- Internet Explorer ---
             @{ Name = "Temporary Internet Files"; ReportCategory = "Internet Explorer"; Type = "Files";    Paths = @("$env:LOCALAPPDATA\Microsoft\Windows\INetCache\*") }
-            @{ Name = "History";                  ReportCategory = "Internet Explorer"; Type = "Files";    Paths = @("$env:LOCALAPPDATA\Microsoft\Windows\History\*") }
+            #@{ Name = "History";                  ReportCategory = "Internet Explorer"; Type = "Files";    Paths = @("$env:LOCALAPPDATA\Microsoft\Windows\History\*") }
             @{ Name = "Cookies";                  ReportCategory = "Internet Explorer"; Type = "Files";    Paths = @("$env:LOCALAPPDATA\Microsoft\Windows\INetCookies\*", "$env:APPDATA\Microsoft\Windows\Cookies\*") }
-            @{ Name = "Recently Typed URLs";       ReportCategory = "Internet Explorer"; Type = "Registry"; RegPaths = @("HKCU:\Software\Microsoft\Internet Explorer\TypedURLs"); Recurse = $false }
+            #@{ Name = "Recently Typed URLs";       ReportCategory = "Internet Explorer"; Type = "Registry"; RegPaths = @("HKCU:\Software\Microsoft\Internet Explorer\TypedURLs"); Recurse = $false }
             @{ Name = "Index.dat files";           ReportCategory = "Internet Explorer"; Type = "Files";    Paths = @("$env:USERPROFILE\Cookies\index.dat", "$env:LOCALAPPDATA\Microsoft\Windows\History\*\index.dat") }
-            @{ Name = "Last Download Location";    ReportCategory = "Internet Explorer"; Type = "Files";    Paths = @() }
+            #@{ Name = "Last Download Location";    ReportCategory = "Internet Explorer"; Type = "Files";    Paths = @() }
 
             # --- Google Chrome ---
             @{ Name = "Internet Cache";         ReportCategory = "Google Chrome"; Type = "Files"; Paths = @("$ChromeBase\*\Cache\Cache_Data\*", "$ChromeBase\*\Code Cache\*", "$ChromeBase\*\GPUCache\*") }
-            @{ Name = "Internet History";       ReportCategory = "Google Chrome"; Type = "Files"; Paths = @("$ChromeBase\*\History", "$ChromeBase\*\History-journal") }
+            #@{ Name = "Internet History";       ReportCategory = "Google Chrome"; Type = "Files"; Paths = @("$ChromeBase\*\History", "$ChromeBase\*\History-journal") }
             @{ Name = "Cookies";                ReportCategory = "Google Chrome"; Type = "Files"; Paths = @("$ChromeBase\*\Network\Cookies", "$ChromeBase\*\Network\Cookies-journal") }
-            @{ Name = "Download History";       ReportCategory = "Google Chrome"; Type = "Files"; Paths = @("$ChromeBase\*\Network\Downloads") }
-            @{ Name = "Last Download Location";  ReportCategory = "Google Chrome"; Type = "Files"; Paths = @() }
+            #@{ Name = "Download History";       ReportCategory = "Google Chrome"; Type = "Files"; Paths = @("$ChromeBase\*\Network\Downloads") }
+            #@{ Name = "Last Download Location";  ReportCategory = "Google Chrome"; Type = "Files"; Paths = @() }
             @{ Name = "Metrics Temp Files";      ReportCategory = "Google Chrome"; Type = "Files"; Paths = @("$ChromeBase\BrowserMetrics*", "$ChromeBase\*\BrowserMetrics*") }
-            @{ Name = "Session";                ReportCategory = "Google Chrome"; Type = "Files"; Paths = @("$ChromeBase\*\Sessions\*", "$ChromeBase\*\Current Session", "$ChromeBase\*\Current Tabs", "$ChromeBase\*\Last Session", "$ChromeBase\*\Last Tabs") }
-            @{ Name = "Compact Databases";       ReportCategory = "Google Chrome"; Type = "Files"; Paths = @("$ChromeBase\*\*-journal") }
+            #@{ Name = "Session";                ReportCategory = "Google Chrome"; Type = "Files"; Paths = @("$ChromeBase\*\Sessions\*", "$ChromeBase\*\Current Session", "$ChromeBase\*\Current Tabs", "$ChromeBase\*\Last Session", "$ChromeBase\*\Last Tabs") }
+            #@{ Name = "Compact Databases";       ReportCategory = "Google Chrome"; Type = "Files"; Paths = @("$ChromeBase\*\*-journal") }
 
             # --- Mozilla Firefox ---
             @{ Name = "Internet Cache"; ReportCategory = "Mozilla Firefox"; Type = "Files"; Paths = @("$FirefoxLoc\*\cache2\*", "$FirefoxLoc\*\startupCache\*") }
             @{ Name = "Cookies";        ReportCategory = "Mozilla Firefox"; Type = "Files"; Paths = @("$FirefoxRoam\*\cookies.sqlite", "$FirefoxRoam\*\cookies.sqlite-wal", "$FirefoxRoam\*\cookies.sqlite-shm") }
-            @{ Name = "Session";        ReportCategory = "Mozilla Firefox"; Type = "Files"; Paths = @("$FirefoxRoam\*\sessionstore-backups\*", "$FirefoxRoam\*\sessionstore.jsonlz4") }
-            @{ Name = "Saved Form History"; ReportCategory = "Mozilla Firefox"; Type = "Files"; Paths = @("$FirefoxRoam\*\formhistory.sqlite") }
-            @{ Name = "Compact Databases";   ReportCategory = "Mozilla Firefox"; Type = "Files"; Paths = @("$FirefoxRoam\*\*.sqlite-wal", "$FirefoxRoam\*\*.sqlite-shm") }
+            #@{ Name = "Session";        ReportCategory = "Mozilla Firefox"; Type = "Files"; Paths = @("$FirefoxRoam\*\sessionstore-backups\*", "$FirefoxRoam\*\sessionstore.jsonlz4") }
+            #@{ Name = "Saved Form History"; ReportCategory = "Mozilla Firefox"; Type = "Files"; Paths = @("$FirefoxRoam\*\formhistory.sqlite") }
+            #@{ Name = "Compact Databases";   ReportCategory = "Mozilla Firefox"; Type = "Files"; Paths = @("$FirefoxRoam\*\*.sqlite-wal", "$FirefoxRoam\*\*.sqlite-shm") }
             @{ Name = "Bookmarks Backup"; ReportCategory = "Mozilla Firefox"; Type = "Special"; Action = {
                     $bytes = 0L; $files = 0
                     $profiles = Get-ChildItem -Path $FirefoxRoam -Directory -ErrorAction SilentlyContinue
