@@ -64,7 +64,7 @@ $keys = Get-ChildItem -Path $registryPath
 $filteredKeys = $keys | Where-Object { $_.PSChildName -notlike "*_Classes" }
 
 # Get user profiles to map SID to Username
-$UserProfiles = Get-WmiObject Win32_UserProfile | Select-Object LocalPath, SID
+$UserProfiles = Get-CimInstance Win32_UserProfile | Select-Object LocalPath, SID
 
 foreach ($key in $filteredKeys) {
     $SID_Value = $key.PSChildName
