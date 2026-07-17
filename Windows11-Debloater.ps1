@@ -1330,7 +1330,7 @@ $Categories = @(
 # ===========================================================================
 # Main execution
 # ===========================================================================
-
+$Host.UI.RawUI.WindowTitle = "System Cleanup Utility"
 Clear-HostSafe
 Write-Host "===============================================================" -ForegroundColor Cyan
 Write-Host "  System Cleanup Utility" -ForegroundColor Cyan
