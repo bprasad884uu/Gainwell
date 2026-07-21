@@ -33,10 +33,6 @@ if ($currentName -ne $WinOSAdmin) {
     }
 }
 
-# Enable account after rename
-Enable-LocalUser -Name $currentName -ErrorAction SilentlyContinue
-net user $currentName /active:yes
-
 # Set Full Name
 Set-LocalUser -Name $currentName -FullName "Gainwell Administrator" -ErrorAction SilentlyContinue
 
@@ -49,6 +45,10 @@ $pass = Read-Host 'Enter Password' -AsSecureString
 Set-LocalUser -Name $currentName -Password $pass -ErrorAction Stop
 
 Write-Host "Password has been reset successfully"
+
+# Enable account after rename
+Enable-LocalUser -Name $currentName -ErrorAction SilentlyContinue
+net user $currentName /active:yes
 
 # Exclusions (names + SID patterns)
 $ExcludeList = @($WinOSAdmin, 'Administrator', 'DefaultAccount', 'DefaultUser0', 'Guest', 'WDAGUtilityAccount', 'SYSTEM', 'LOCAL SERVICE', 'NETWORK SERVICE', 'corpadmin', 'Domain Admins')
