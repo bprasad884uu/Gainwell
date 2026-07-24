@@ -47,7 +47,8 @@ param (
 		"PCM_DOWNLOADER.EXE",
 		"FSLIB.APP.UTILITIES.EXE",
 		"USW*.EXE",
-		"FLASHTOOL.EXE"
+		"FLASHTOOL.EXE",
+		"Java.exe"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
