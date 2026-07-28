@@ -1401,6 +1401,18 @@ foreach ($category in $Categories) {
 $Stopwatch.Stop()
 $AfterSnapshot = Get-FixedDriveSnapshot
 
+# Disk Cleanup - Configure once
+$base = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches"
+
+Get-ChildItem $base | ForEach-Object {
+    New-ItemProperty -Path $_.PSPath -Name "StateFlags0001" -Value 2 -PropertyType DWord -Force | Out-Null
+}
+
+# Skip in DryRun mode
+if (-not $Script:DryRun) {
+    Start-Process cleanmgr.exe -ArgumentList "/sagerun:1" -Wait
+}
+
 # --- SSD TRIM ---
 $TrimResults = @()
 if (-not $Script:DryRun) {
@@ -1418,7 +1430,6 @@ foreach ($driveLetter in ($BeforeSnapshot.Keys | Sort-Object)) {
     if (-not $after) { continue }
 
     $cleanedTracked = 0L
-    $shortLetter = $driveLetter
     if ($Script:BytesByDrive.ContainsKey($driveLetter)) {
         $cleanedTracked = $Script:BytesByDrive[$driveLetter]
     }
