@@ -1060,8 +1060,9 @@ $Categories = @(
 			$base = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches"
             Get-ChildItem $base | ForEach-Object {
                 New-ItemProperty -Path $_.PSPath -Name "StateFlags0001" -Value 2 -PropertyType DWord -Force | Out-Null
-            }
-            Start-Process cleanmgr.exe -ArgumentList "/sagerun:1" -Wait
+                }
+                    Start-Process cleanmgr.exe -ArgumentList "/sagerun:1" -Wait
+			    }
 			}
         )
     }
