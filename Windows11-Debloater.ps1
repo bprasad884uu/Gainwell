@@ -1056,6 +1056,13 @@ $Categories = @(
             @{ Name = "User Assist History"; Type = "Registry"; RegPaths = @("HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist"); Recurse = $true }
             @{ Name = "Custom Files and Folders"; Type = "Files"; Paths = $CustomCleanupPaths }
             @{ Name = "WebDAV Cache"; Type = "Files"; Paths = @("$env:LOCALAPPDATA\Microsoft\Windows\WebDav Client Cache\*") }
+            @{ Name = "Disk Cleanup"; Type = "Special"; Action = {
+			$base = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches"
+            Get-ChildItem $base | ForEach-Object {
+                New-ItemProperty -Path $_.PSPath -Name "StateFlags0001" -Value 2 -PropertyType DWord -Force | Out-Null
+            }
+            Start-Process cleanmgr.exe -ArgumentList "/sagerun:1" -Wait
+			}
         )
     }
 
@@ -1401,18 +1408,6 @@ foreach ($category in $Categories) {
 
 $Stopwatch.Stop()
 $AfterSnapshot = Get-FixedDriveSnapshot
-
-# Disk Cleanup - Configure once
-$base = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches"
-
-Get-ChildItem $base | ForEach-Object {
-    New-ItemProperty -Path $_.PSPath -Name "StateFlags0001" -Value 2 -PropertyType DWord -Force | Out-Null
-}
-
-# Skip in DryRun mode
-if (-not $Script:DryRun) {
-    Start-Process cleanmgr.exe -ArgumentList "/sagerun:1" -Wait
-}
 
 # --- SSD TRIM ---
 $TrimResults = @()
