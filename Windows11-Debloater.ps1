@@ -430,7 +430,7 @@ function Write-Info { param([string]$Message) Write-Host ("`n[..] {0}" -f $Messa
 function Write-Warn { param([string]$Message) Write-Warning $Message }
 function Write-Err  { param([string]$Message) Write-Host ("`n[ERR] {0}" -f $Message) -ForegroundColor Red }
 
-function Ensure-Key {
+function New-RegistryKey {
     param([string]$Path)
     try {
         if (-not (Test-Path $Path)) {
@@ -438,6 +438,7 @@ function Ensure-Key {
         }
     } catch { }
 }
+Set-Alias Ensure-Key New-RegistryKey
 
 function Reset-ConsoleIfAvailable {
     try {
