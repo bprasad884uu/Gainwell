@@ -41,9 +41,6 @@ $AllowList        = Join-Path $BaseDir "allowlist.json"
 $CertPath         = Join-Path $CertDir "AcceleronCertificate.cer"
 $LogFile          = Join-Path $BaseDir "install.log"
 
-$AppName          = "Admin Launcher"
-$AppVersion       = if (Test-Path $ExeWrapperPath) { (Get-Item $ExeWrapperPath).VersionInfo.FileVersion } else { $null }
-
 $RegPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\AdminLauncher"
 
 # Calculate folder size in KB
@@ -279,6 +276,9 @@ public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wP
 Add-ToSystemPath -PathToAdd $BaseDir
 
 # Register application
+
+$AppName          = "Admin Launcher"
+$AppVersion       = if (Test-Path $ExeWrapperPath) { (Get-Item $ExeWrapperPath).VersionInfo.FileVersion } else { $null }
 
 New-Item -Path $RegPath -Force | Out-Null
 
