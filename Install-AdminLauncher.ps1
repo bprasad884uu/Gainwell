@@ -247,29 +247,32 @@ function Add-ToSystemPath {
     $current = (Get-ItemProperty -Path $regKey -Name Path).Path
 
     $normalizedAdd = $PathToAdd.TrimEnd('\')
-    $entries       = $current -split ';' | ForEach-Object { $_.TrimEnd('\') }
 
-    if ($entries -notcontains $normalizedAdd) {
-        $newPath = if ($current.TrimEnd(';') -eq '') { $PathToAdd } else { "$current;$PathToAdd" }
+    # Always rebuild cleanly rather than skipping when already present -
+    # this also removes any stale/duplicate/mismatched-case copies of the
+    # entry instead of just leaving them alongside a correct one.
+    $entries = $current -split ';' |
+        Where-Object { $_.Trim() -ne '' } |
+        Where-Object { $_.TrimEnd('\') -ne $normalizedAdd }
 
-        try {
-            Set-ItemProperty -Path $regKey -Name Path -Value $newPath
+    $newEntries = @($entries) + $normalizedAdd
+    $newPath    = ($newEntries -join ';')
 
-            $HWND_BROADCAST   = [IntPtr]0xffff
-            $WM_SETTINGCHANGE = 0x1A
-            $result           = [UIntPtr]::Zero
-            $sig = @'
+    try {
+        Set-ItemProperty -Path $regKey -Name Path -Value $newPath
+
+        $HWND_BROADCAST   = [IntPtr]0xffff
+        $WM_SETTINGCHANGE = 0x1A
+        $result           = [UIntPtr]::Zero
+        $sig = @'
 [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
 public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);
 '@
-            $type = Add-Type -MemberDefinition $sig -Name Win32SendMessageTimeout -Namespace Win32Functions -PassThru
-            $type::SendMessageTimeout($HWND_BROADCAST, $WM_SETTINGCHANGE, [UIntPtr]::Zero, "Environment", 2, 5000, [ref]$result) | Out-Null
-            Write-Log "Added $PathToAdd to system PATH."
-        } catch {
-            Write-Log ("Failed to update system PATH: {0}" -f $_) "ERROR"
-        }
-    } else {
-        Write-Log "System PATH already contains $PathToAdd. Skipping." "WARN"
+        $type = Add-Type -MemberDefinition $sig -Name Win32SendMessageTimeout -Namespace Win32Functions -PassThru
+        $type::SendMessageTimeout($HWND_BROADCAST, $WM_SETTINGCHANGE, [UIntPtr]::Zero, "Environment", 2, 5000, [ref]$result) | Out-Null
+        Write-Log "System PATH updated (forced) to ensure $PathToAdd is present."
+    } catch {
+        Write-Log ("Failed to update system PATH: {0}" -f $_) "ERROR"
     }
 }
 
@@ -279,6 +282,21 @@ Add-ToSystemPath -PathToAdd $BaseDir
 # 2. Refresh PATH for the current PowerShell process
 $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
 $env:Path = $machinePath
+
+# 3. Register under App Paths so Explorer shortcuts (.lnk Target field),
+#    the Run dialog, and ShellExecute can resolve a bare "ADMPASS.exe"
+#    the same way cmd/PowerShell can via system PATH. Shortcuts do NOT
+#    consult PATH at all - this registry key is the only mechanism they
+#    honor for a bare filename.
+try {
+    $appPathsKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\ADMPASS.exe"
+    New-Item -Path $appPathsKey -Force | Out-Null
+    New-ItemProperty -Path $appPathsKey -Name "(Default)" -Value $ExeWrapperPath -PropertyType String -Force | Out-Null
+    New-ItemProperty -Path $appPathsKey -Name "Path" -Value $BaseDir -PropertyType String -Force | Out-Null
+    Write-Log "Registered ADMPASS.exe under App Paths for shortcut/Run-dialog resolution."
+} catch {
+    Write-Log ("Failed to register App Paths entry: {0}" -f $_) "ERROR"
+}
 
 # Register application
 
