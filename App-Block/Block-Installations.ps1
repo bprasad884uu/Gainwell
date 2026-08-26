@@ -48,7 +48,13 @@ param (
 		"FSLIB.APP.UTILITIES.EXE",
 		"USW*.EXE",
 		"FLASHTOOL.EXE",
-		"Java.exe"
+		"Java.exe",
+		"GST OFFLINE TOOL.EXE",
+		"CST.EXE",
+		"MECHANICAL-LOCKING-HEAD-14-12-21.EXE",
+		"emSigner.exe",
+		"PDF_GENERATION_UTILITY.EXE",
+		"VIBANALYZER.EXE"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
@@ -111,7 +117,9 @@ param (
 		"E:\OneDrive - Gainwell Commosales Private Limited\D Drive of old Laptop\D colon folders\Training modules all\*",
 		"D:\Program Files (x86)\diagsmart\*",
 		"%OSDRIVE%\PDS Connector\*",
-		"%OSDRIVE%\CrisSigner\CrisSigner\*"
+		"%OSDRIVE%\CrisSigner\CrisSigner\*",
+		"%OSDRIVE%\MANITOWOC\*",
+		"%OSDRIVE%\GST Offline Tool\*"
     ),
 
     [string[]]$WhitelistedPublishers = @(
@@ -156,7 +164,8 @@ param (
 		"%OSDRIVE%\Users\*\AppData\Local\Temp\IPW*.*",
 		"%OSDRIVE%\Users\*\AppData\Local\TEMP\*\START.BAT",			#For Xentry Software Installation
 		"D:\Outlook_Mail_Merge_Attachment_v1.1.9_BETA\Outlook Mail Merge Attachment.vbs",
-		"*.ica"
+		"*.ica",
+		"%OSDRIVE%\GST Offline Tool\offline.bat"
     )
 )
 
