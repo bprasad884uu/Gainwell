@@ -8,7 +8,7 @@ $downloadSuccess = $false
 Write-Host "`n=== Checking and Installing ZTNA (Zscaler) ==="
 
 $destination = "$env:TEMP\Zscaler-windows-installer-x64.msi"
-$ZTNA_setup  = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/ZTNA/Zscaler-windows-4.7.0.61-installer-x64.msi"
+$ZTNA_setup  = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/ZTNA/Zscaler-windows-4.9.0.465-installer-x64.msi"
 
 # -------- Functions --------
 function Format-Size {

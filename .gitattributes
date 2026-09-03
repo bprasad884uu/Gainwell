@@ -1,1 +1,2 @@
 Falcon/WindowsSensor.exe filter=lfs diff=lfs merge=lfs -text
+ZTNA/Zscaler-windows-4.9.0.465-installer-x64.msi filter=lfs diff=lfs merge=lfs -text
