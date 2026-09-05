@@ -123,70 +123,47 @@ if ($IsSystem -or $IsAdmin) {
 # ============================================================
 # WRITE EXE WRAPPER
 # ============================================================
-$WriteExe = $true
 
-if (Test-Path $ExeWrapperPath) {
+[IO.File]::WriteAllBytes(
+    $ExeWrapperPath,
+    $ExeBytes
+)
 
-    $Sig = Get-AuthenticodeSignature $ExeWrapperPath
+$Sig = Get-AuthenticodeSignature -FilePath $ExeWrapperPath
 
-    if (
-        $Sig.SignerCertificate -and
-        $Sig.SignerCertificate.Thumbprint -eq $PinnedThumbprint
-    ) {
-        $WriteExe = $false
-    }
+if (
+    -not $Sig.SignerCertificate -or
+    $Sig.SignerCertificate.Thumbprint -ne $PinnedThumbprint -or
+    $Sig.Status -in @(
+        'HashMismatch',
+        'NotSigned',
+        'UnknownError'
+    )
+) {
+    throw "Appblocker.exe signature validation failed. Status: $($Sig.Status)"
 }
-
-if ($WriteExe) {
-
-    [IO.File]::WriteAllBytes($ExeWrapperPath, $ExeBytes)
-
-    Start-Sleep 2
-    $Sig = Get-AuthenticodeSignature $ExeWrapperPath
-
-    if (
-        -not $Sig.SignerCertificate -or
-        $Sig.SignerCertificate.Thumbprint -ne $PinnedThumbprint -or
-        $Sig.Status -in @('HashMismatch','NotSigned')
-    ) {
-        throw "Appblocker.exe signature validation failed"
-    }
-}
-
-Start-Sleep 2
 
 # ============================================================
 # WRITE SERVICE EXE
 # ============================================================
 
-$WriteServiceExe = $true
+[IO.File]::WriteAllBytes(
+    $ServicePath,
+    $ServiceExeBytes
+)
 
-if (Test-Path $ServicePath) {
+$Sig = Get-AuthenticodeSignature -FilePath $ServicePath
 
-    $Sig = Get-AuthenticodeSignature $ServicePath
-
-    if (
-        $Sig.SignerCertificate -and
-        $Sig.SignerCertificate.Thumbprint -eq $PinnedThumbprint
-    ) {
-        $WriteExe = $false
-    }
-}
-
-if ($WriteExe) {
-
-    [IO.File]::WriteAllBytes($ServicePath, $ServiceExeBytes)
-
-    Start-Sleep 2
-    $Sig = Get-AuthenticodeSignature $ServicePath
-
-    if (
-        -not $Sig.SignerCertificate -or
-        $Sig.SignerCertificate.Thumbprint -ne $PinnedThumbprint -or
-        $Sig.Status -in @('HashMismatch','NotSigned')
-    ) {
-        throw "Service.exe signature validation failed"
-    }
+if (
+    -not $Sig.SignerCertificate -or
+    $Sig.SignerCertificate.Thumbprint -ne $PinnedThumbprint -or
+    $Sig.Status -in @(
+        'HashMismatch',
+        'NotSigned',
+        'UnknownError'
+    )
+) {
+    throw "svcapp.exe signature validation failed. Status: $($Sig.Status)"
 }
 
 # ============================================================
@@ -198,10 +175,213 @@ Set-Content -Path $JsonPath -Value $JsonContent -Encoding UTF8 -Force
 # ============================================================
 # Install App Blocker
 # ============================================================
+# ------------------------------------------------------------
+# Windows API
+# ------------------------------------------------------------
 
-$null = & $ServicePath -InstallService
+if (-not ("AcceleronAppBlocker.NativeMethods" -as [type])) {
 
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+
+namespace AcceleronAppBlocker
+{
+    public static class NativeMethods
+    {
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern uint WTSGetActiveConsoleSessionId();
+
+        [DllImport("wtsapi32.dll", SetLastError = true)]
+        public static extern bool WTSQueryUserToken(
+            UInt32 SessionId,
+            out IntPtr phToken
+        );
+
+        [DllImport("userenv.dll", SetLastError = true)]
+        public static extern bool CreateEnvironmentBlock(
+            out IntPtr lpEnvironment,
+            IntPtr hToken,
+            bool bInherit
+        );
+
+        [DllImport("userenv.dll", SetLastError = true)]
+        public static extern bool DestroyEnvironmentBlock(
+            IntPtr lpEnvironment
+        );
+
+        [DllImport("advapi32.dll",
+            SetLastError = true,
+            CharSet = CharSet.Unicode)]
+        public static extern bool CreateProcessAsUser(
+            IntPtr hToken,
+            string lpApplicationName,
+            string lpCommandLine,
+            IntPtr lpProcessAttributes,
+            IntPtr lpThreadAttributes,
+            bool bInheritHandles,
+            UInt32 dwCreationFlags,
+            IntPtr lpEnvironment,
+            string lpCurrentDirectory,
+            ref STARTUPINFO lpStartupInfo,
+            out PROCESS_INFORMATION lpProcessInformation
+        );
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool CloseHandle(IntPtr hObject);
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        public struct STARTUPINFO
+        {
+            public UInt32 cb;
+            public string lpReserved;
+            public string lpDesktop;
+            public string lpTitle;
+            public UInt32 dwX;
+            public UInt32 dwY;
+            public UInt32 dwXSize;
+            public UInt32 dwYSize;
+            public UInt32 dwXCountChars;
+            public UInt32 dwYCountChars;
+            public UInt32 dwFillAttribute;
+            public UInt32 dwFlags;
+            public UInt16 wShowWindow;
+            public UInt16 cbReserved2;
+            public IntPtr lpReserved2;
+            public IntPtr hStdInput;
+            public IntPtr hStdOutput;
+            public IntPtr hStdError;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct PROCESS_INFORMATION
+        {
+            public IntPtr hProcess;
+            public IntPtr hThread;
+            public UInt32 dwProcessId;
+            public UInt32 dwThreadId;
+        }
+    }
+}
+'@
+
+}
+
+# ------------------------------------------------------------
+# Get active user session
+# ------------------------------------------------------------
+
+$sessionId = [AcceleronAppBlocker.NativeMethods]::WTSGetActiveConsoleSessionId()
+
+if ($sessionId -eq [UInt32]::MaxValue) {
+    throw "No active user session found."
+}
+
+# ------------------------------------------------------------
+# Get user token
+# ------------------------------------------------------------
+
+$userToken = [IntPtr]::Zero
+
+if (-not [AcceleronAppBlocker.NativeMethods]::WTSQueryUserToken(
+    $sessionId,
+    [ref]$userToken
+)) {
+    throw "Unable to get logged-in user's token."
+}
+
+# ------------------------------------------------------------
+# Get logged-in user's full name
+# ------------------------------------------------------------
+$account = (Get-CimInstance Win32_ComputerSystem -Property UserName).UserName
+
+if (-not $account) {
+    [AcceleronAppBlocker.NativeMethods]::CloseHandle($userToken)
+    throw "Unable to determine logged-in user."
+}
+
+$username = $account.Split('\')[-1]
+
+try {
+    $displayName = ([System.DirectoryServices.AccountManagement.UserPrincipal]::FindByIdentity(
+        [System.DirectoryServices.AccountManagement.ContextType]::Domain,
+        $account
+    )).DisplayName
+}
+catch {
+    $displayName = $username
+}
+
+if ([string]::IsNullOrWhiteSpace($displayName)) {
+    $displayName = $username
+}
+
+# ------------------------------------------------------------
+# Create user environment
+# ------------------------------------------------------------
+
+$environment = [IntPtr]::Zero
+
+if (-not [AcceleronAppBlocker.NativeMethods]::CreateEnvironmentBlock(
+    [ref]$environment,
+    $userToken,
+    $false
+)) {
+    [AcceleronAppBlocker.NativeMethods]::CloseHandle($userToken)
+    throw "Unable to create user environment."
+}
+
+# ------------------------------------------------------------
+# Startup information
+# ------------------------------------------------------------
+
+$si = New-Object 'AcceleronAppBlocker.NativeMethods+STARTUPINFO'
+
+$si.cb = [Runtime.InteropServices.Marshal]::SizeOf($si)
+
+$si.lpDesktop = "winsta0\default"
+
+$pi = New-Object 'AcceleronAppBlocker.NativeMethods+PROCESS_INFORMATION'
+
+$CREATE_UNICODE_ENVIRONMENT = 0x00000400
+
+# ------------------------------------------------------------
+# Start App Blocker as logged-in user
+# ------------------------------------------------------------
+
+$success = [AcceleronAppBlocker.NativeMethods]::CreateProcessAsUser(
+    $userToken,
+    $ServicePath,
+    $null,
+    [IntPtr]::Zero,
+    [IntPtr]::Zero,
+    $false,
+    $CREATE_UNICODE_ENVIRONMENT,
+    $environment,
+    $BaseDir,
+    [ref]$si,
+    [ref]$pi
+)
+
+# ------------------------------------------------------------
+# Cleanup
+# ------------------------------------------------------------
+
+$null = [AcceleronAppBlocker.NativeMethods]::DestroyEnvironmentBlock($environment)
+$null = [AcceleronAppBlocker.NativeMethods]::CloseHandle($userToken)
+
+if (-not $success) {
+    $errorCode = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+    throw "Unable to start App Blocker. Win32 error: $errorCode"
+}
+
+$null = [AcceleronAppBlocker.NativeMethods]::CloseHandle($pi.hThread)
+$null = [AcceleronAppBlocker.NativeMethods]::CloseHandle($pi.hProcess)
+
+# ------------------------------------------------------------
+# Final output only
+# ------------------------------------------------------------
 # Clear applied Certificate
 Remove-Item $CertDir -Recurse -Force -ErrorAction SilentlyContinue
 
-Write-Host "App Blocker Installed"
+Write-Host "App blocker started for - $displayName"
