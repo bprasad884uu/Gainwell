@@ -52,7 +52,7 @@ Remove-Item "C:\Windows\Block-Anydesk.ps1" -Force -ErrorAction SilentlyContinue
 Remove-Item "C:\Windows\Block-WindowsStore.ps1" -Force -ErrorAction SilentlyContinue
 Remove-Item "C:\Windows\RunHidden.vbs" -Force -ErrorAction SilentlyContinue
 Remove-Item "C:\Windows\RunHidden-Store.vbs" -Force -ErrorAction SilentlyContinue
-$null = taskkill /im appblocker.exe /f && taskkill /im svcapp.exe /f
+$null = taskkill /im appblocker.exe /im svcapp.exe /f
 # ============================================================
 # EMBEDDED BINARIES (BASE64)
 # ============================================================
