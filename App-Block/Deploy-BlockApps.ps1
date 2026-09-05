@@ -268,45 +268,90 @@ namespace AcceleronAppBlocker
 }
 
 # ------------------------------------------------------------
-# Get active user session
+# Get current script user
+# ------------------------------------------------------------
+
+$currentIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+
+if ($null -eq $currentIdentity) {
+    throw "Unable to determine current script user."
+}
+
+$currentAccount = $currentIdentity.Name
+$currentToken   = $currentIdentity.Token
+
+if ([string]::IsNullOrWhiteSpace($currentAccount) -or
+    $currentToken -eq [IntPtr]::Zero) {
+    throw "Unable to determine current user/token."
+}
+
+# ------------------------------------------------------------
+# Try active logged-in user's token first
 # ------------------------------------------------------------
 
 $sessionId = [AcceleronAppBlocker.NativeMethods]::WTSGetActiveConsoleSessionId()
 
-if ($sessionId -eq [UInt32]::MaxValue) {
-    throw "No active user session found."
-}
-
-# ------------------------------------------------------------
-# Get user token
-# ------------------------------------------------------------
-
 $userToken = [IntPtr]::Zero
+$account   = $null
+$usedFallback = $false
 
-if (-not [AcceleronAppBlocker.NativeMethods]::WTSQueryUserToken(
-    $sessionId,
-    [ref]$userToken
-)) {
-    throw "Unable to get logged-in user's token."
+if ($sessionId -ne [UInt32]::MaxValue) {
+
+    if ([AcceleronAppBlocker.NativeMethods]::WTSQueryUserToken(
+        $sessionId,
+        [ref]$userToken
+    )) {
+        try {
+            $account = (Get-CimInstance Win32_ComputerSystem -Property UserName).UserName
+        }
+        catch {
+            $account = $null
+        }
+
+        if ([string]::IsNullOrWhiteSpace($account)) {
+            [AcceleronAppBlocker.NativeMethods]::CloseHandle($userToken)
+            $userToken = [IntPtr]::Zero
+        }
+    }
 }
 
 # ------------------------------------------------------------
-# Get logged-in user's full name
+# Fallback:
+# Use the user who executed this script
 # ------------------------------------------------------------
-$account = (Get-CimInstance Win32_ComputerSystem -Property UserName).UserName
 
-if (-not $account) {
-    [AcceleronAppBlocker.NativeMethods]::CloseHandle($userToken)
-    throw "Unable to determine logged-in user."
+if ($userToken -eq [IntPtr]::Zero) {
+
+    $userToken = $currentToken
+    $account = $currentAccount
+    $usedFallback = $true
 }
+
+# ------------------------------------------------------------
+# Get username
+# ------------------------------------------------------------
 
 $username = $account.Split('\')[-1]
 
+# ------------------------------------------------------------
+# Get display name
+# ------------------------------------------------------------
+
+$displayName = $username
+
 try {
-    $displayName = ([System.DirectoryServices.AccountManagement.UserPrincipal]::FindByIdentity(
-        [System.DirectoryServices.AccountManagement.ContextType]::Domain,
+    $principalContextType = [System.DirectoryServices.AccountManagement.ContextType]::Domain
+
+    $principal = [System.DirectoryServices.AccountManagement.UserPrincipal]::FindByIdentity(
+        $principalContextType,
         $account
-    )).DisplayName
+    )
+
+    if ($null -ne $principal -and
+        -not [string]::IsNullOrWhiteSpace($principal.DisplayName)) {
+
+        $displayName = $principal.DisplayName
+    }
 }
 catch {
     $displayName = $username
@@ -327,7 +372,11 @@ if (-not [AcceleronAppBlocker.NativeMethods]::CreateEnvironmentBlock(
     $userToken,
     $false
 )) {
-    [AcceleronAppBlocker.NativeMethods]::CloseHandle($userToken)
+
+    if (-not $usedFallback) {
+        [AcceleronAppBlocker.NativeMethods]::CloseHandle($userToken)
+    }
+
     throw "Unable to create user environment."
 }
 
@@ -346,7 +395,7 @@ $pi = New-Object 'AcceleronAppBlocker.NativeMethods+PROCESS_INFORMATION'
 $CREATE_UNICODE_ENVIRONMENT = 0x00000400
 
 # ------------------------------------------------------------
-# Start App Blocker as logged-in user
+# Start App Blocker as selected user
 # ------------------------------------------------------------
 
 $success = [AcceleronAppBlocker.NativeMethods]::CreateProcessAsUser(
@@ -363,15 +412,25 @@ $success = [AcceleronAppBlocker.NativeMethods]::CreateProcessAsUser(
     [ref]$pi
 )
 
+$errorCode = 0
+
+if (-not $success) {
+    $errorCode = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+}
+
 # ------------------------------------------------------------
 # Cleanup
 # ------------------------------------------------------------
 
 $null = [AcceleronAppBlocker.NativeMethods]::DestroyEnvironmentBlock($environment)
-$null = [AcceleronAppBlocker.NativeMethods]::CloseHandle($userToken)
+
+# Only close the WTS token.
+# For fallback, the token belongs to the current WindowsIdentity.
+if (-not $usedFallback) {
+    $null = [AcceleronAppBlocker.NativeMethods]::CloseHandle($userToken)
+}
 
 if (-not $success) {
-    $errorCode = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
     throw "Unable to start App Blocker. Win32 error: $errorCode"
 }
 
@@ -381,6 +440,7 @@ $null = [AcceleronAppBlocker.NativeMethods]::CloseHandle($pi.hProcess)
 # ------------------------------------------------------------
 # Final output only
 # ------------------------------------------------------------
+
 # Clear applied Certificate
 Remove-Item $CertDir -Recurse -Force -ErrorAction SilentlyContinue
 
