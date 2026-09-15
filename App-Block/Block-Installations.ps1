@@ -54,12 +54,17 @@ param (
 		"MECHANICAL-LOCKING-HEAD-14-12-21.EXE",
 		"emSigner.exe",
 		"PDF_GENERATION_UTILITY.EXE",
-		"VIBANALYZER.EXE"
+		"VIBANALYZER.EXE",
+		"ZoomInstallerFull.exe",
+		"EasyregAdvanced3.0.26.exe",
+		"FusionLauncher.exe"
     ),
 	
 	[string[]]$WhitelistedMsiNames = @(
 		"DataMovement.PersonalGatewayComponents.msi",
-		"e-Filing_F145-F146_V1.0.msi"
+		"e-Filing_F145-F146_V1.0.msi",
+		"ITDE-FILING_6-2026-SETUP-1.0.0.MSI",
+		"ITDE-FILING-2026-SETUP-1.2.3.MSI"
 	),
 
     [string[]]$WhitelistedPaths = @(
@@ -119,7 +124,8 @@ param (
 		"%OSDRIVE%\PDS Connector\*",
 		"%OSDRIVE%\CrisSigner\CrisSigner\*",
 		"%OSDRIVE%\MANITOWOC\*",
-		"%OSDRIVE%\GST Offline Tool\*"
+		"%OSDRIVE%\GST Offline Tool\*",
+		"%OSDRIVE%\USERS\*\DESKTOP\1_INSTRUCTOR LHD\*"
     ),
 
     [string[]]$WhitelistedPublishers = @(
