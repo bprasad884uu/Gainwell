@@ -30,6 +30,47 @@ $IsAdmin            = ([Security.Principal.WindowsPrincipal] `
                       [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 # ============================================================
+# RELAUNCH AS SYSTEM
+# ============================================================
+# WTSQueryUserToken (used later to target the logged-in user's
+# session) requires the SE_TCB_NAME privilege, which SYSTEM holds
+# by default but a local Administrator token does not, even when
+# elevated. Without it, the query silently fails and the script
+# falls back to running as whoever launched it, instead of the
+# actual logged-in user. Relaunching as SYSTEM via a one-time
+# scheduled task guarantees that privilege every time, regardless
+# of how the script itself was invoked.
+
+if (-not $IsSystem) {
+
+    $ScriptPath = $PSCommandPath
+    if ([string]::IsNullOrWhiteSpace($ScriptPath)) {
+        $ScriptPath = $MyInvocation.MyCommand.Path
+    }
+
+    if ([string]::IsNullOrWhiteSpace($ScriptPath)) {
+        throw "Unable to resolve script path for SYSTEM relaunch."
+    }
+
+    $TaskName = "AcceleronAppBlockerRelaunch"
+
+    $Action    = New-ScheduledTaskAction -Execute "powershell.exe" `
+                 -Argument "-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -File `"$ScriptPath`""
+    $Principal = New-ScheduledTaskPrincipal -UserId "NT AUTHORITY\SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+
+    Register-ScheduledTask -TaskName $TaskName -Action $Action -Principal $Principal -Force | Out-Null
+    Start-ScheduledTask -TaskName $TaskName
+
+    do {
+        Start-Sleep -Milliseconds 500
+    } while ((Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue).State -eq 'Running')
+
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+
+    exit
+}
+
+# ============================================================
 # ENSURE BASE DIRECTORY
 # ============================================================
 
