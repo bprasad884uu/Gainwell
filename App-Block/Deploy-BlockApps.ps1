@@ -464,6 +464,83 @@ $null = [AcceleronAppBlocker.NativeMethods]::CloseHandle($pi.hThread)
 $null = [AcceleronAppBlocker.NativeMethods]::CloseHandle($pi.hProcess)
 
 # ------------------------------------------------------------
+# SCHEDULED TASK: APP BLOCKER (INTERACTIVE USER)
+# ------------------------------------------------------------
+
+# Generate correct timestamp
+$startTime = (Get-Date).AddMinutes(1).ToString("yyyy-MM-ddTHH:mm:ss")
+
+$TaskName = "App Blocker - Interactive User"
+$tempXml  = "$env:TEMP\AppBlockerTask.xml"
+
+# ---------------- CLEAN OLD TASK ----------------
+
+Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+
+# ---------------- CREATE XML ----------------
+
+$xml = @"
+<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Author>Acceleron</Author>
+    <URI>\Application Blocker</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <TimeTrigger>
+      <StartBoundary>$startTime</StartBoundary>
+      <Enabled>true</Enabled>
+    </TimeTrigger>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <GroupId>S-1-5-4</GroupId>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>true</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>true</StopIfGoingOnBatteries>
+    <AllowHardTerminate>true</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+    <IdleSettings>
+      <StopOnIdleEnd>true</StopOnIdleEnd>
+      <RestartOnIdle>false</RestartOnIdle>
+    </IdleSettings>
+    <AllowStartOnDemand>true</AllowStartOnDemand>
+    <Enabled>true</Enabled>
+    <Hidden>true</Hidden>
+    <RunOnlyIfIdle>false</RunOnlyIfIdle>
+    <WakeToRun>false</WakeToRun>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>$ServicePath</Command>
+    </Exec>
+  </Actions>
+</Task>
+"@
+
+# ---------------- SAVE XML ----------------
+
+$xml | Out-File -FilePath $tempXml -Encoding Unicode
+
+# ---------------- REGISTER TASK ----------------
+
+$null = Register-ScheduledTask -TaskName $TaskName -Xml (Get-Content $tempXml | Out-String) -Force
+# ---------------- CLEANUP ----------------
+
+Remove-Item $tempXml -Force -ErrorAction SilentlyContinue
+Get-Process -Name appblocker,svcapp -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# ------------------------------------------------------------
 # Final output only
 # ------------------------------------------------------------
 
