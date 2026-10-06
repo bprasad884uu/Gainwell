@@ -46,25 +46,50 @@ function Get-ZTNAInstalledInfo {
 # -------- 1) Check first --------
 $installInfo = Get-ZTNAInstalledInfo
 
-if ($installInfo.Installed -and $installInfo.Version -eq $ZTNA_TargetVersion) {
-    Write-Output "ZTNA (Zscaler) version $($installInfo.Version) is already installed (matches target). Skipping download and installation."
+if (-not $installInfo.Installed) {
+
+    Write-Output "Zscaler is NOT installed."
+    Write-Output "Zscaler installation is not required."
+    Write-Output "Skipping installation/update."
+
+    # Cleanup any leftover installer
     if (Test-Path $destination) {
         Remove-Item $destination -Force -ErrorAction SilentlyContinue
         Write-Output "Cleaned up leftover installer: $destination"
     }
+
+    # Skip download/install
     $skipRest = $true
 }
-elseif ($installInfo.Installed) {
-    Write-Output "ZTNA (Zscaler) is installed with version $($installInfo.Version), which differs from target version $ZTNA_TargetVersion. Proceeding with force install."
+elseif ($installInfo.Version -eq $ZTNA_TargetVersion) {
+
+    Write-Output "Zscaler version $($installInfo.Version) is already installed."
+    Write-Output "No update required."
+
+    # Cleanup any leftover installer
+    if (Test-Path $destination) {
+        Remove-Item $destination -Force -ErrorAction SilentlyContinue
+        Write-Output "Cleaned up leftover installer: $destination"
+    }
+
+    # Skip download/install
+    $skipRest = $true
 }
 else {
-    Write-Output "ZTNA (Zscaler) is not installed. Proceeding with installation."
+
+    Write-Output "Zscaler is installed."
+    Write-Output "Installed Version : $($installInfo.Version)"
+    Write-Output "Target Version    : $ZTNA_TargetVersion"
+    Write-Output "Proceeding with UPDATE."
 }
 
-# -------- 2) Download & Install (only if not skipped) --------
+# -------- 2) Download & Install --------
 if (-not $skipRest) {
 
-    try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {}
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    }
+    catch {}
 
     if (Test-Path $destination) {
         Remove-Item $destination -Force -ErrorAction SilentlyContinue
@@ -78,104 +103,161 @@ if (-not $skipRest) {
     $httpClient = New-Object System.Net.Http.HttpClient($httpClientHandler)
 
     Write-Output "Starting download..."
+
     try {
-        $response = $httpClient.GetAsync($ZTNA_setup, [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead).Result
+
+        $response = $httpClient.GetAsync(
+            $ZTNA_setup,
+            [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead
+        ).Result
 
         if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
+
             Write-Output "ERROR: HttpClient request failed: $($response.StatusCode) ($($response.ReasonPhrase))"
+
             $skipRest = $true
             $exitCode = 1
         }
 
         if (-not $skipRest) {
+
             $stream = $response.Content.ReadAsStreamAsync().Result
+
             if (-not $stream) {
+
                 Write-Output "ERROR: Failed to retrieve response stream."
+
                 $skipRest = $true
                 $exitCode = 1
             }
         }
 
         if (-not $skipRest) {
+
             $totalSize = $response.Content.Headers.ContentLength
+
             if ($null -eq $totalSize) {
                 Write-Output "Warning: Server did not return file size."
             }
 
             $fileStream = [System.IO.File]::OpenWrite($destination)
+
             $bufferSize = 10MB
             $buffer = New-Object byte[] ($bufferSize)
             $downloaded = 0
-            $startTime = Get-Date
             $lastLoggedPercent = -10
 
-            Write-Output "Downloading ZTNA Setup..."
+            Write-Output "Downloading Zscaler Setup..."
+
             while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+
                 $fileStream.Write($buffer, 0, $bytesRead)
                 $downloaded += $bytesRead
 
                 if ($totalSize) {
-                    $progress = [math]::Round(($downloaded / $totalSize) * 100, 0)
-                    # Log every 10% instead of continuous progress line (UEMS log friendly)
+
+                    $progress = [math]::Round(
+                        ($downloaded / $totalSize) * 100,
+                        0
+                    )
+
                     if ($progress -ge ($lastLoggedPercent + 10)) {
+
                         Write-Output "Progress: $progress% | Downloaded: $(Format-Size $downloaded) / $(Format-Size $totalSize)"
+
                         $lastLoggedPercent = $progress
                     }
                 }
             }
 
             $fileStream.Close()
+            $stream.Close()
+
             Write-Output "Download Complete: $destination"
+
             $downloadSuccess = $true
         }
 
         $httpClient.Dispose()
     }
     catch {
-        try { $httpClient.Dispose() } catch {}
-        Write-Output "ERROR: Failed to download ZTNA installer. $_"
+
+        try {
+            $httpClient.Dispose()
+        }
+        catch {}
+
+        Write-Output "ERROR: Failed to download Zscaler installer. $_"
+
         $skipRest = $true
         $exitCode = 1
     }
 
-    if (-not $downloadSuccess -and -not $skipRest) {
-        Write-Output "ERROR: All download methods failed. Please check your internet connection."
-        $skipRest = $true
-        $exitCode = 1
-    }
-
-    # -------- 3) Install silently --------
+    # -------- 3) Install / Update --------
     if ($downloadSuccess -and -not $skipRest) {
-        Write-Output "Installing ZTNA from: $destination"
-        $proc = Start-Process "msiexec.exe" -ArgumentList "/i `"$destination`" /qn /norestart" -Wait -PassThru
+
+        Write-Output "Force updating Zscaler..."
+        Write-Output "Installed Version : $($installInfo.Version)"
+        Write-Output "Target Version    : $ZTNA_TargetVersion"
+
+        $proc = Start-Process `
+            "msiexec.exe" `
+            -ArgumentList "/i `"$destination`" /qn /norestart" `
+            -Wait `
+            -PassThru
+
         if ($proc.ExitCode -eq 0) {
-            Write-Output "ZTNA installation completed."
+
+            Write-Output "Zscaler update completed successfully."
             $DidInstall = $true
-        } else {
-            Write-Output "ERROR: MSI installation failed with exit code $($proc.ExitCode)."
+        }
+        elseif ($proc.ExitCode -eq 3010) {
+
+            Write-Output "Zscaler update completed successfully."
+            Write-Output "MSI requested reboot (3010), but reboot was suppressed."
+
+            $DidInstall = $true
+        }
+        else {
+
+            Write-Output "ERROR: Zscaler MSI update failed with exit code $($proc.ExitCode)."
             $exitCode = $proc.ExitCode
         }
     }
 
-    # -------- 4) Post-install --------
+    # -------- 4) Post-update --------
     if ($DidInstall) {
-        Write-Output "ZTNA (Zscaler) was installed."
-        Write-Output "Stopping ZTNA processes..."
-        $ProcessesToKill = @("ZSAService", "ZSATray", "ZSATrayManager")
+
+        Write-Output "Zscaler update was successful."
+        Write-Output "Stopping Zscaler processes..."
+
+        $ProcessesToKill = @(
+            "ZSAService",
+            "ZSATray",
+            "ZSATrayManager"
+        )
+
         foreach ($p in $ProcessesToKill) {
-            Get-Process -Name $p -ErrorAction SilentlyContinue | Stop-Process -Force
+
+            Get-Process -Name $p -ErrorAction SilentlyContinue |
+                Stop-Process -Force -ErrorAction SilentlyContinue
         }
-        Write-Output "ZTNA processes stopped. They will start on next system boot or user login."
-    } else {
-        Write-Output "No ZTNA installation performed."
+
+        Write-Output "Zscaler processes stopped."
+        Write-Output "They will start again on next system boot or user login."
+    }
+    else {
+
+        Write-Output "No Zscaler update performed."
     }
 
     # -------- 5) Always Cleanup --------
     if (Test-Path $destination) {
+
         Remove-Item $destination -Force -ErrorAction SilentlyContinue
+
         Write-Output "Installer removed: $destination"
     }
 }
 
 Write-Output "=== Script Finished ==="
-exit $exitCode
