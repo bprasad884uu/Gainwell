@@ -1,5 +1,5 @@
-$Url  = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/Excel/excel-x-none_KB5002665.msi"
-$File = Join-Path $env:TEMP "excel-x-none_KB5002665.msi"
+$Url  = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/Excel/excel-x-none_KB5002665.msp"
+$File = Join-Path $env:TEMP "excel-x-none_KB5002665.msp"
 
 Write-Output "=============================================="
 Write-Output "Excel 2016 KB5002665 Installation"
