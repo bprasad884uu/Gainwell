@@ -6,38 +6,6 @@ Write-Output "Excel 2016 KB5002665 Installation"
 Write-Output "=============================================="
 
 # ============================================================
-# Check and Close Excel
-# ============================================================
-
-Write-Output "Checking if Microsoft Excel is running..."
-
-$ExcelProcess = Get-Process -Name "EXCEL" -ErrorAction SilentlyContinue
-
-if ($ExcelProcess) {
-
-    Write-Output "Microsoft Excel is running."
-    Write-Output "Closing Excel forcefully..."
-
-    $ExcelProcess | Stop-Process -Force -ErrorAction SilentlyContinue
-
-    Start-Sleep -Seconds 2
-
-    $ExcelProcessCheck = Get-Process -Name "EXCEL" -ErrorAction SilentlyContinue
-
-    if ($ExcelProcessCheck) {
-        Write-Output "WARNING: Excel is still running."
-    }
-    else {
-        Write-Output "Excel closed successfully."
-    }
-
-}
-else {
-
-    Write-Output "Microsoft Excel is not running."
-}
-
-# ============================================================
 # Check for Office 2016 MSI-based installation
 # ============================================================
 
@@ -105,10 +73,42 @@ else {
     Write-Output "Office 2016 MSI-based installation confirmed."
 
     # ========================================================
-    # Download Excel 2016 KB5002665 MSI
+    # Check and Close Excel
     # ========================================================
 
-    Write-Output "Downloading Excel 2016 KB5002665 MSI..."
+    Write-Output "Checking if Microsoft Excel is running..."
+
+    $ExcelProcess = Get-Process -Name "EXCEL" -ErrorAction SilentlyContinue
+
+    if ($ExcelProcess) {
+
+        Write-Output "Microsoft Excel is running."
+        Write-Output "Closing Excel forcefully..."
+
+        $ExcelProcess | Stop-Process -Force -ErrorAction SilentlyContinue
+
+        Start-Sleep -Seconds 2
+
+        $ExcelProcessCheck = Get-Process -Name "EXCEL" -ErrorAction SilentlyContinue
+
+        if ($ExcelProcessCheck) {
+            Write-Output "WARNING: Excel is still running."
+        }
+        else {
+            Write-Output "Excel closed successfully."
+        }
+
+    }
+    else {
+
+        Write-Output "Microsoft Excel is not running."
+    }
+
+    # ========================================================
+    # Download Excel 2016 KB5002665 MSP
+    # ========================================================
+
+    Write-Output "Downloading Excel 2016 KB5002665 MSP..."
 
     try {
 
@@ -128,27 +128,29 @@ else {
     }
 
     # ========================================================
-    # Verify downloaded MSI
+    # Verify downloaded MSP
     # ========================================================
 
     if (Test-Path $File) {
 
-        Write-Output "MSI installer found."
-        Write-Output "Starting Excel 2016 KB5002665 installation..."
+        $FileSize = (Get-Item $File).Length
+
+        Write-Output "MSP installer found."
+        Write-Output "File size: $([math]::Round($FileSize / 1MB, 2)) MB"
 
         # ====================================================
-        # Install MSI
-        # /passive = Progress UI, no user interaction
-        # /norestart = Do not restart automatically
+        # Install MSP Patch
         # ====================================================
+
+        Write-Output "Starting Excel 2016 KB5002665 installation..."
 
         $Process = Start-Process `
             -FilePath "msiexec.exe" `
-            -ArgumentList "/i `"$File`" /passive /norestart" `
+            -ArgumentList "/update `"$File`" /passive /norestart" `
             -Wait `
             -PassThru
 
-        Write-Output "MSI installer exit code: $($Process.ExitCode)"
+        Write-Output "MSP installer exit code: $($Process.ExitCode)"
 
         # ====================================================
         # Installation Result
@@ -171,14 +173,19 @@ else {
             Write-Output "Restart initiated by Windows Installer."
 
         }
-        elseif ($Process.ExitCode -eq 1605) {
+        elseif ($Process.ExitCode -eq 1603) {
 
-            Write-Output "The product is not installed on this system."
+            Write-Output "Installation failed with error 1603."
 
         }
         elseif ($Process.ExitCode -eq 1618) {
 
             Write-Output "Another MSI installation is already in progress."
+
+        }
+        elseif ($Process.ExitCode -eq 1642) {
+
+            Write-Output "This update is not applicable to this system."
 
         }
         else {
@@ -191,7 +198,7 @@ else {
         # Cleanup
         # ====================================================
 
-        Write-Output "Removing downloaded MSI..."
+        Write-Output "Removing downloaded MSP..."
 
         Remove-Item $File -Force -ErrorAction SilentlyContinue
 
@@ -200,62 +207,49 @@ else {
     }
     else {
 
-        Write-Output "MSI installer was not downloaded."
+        Write-Output "MSP installer was not downloaded."
         Write-Output "Installation skipped."
     }
-}
 
-# ============================================================
-# ENABLE MICROSOFT OFFICE 2016 AUTOMATIC UPDATES
-# Office 2016 MSI
-# ============================================================
+    # ========================================================
+    # ENABLE MICROSOFT OFFICE 2016 AUTOMATIC UPDATES
+    # ========================================================
 
-$RegPath = "HKLM:\SOFTWARE\Policies\Microsoft\Office\16.0\Common\OfficeUpdate"
+    $RegPath = "HKLM:\SOFTWARE\Policies\Microsoft\Office\16.0\Common\OfficeUpdate"
 
-Write-Output "Checking Microsoft Office 2016 automatic update policy..."
+    Write-Output "Checking Microsoft Office 2016 automatic update policy..."
 
-if (Test-Path $RegPath) {
+    if (Test-Path $RegPath) {
 
-    Remove-ItemProperty `
-        -Path $RegPath `
-        -Name "EnableAutomaticUpdates" `
-        -Force `
-        -ErrorAction SilentlyContinue
+        $UpdatePolicy = Get-ItemProperty `
+            -Path $RegPath `
+            -Name "EnableAutomaticUpdates" `
+            -ErrorAction SilentlyContinue
 
-    Write-Output "EnableAutomaticUpdates policy removed."
+        if ($null -ne $UpdatePolicy) {
 
-    # Check remaining policy values
-    $Properties = Get-ItemProperty `
-        -Path $RegPath `
-        -ErrorAction SilentlyContinue
-
-    if ($Properties) {
-
-        $RemainingProperties = @(
-            $Properties.PSObject.Properties |
-            Where-Object {
-                $_.Name -notmatch "^PS"
-            }
-        )
-
-        if ($RemainingProperties.Count -eq 0) {
-
-            Remove-Item `
+            Remove-ItemProperty `
                 -Path $RegPath `
+                -Name "EnableAutomaticUpdates" `
                 -Force `
                 -ErrorAction SilentlyContinue
 
-            Write-Output "OfficeUpdate policy key removed."
+            Write-Output "EnableAutomaticUpdates policy removed."
+            Write-Output "Microsoft Office 2016 automatic updates: ENABLED / NOT BLOCKED"
+
         }
+        else {
+
+            Write-Output "Automatic update blocking policy not present."
+        }
+
     }
+    else {
 
+        Write-Output "Office automatic update blocking policy not found."
+        Write-Output "Microsoft Office 2016 automatic updates: NOT BLOCKED"
+    }
 }
-else {
-
-    Write-Output "Office automatic update blocking policy not found."
-}
-
-Write-Output "Microsoft Office 2016 automatic updates: ENABLED / NOT BLOCKED"
 
 Write-Output "=============================================="
 Write-Output "Script execution completed."
