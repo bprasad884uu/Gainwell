@@ -41,7 +41,7 @@ $ErrorActionPreference = "Continue"
 $KBNumber = "KB5002665"
 
 # Direct raw.githubusercontent.com URL avoids GitHub redirect
-$Url = "https://raw.githubusercontent.com/bprasad884uu/Gainwell/main/Excel/excel-x-none_KB5002665.msp"
+$Url = "https://media.githubusercontent.com/media/bprasad884uu/Gainwell/main/Excel/excel-x-none_KB5002665.msp"
 
 $TempFolder = Join-Path $env:TEMP "Excel-KB5002665"
 
@@ -413,234 +413,212 @@ else {
         $DownloadSuccess = $false
 
         # ====================================================
-        # DOWNLOAD METHOD 1 - BITS
+        # DOWNLOAD USING .NET HTTPCLIENT
         # ====================================================
 
         Write-Output ""
-        Write-Output "Download Method 1: BITS"
+        Write-Output "Download Method: .NET HttpClient"
+        Write-Output "Downloading actual Git LFS content from:"
+        Write-Output $Url
 
         try {
 
-            $BitsAvailable = $null
+            # Load HttpClient assembly (available in Windows PowerShell 5.1)
+            Add-Type -AssemblyName System.Net.Http -ErrorAction Stop
+
+            # Ensure TLS 1.2 for GitHub HTTPS
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+            $Handler = New-Object System.Net.Http.HttpClientHandler
+            $Handler.AllowAutoRedirect = $true
+
+            $Client = New-Object System.Net.Http.HttpClient($Handler)
+            $Client.Timeout = [TimeSpan]::FromMinutes(20)
+            $Client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT; Windows PowerShell 5.1)")
+
+            $Response = $null
+            $InputStream = $null
+            $OutputStream = $null
 
             try {
 
-                $BitsAvailable = Get-Command `
-                    Start-BitsTransfer `
-                    -ErrorAction SilentlyContinue
+                $Response = $Client.GetAsync(
+                    $Url,
+                    [System.Net.Http.HttpCompletionOption]::ResponseHeadersRead
+                ).GetAwaiter().GetResult()
 
-            }
-            catch {
-            }
+                Write-Output "HTTP Status: $([int]$Response.StatusCode) $($Response.ReasonPhrase)"
 
-            if ($BitsAvailable) {
-
-                Write-Output "BITS service/cmdlet available."
-                Write-Output "Starting BITS download..."
-
-                Start-BitsTransfer `
-                    -Source $Url `
-                    -Destination $File `
-                    -DisplayName "Excel 2016 $KBNumber" `
-                    -Description "Downloading Excel 2016 $KBNumber MSP" `
-                    -RetryInterval 15 `
-                    -ErrorAction Stop
+                if (-not $Response.IsSuccessStatusCode) {
+                    throw "HTTP request failed with status $([int]$Response.StatusCode) $($Response.ReasonPhrase)"
+                }
 
                 if (Test-Path $File) {
+                    Remove-Item -Path $File -Force -ErrorAction SilentlyContinue
+                }
 
-                    $FileSize = (Get-Item $File).Length
+                $InputStream = $Response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+                $OutputStream = [System.IO.File]::Open(
+                    $File,
+                    [System.IO.FileMode]::Create,
+                    [System.IO.FileAccess]::Write,
+                    [System.IO.FileShare]::None
+                )
 
-                    if ($FileSize -ge $MinimumFileSize) {
+                $Buffer = New-Object byte[] (81920)
+                [long]$TotalBytes = 0
+                [long]$ExpectedBytes = -1
 
-                        Write-Output "BITS download completed."
-                        Write-Output "Downloaded size: $([math]::Round($FileSize / 1MB, 2)) MB"
+                if ($Response.Content.Headers.ContentLength.HasValue) {
+                    $ExpectedBytes = [long]$Response.Content.Headers.ContentLength.Value
+                }
+                else {
+                    # Fallback to the expected payload size from the repository's Git LFS pointer.
+                    # This is for progress display only; final verification must still check actual bytes.
+                    $ExpectedBytes = 149516288
+                }
 
-                        $DownloadSuccess = $true
+                $Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+                $LastReportSeconds = -1
 
-                    }
-                    else {
+                if ($ExpectedBytes -gt 0) {
+                    Write-Output ("Size: {0} MB | Downloaded: 0.00 MB (0.0%) | Speed: 0.00 MB/s | ETA: calculating..." -f ([string]::Format([System.Globalization.CultureInfo]::InvariantCulture, "{0:N2}", ($ExpectedBytes / 1MB))))
+                }
+                else {
+                    Write-Output "Size: Unknown | Downloaded: 0.00 MB | Speed: calculating... | ETA: Unknown"
+                }
 
-                        Write-Output "BITS downloaded file is too small."
-                        Write-Output "Size: $FileSize bytes"
+                while (($BytesRead = $InputStream.Read($Buffer, 0, $Buffer.Length)) -gt 0) {
+                    $OutputStream.Write($Buffer, 0, $BytesRead)
+                    $TotalBytes += $BytesRead
 
-                        Remove-Item `
-                            -Path $File `
-                            -Force `
-                            -ErrorAction SilentlyContinue
+                    $ElapsedSeconds = [Math]::Max($Stopwatch.Elapsed.TotalSeconds, 0.001)
+                    $ElapsedWholeSeconds = [int][Math]::Floor($ElapsedSeconds)
+
+                    if ($ElapsedWholeSeconds -gt $LastReportSeconds) {
+                        $LastReportSeconds = $ElapsedWholeSeconds
+                        $SpeedMBps = ($TotalBytes / 1MB) / $ElapsedSeconds
+
+                        if ($ExpectedBytes -gt 0) {
+                            $RemainingBytes = [Math]::Max(0, $ExpectedBytes - $TotalBytes)
+                            if ($SpeedMBps -gt 0) {
+                                $EtaSeconds = [int][Math]::Ceiling(($RemainingBytes / 1MB) / $SpeedMBps)
+                                if ($EtaSeconds -ge 3600) {
+                                    $EtaSpan = [TimeSpan]::FromSeconds($EtaSeconds)
+                                    $EtaHours = [int][Math]::Floor($EtaSpan.TotalHours)
+                                    $EtaText = "{0:00}:{1:00}:{2:00}" -f $EtaHours, $EtaSpan.Minutes, $EtaSpan.Seconds
+                                }
+                                elseif ($EtaSeconds -ge 60) {
+                                    $EtaMinutes = [int][Math]::Floor($EtaSeconds / 60)
+                                    $EtaRemainderSeconds = $EtaSeconds % 60
+                                    $EtaText = "{0:00}:{1:00}" -f $EtaMinutes, $EtaRemainderSeconds
+                                }
+                                else {
+                                    $EtaText = "{0} Sec" -f $EtaSeconds
+                                }
+                            }
+                            else {
+                                $EtaText = "calculating..."
+                            }
+
+                            $SizeLabel = if ($Response.Content.Headers.ContentLength.HasValue) { "Size" } else { "Size (estimated)" }
+                            $SizeValue = [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, "{0:N2}", ($ExpectedBytes / 1MB))
+                            $DownloadedValue = [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, "{0:N2}", ($TotalBytes / 1MB))
+                            $PercentValue = [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, "{0:P1}", ($TotalBytes / [double]$ExpectedBytes))
+                            $SpeedValue = [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, "{0:N2}", $SpeedMBps)
+                            $ProgressLine = "{0}: {1} MB | Downloaded: {2} MB ({3}) | Speed: {4} MB/s | ETA: {5}" -f `
+                                $SizeLabel, $SizeValue, $DownloadedValue, $PercentValue, $SpeedValue, $EtaText
+                        }
+                        else {
+                            $DownloadedValue = [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, "{0:N2}", ($TotalBytes / 1MB))
+                            $SpeedValue = [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, "{0:N2}", $SpeedMBps)
+                            $ProgressLine = "Size: Unknown | Downloaded: {0} MB | Speed: {1} MB/s | ETA: Unknown" -f `
+                                $DownloadedValue, $SpeedValue
+                        }
+
+                        Write-Host ("`r" + $ProgressLine.PadRight(120)) -NoNewline
                     }
                 }
 
-            }
-            else {
+                $OutputStream.Flush()
+                $Stopwatch.Stop()
+                Write-Host ""
 
-                Write-Output "BITS cmdlet is not available."
+                $FinalSpeed = if ($Stopwatch.Elapsed.TotalSeconds -gt 0) {
+                    ($TotalBytes / 1MB) / $Stopwatch.Elapsed.TotalSeconds
+                }
+                else { 0 }
+
+                if ($ExpectedBytes -gt 0) {
+                    $FinalSizeLabel = if ($Response.Content.Headers.ContentLength.HasValue) { "Size" } else { "Size (estimated)" }
+                    $FinalSizeValue = [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, "{0:N2}", ($ExpectedBytes / 1MB))
+                    $FinalDownloadedValue = [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, "{0:N2}", ($TotalBytes / 1MB))
+                    $FinalSpeedValue = [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, "{0:N2}", $FinalSpeed)
+                    Write-Output ("{0}: {1} MB | Downloaded: {2} MB | Speed: {3} MB/s | ETA: 00:00:00" -f `
+                        $FinalSizeLabel, $FinalSizeValue, $FinalDownloadedValue, $FinalSpeedValue)
+                }
+                else {
+                    $FinalDownloadedValue = [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, "{0:N2}", ($TotalBytes / 1MB))
+                    $FinalSpeedValue = [string]::Format([System.Globalization.CultureInfo]::InvariantCulture, "{0:N2}", $FinalSpeed)
+                    Write-Output ("Size: Unknown | Downloaded: {0} MB | Speed: {1} MB/s | ETA: complete" -f `
+                        $FinalDownloadedValue, $FinalSpeedValue)
+                }
+
+                if ($TotalBytes -lt $MinimumFileSize) {
+
+                    $Preview = ""
+                    try {
+                        $Preview = [System.IO.File]::ReadAllText($File)
+                    }
+                    catch {
+                        $Preview = "(Response is not readable as text.)"
+                    }
+
+                    throw "Downloaded content is too small ($TotalBytes bytes). Response preview: $($Preview.Substring(0, [Math]::Min(300, $Preview.Length)))"
+                }
+
+                # Reject Git LFS pointer files even if the configured minimum size is changed later
+                $FileStream = [System.IO.File]::OpenRead($File)
+                try {
+                    $CheckBuffer = New-Object byte[] 120
+                    $ReadCount = $FileStream.Read($CheckBuffer, 0, $CheckBuffer.Length)
+                    $HeaderText = [System.Text.Encoding]::UTF8.GetString($CheckBuffer, 0, $ReadCount)
+                }
+                finally {
+                    $FileStream.Dispose()
+                }
+
+                if ($HeaderText.StartsWith("version https://git-lfs.github.com/spec/v1")) {
+                    throw "Git LFS pointer file was downloaded instead of the actual MSP payload. Verify that the URL uses media.githubusercontent.com/media/."
+                }
+
+                $DownloadSuccess = $true
+                Write-Output "HttpClient download completed successfully."
+                Write-Output "Downloaded size: $([math]::Round($TotalBytes / 1MB, 2)) MB"
+
+            }
+            finally {
+
+                if ($OutputStream) { $OutputStream.Dispose() }
+                if ($InputStream) { $InputStream.Dispose() }
+                if ($Response) { $Response.Dispose() }
+                if ($Client) { $Client.Dispose() }
+                if ($Handler) { $Handler.Dispose() }
+
             }
 
         }
         catch {
 
-            Write-Output "BITS download failed."
-            Write-Output "Error: $($_.Exception.Message)"
+            $DownloadSuccess = $false
+
+            Write-Output "HttpClient download failed."
+            Write-Output "Error: $($_.Exception.GetBaseException().Message)"
+            Write-Output "Error Type: $($_.Exception.GetBaseException().GetType().FullName)"
+            Write-Output "Script Location: $($_.InvocationInfo.PositionMessage)"
 
             if (Test-Path $File) {
-
-                Remove-Item `
-                    -Path $File `
-                    -Force `
-                    -ErrorAction SilentlyContinue
-            }
-        }
-
-        # ====================================================
-        # DOWNLOAD METHOD 2 - CURL
-        # ====================================================
-
-        if (-not $DownloadSuccess) {
-
-            Write-Output ""
-            Write-Output "Download Method 2: curl.exe"
-
-            $CurlPath = Join-Path `
-                $env:SystemRoot `
-                "System32\curl.exe"
-
-            if (Test-Path $CurlPath) {
-
-                Write-Output "curl.exe found:"
-                Write-Output $CurlPath
-
-                if (Test-Path $File) {
-
-                    Remove-Item `
-                        -Path $File `
-                        -Force `
-                        -ErrorAction SilentlyContinue
-                }
-
-                try {
-
-                    Write-Output "Starting curl.exe download..."
-
-                    & $CurlPath `
-                        --fail `
-                        --location `
-                        --tlsv1.2 `
-                        --retry 3 `
-                        --retry-delay 5 `
-                        --connect-timeout 30 `
-                        --max-time 900 `
-                        --silent `
-                        --show-error `
-                        --output $File `
-                        $Url
-
-                    $CurlExitCode = $LASTEXITCODE
-
-                    Write-Output "curl.exe exit code: $CurlExitCode"
-
-                    if (
-                        $CurlExitCode -eq 0 -and
-                        (Test-Path $File)
-                    ) {
-
-                        $FileSize = (Get-Item $File).Length
-
-                        if ($FileSize -ge $MinimumFileSize) {
-
-                            Write-Output "curl.exe download completed."
-                            Write-Output "Downloaded size: $([math]::Round($FileSize / 1MB, 2)) MB"
-
-                            $DownloadSuccess = $true
-
-                        }
-                        else {
-
-                            Write-Output "curl.exe downloaded file is too small."
-                            Write-Output "Size: $FileSize bytes"
-
-                            Remove-Item `
-                                -Path $File `
-                                -Force `
-                                -ErrorAction SilentlyContinue
-                        }
-                    }
-
-                }
-                catch {
-
-                    Write-Output "curl.exe download failed."
-                    Write-Output "Error: $($_.Exception.Message)"
-                }
-
-            }
-            else {
-
-                Write-Output "curl.exe was not found."
-            }
-        }
-
-        # ====================================================
-        # DOWNLOAD METHOD 3 - INVOKE-WEBREQUEST
-        # ====================================================
-
-        if (-not $DownloadSuccess) {
-
-            Write-Output ""
-            Write-Output "Download Method 3: Invoke-WebRequest"
-
-            if (Test-Path $File) {
-
-                Remove-Item `
-                    -Path $File `
-                    -Force `
-                    -ErrorAction SilentlyContinue
-            }
-
-            try {
-
-                [Net.ServicePointManager]::SecurityProtocol = `
-                    [Net.SecurityProtocolType]::Tls12
-
-                Write-Output "Starting Invoke-WebRequest..."
-
-                Invoke-WebRequest `
-                    -Uri $Url `
-                    -OutFile $File `
-                    -UseBasicParsing `
-                    -Headers @{
-                        "User-Agent" = "Mozilla/5.0"
-                    } `
-                    -ErrorAction Stop
-
-                if (Test-Path $File) {
-
-                    $FileSize = (Get-Item $File).Length
-
-                    if ($FileSize -ge $MinimumFileSize) {
-
-                        Write-Output "Invoke-WebRequest download completed."
-                        Write-Output "Downloaded size: $([math]::Round($FileSize / 1MB, 2)) MB"
-
-                        $DownloadSuccess = $true
-
-                    }
-                    else {
-
-                        Write-Output "Downloaded file is too small."
-                        Write-Output "Size: $FileSize bytes"
-
-                        Remove-Item `
-                            -Path $File `
-                            -Force `
-                            -ErrorAction SilentlyContinue
-                    }
-                }
-
-            }
-            catch {
-
-                Write-Output "Invoke-WebRequest download failed."
-                Write-Output "Error: $($_.Exception.Message)"
+                Remove-Item -Path $File -Force -ErrorAction SilentlyContinue
             }
         }
 
