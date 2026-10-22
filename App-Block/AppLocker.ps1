@@ -15,6 +15,7 @@ $AppLockerPath      = Join-Path $BaseDir "AppLocker.exe"
 $WatchDogPath       = Join-Path $BaseDir "runtimesvc.exe"
 $JsonPath           = Join-Path $BaseDir "policy.json"
 $CertPath           = Join-Path $CertDir "AcceleronCertificate.cer"
+$LogFile            = Join-Path $BaseDir "AppLocker.log"
 
 $RegPath            = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\AppLocker"
 
@@ -41,6 +42,10 @@ if (-not (Test-Path $BaseDir)) {
 # Create certificate directory if not exists
 if (-not (Test-Path $CertDir)) {
     New-Item -Path $CertDir -ItemType Directory -Force | Out-Null
+}
+
+if (-not (Test-Path $LogFile)) {
+    New-Item -Path $LogFile -ItemType File | Out-Null
 }
 
 # ============================================================
