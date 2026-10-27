@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Installs the ExcelPatchGuard service (exe embedded below as base64) on machines with MSI-based Office 2016.
@@ -125,7 +125,7 @@ TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 				Write-Host "`n$KB is no longer installed." -ForegroundColor Green
 				# Write-Host "Uninstall completed successfully." -ForegroundColor Green
 
-				exit 0
+				return
 			}
 
 			Write-Host "`nFound $($Updates.Count) remaining entry(s)." `
@@ -196,7 +196,7 @@ TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 						Write-Host "Uninstall returned exit code $ExitCode." `
 							-ForegroundColor Red
 
-						exit $ExitCode
+						return
 					}
 
 				}
@@ -205,7 +205,7 @@ TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 					Write-Host "Uninstall failed: $($_.Exception.Message)" `
 						-ForegroundColor Red
 
-					exit 1
+					return
 				}
 
 				# ----------------------------------------------------
@@ -222,7 +222,7 @@ TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 					Write-Host "`n$KB successfully removed." `
 						-ForegroundColor Green
 
-					exit 0
+					return
 				}
 
 				# Still present -> loop and process next entry
@@ -237,7 +237,7 @@ TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 
 				Write-Host $Command
 
-				exit 1
+				return
 			}
 		}
     } catch {
