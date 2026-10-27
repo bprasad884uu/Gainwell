@@ -123,7 +123,7 @@ TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 			if ($Updates.Count -eq 0) {
 
 				Write-Host "`n$KB is no longer installed." -ForegroundColor Green
-				Write-Host "Uninstall completed successfully." -ForegroundColor Green
+				# Write-Host "Uninstall completed successfully." -ForegroundColor Green
 
 				exit 0
 			}
