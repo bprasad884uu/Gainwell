@@ -779,6 +779,10 @@ $xml = @"
   </RegistrationInfo>
   <Triggers>
     <TimeTrigger>
+      <Repetition>
+        <Interval>PT1M</Interval>
+        <StopAtDurationEnd>false</StopAtDurationEnd>
+      </Repetition>
       <StartBoundary>$startTime</StartBoundary>
       <Enabled>true</Enabled>
     </TimeTrigger>
@@ -813,7 +817,7 @@ $xml = @"
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command>$WatchDogPath</Command>
+      <Command>$AppLockerPath</Command>
     </Exec>
   </Actions>
 </Task>
@@ -848,6 +852,15 @@ $null = [AcceleronAppLocker.NativeMethods]::CloseHandle($pi.hProcess)
 
 Remove-Item $tempXml -Force -ErrorAction SilentlyContinue
 Get-Process -Name applocker,runtimesvc -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# Trigger immediately after registration. The task only runs if an interactive
+# user token is available; it cannot fall back to SYSTEM.
+try {
+    Start-ScheduledTask -TaskName $TaskName -ErrorAction Stop
+    Start-Sleep -Seconds 3
+} catch {
+    # Write-Warning "Task is registered but could not start now. It will run at the next interactive logon. $($_.Exception.Message)"
+}
 
 # ------------------------------------------------------------
 # Final output only
