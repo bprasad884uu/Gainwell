@@ -71,13 +71,6 @@ $JsonContent = @'
 {
   "apps": [
     {
-      "name": "AnyDesk",
-      "blockMessage": "Anydesk has been blocked by your Administrator",
-      "matchType": "ProductName",
-      "matchValue": "AnyDesk",
-      "adminExempt": false
-    },
-    {
       "name": "Windows Store",
       "blockMessage": "Windows Store has been blocked by your Administrator.",
       "matchType": "ProcessName",
@@ -90,6 +83,13 @@ $JsonContent = @'
       "matchType": "ProductName",
       "matchValue": "TeamViewer",
       "adminExempt": false
+    },
+	{
+      "name": "Powershell",
+      "blockMessage": "Powershell has been blocked by your Administrator.",
+      "matchType": "ProductName",
+      "matchValue": "PowerShell",
+      "adminExempt": true
     }
   ]
 }
