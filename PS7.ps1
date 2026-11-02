@@ -1,6 +1,14 @@
 # =================================================
-# PowerShell 7 - Setup and Integration
+# PowerShell 7 – Install, Cleanup, Default Integrate
 # =================================================
+# -------------------------
+# Helpers
+# -------------------------
+function Write-OK([string]$msg){ Write-Host "`n[OK] $msg" -ForegroundColor Green }
+function Write-Info([string]$msg){ Write-Host "`n[..] $msg" -ForegroundColor Cyan }
+function Write-Warn([string]$msg){ Write-Warning $msg }
+function Write-Err([string]$msg){ Write-Host "[ERR] $msg" -ForegroundColor Red }
+
 # -------------------------
 # Paths
 # -------------------------
@@ -8,13 +16,39 @@ $PwshStable  = "C:\Program Files\PowerShell\7\pwsh.exe"
 $PwshPreview = "C:\Program Files\PowerShell\7-preview\pwsh.exe"
 
 # -------------------------
+# MSIX detection (WindowsApps)
+# If PowerShell 7 exists as MSIX, use it and skip the MSI install.
+# -------------------------
+$WindowsAppsPath = "$env:ProgramFiles\WindowsApps"
+$UseMsix = $false
+
+function Get-MsixPwsh {
+    param([string]$Filter)
+    if (-not (Test-Path $WindowsAppsPath)) { return $null }
+    Get-ChildItem -Path $WindowsAppsPath -Directory -Filter $Filter -ErrorAction SilentlyContinue |
+        Where-Object {
+            (Test-Path (Join-Path $_.FullName "AppxManifest.xml")) -and
+            (Test-Path (Join-Path $_.FullName "pwsh.exe")) -and
+            $_.Name -match '_(\d+\.\d+\.\d+\.\d+)_'
+        } |
+        Sort-Object { [version]([regex]::Match($_.Name, '_(\d+\.\d+\.\d+\.\d+)_').Groups[1].Value) } -Descending |
+        Select-Object -First 1 |
+        ForEach-Object { Join-Path $_.FullName "pwsh.exe" }
+}
+
+$MsixStable  = Get-MsixPwsh -Filter "Microsoft.PowerShell_*"
+$MsixPreview = Get-MsixPwsh -Filter "Microsoft.PowerShellPreview_*"
+
+if ($MsixStable -or $MsixPreview) {
+    $UseMsix = $true
+    if ($MsixStable)  { $PwshStable  = $MsixStable }
+    if ($MsixPreview) { $PwshPreview = $MsixPreview }
+    Write-Info "PowerShell 7 MSIX detected. Skipping MSI install."
+}
+
+# -------------------------
 # Helper: Get pwsh version
 # -------------------------
-function Write-OK([string]$msg){ Write-Host "`n[OK] $msg" -ForegroundColor Green }
-function Write-Info([string]$msg){ Write-Host "`n[..] $msg" -ForegroundColor Cyan }
-function Write-Warn([string]$msg){ Write-Warning $msg }
-function Write-Err([string]$msg){ Write-Host "`n[ERR] $msg" -ForegroundColor Red }
-
 function Get-PwshVersion {
     param([string]$Path)
     if (Test-Path $Path) {
@@ -25,9 +59,14 @@ function Get-PwshVersion {
     return $null
 }
 
+# =================================================
+# 1. Ensure PowerShell 7 STABLE installed
+# =================================================
 # -------------------------------------------------
 # 1. Ensure PowerShell 7 (Stable) is installed
 # -------------------------------------------------
+if (-not $UseMsix) {
+
 Write-Info "Checking PowerShell 7 installation..."
 
 # --- Get latest stable release info from GitHub ---
@@ -40,7 +79,7 @@ try {
     $msiFile      = "$env:TEMP\$($asset.name)"
     Write-Info "Latest PowerShell stable release detected: $targetVer"
 } catch {
-    Write-Warn "`nFailed to fetch latest release info. Falling back to 7.5.4."
+    Write-Warn "Failed to fetch latest release info. Falling back to 7.5.4."
     $targetVer = [Version]"7.5.4"
     $msiUrl    = "https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/PowerShell-7.5.4-win-x64.msi"
     $msiFile   = "$env:TEMP\PowerShell-7.5.4-win-x64.msi"
@@ -50,29 +89,20 @@ function Get-InstalledPwshVersion {
     param([string]$exePath)
     if (-not (Test-Path $exePath)) { return $null }
     try {
-        $ver = & $exePath -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
-        # Return full version object (supports Preview)
-        return $ver
-    }
-    catch {
-        Write-Warn "Failed to run: $exePath. $_"
-        return $null
-    }
+        $out = & $exePath -NoLogo -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+        return [Version]$out.Trim()
+    } catch { return $null }
 }
 
 $installedStableVer = Get-InstalledPwshVersion -exePath $PwshStable
 
 if ($installedStableVer) {
     Write-Info "Detected PowerShell 7 stable: $installedStableVer"
+} else {
+    Write-Info "PowerShell 7 stable not detected."
 }
 
-$installedPreviewVer = Get-InstalledPwshVersion -exePath $PwshPreview
-
-if ($installedPreviewVer) {
-    Write-Info "Detected PowerShell 7 Preview: $installedPreviewVer"
-}
-
-if (-not $installedPreviewVer -and (-not $installedStableVer -or $installedStableVer -lt $targetVer)) {
+if (-not $installedStableVer -or $installedStableVer -lt $targetVer) {
 
     Write-Info "Installing / upgrading PowerShell 7 stable to $targetVer..."
 
@@ -162,21 +192,13 @@ if (-not $installedPreviewVer -and (-not $installedStableVer -or $installedStabl
         Remove-Item $msiFile -Force -ErrorAction SilentlyContinue
 		Write-OK "Powershell $targetVer Installed."
     } catch {
-        Write-Warn "`nInstallation failed: $_"
+        Write-Warn "Installation failed: $_"
     }
 } else {
-	$installedVer = if ($installedPreviewVer) {
-    "Preview $installedPreviewVer"
-    }
-    elseif ($installedStableVer) {
-        "Stable $installedStableVer"
-    }
-    else {
-        "Unknown"
-    }
-
-    Write-OK "PowerShell $installedVer is up to date. Skipping install."
+    Write-OK "PowerShell $installedStableVer is up to date (>= $targetVer). Skipping install."
 }
+
+}  # end if (-not $UseMsix)
 
 # =================================================
 # 2. Select DEFAULT pwsh (Preview > Stable)
@@ -190,15 +212,15 @@ elseif (Test-Path $PwshStable) {
     $PwshType = "Stable"
 }
 else {
-    Write-Warn "`nNo PowerShell 7 installation available after install step."
-    return
+    Write-Error "No PowerShell 7 found after install step."
+    exit 1
 }
 
-Write-Info "Using PowerShell $PwshType as system default."
+Write-Info "Using PowerShell $PwshType as default: $DefaultPwsh"
 
-<# -------------------------------------------------
-# 3. All Users PowerShell 5.1 redirect
-# -------------------------------------------------
+<# # =================================================
+# 3. Safe replace – All Users PowerShell 5.1 profile
+# =================================================
 Write-Info "Configuring system-wide PowerShell redirect..."
 
 $AllUsersProfile = "$env:WINDIR\System32\WindowsPowerShell\v1.0\profile.ps1"
@@ -235,9 +257,9 @@ if (!(Test-Path $AllUsersProfile)) {
 
 Write-OK "PowerShell redirect configured."
 #>
-# -------------------------------------------------
-# 4. Windows Terminal - existing users
-# -------------------------------------------------
+# =================================================
+# 4. Windows Terminal – EXISTING USERS
+# =================================================
 Write-Info "Configuring Windows Terminal (existing users)..."
 
 $UserProfiles = Get-ChildItem C:\Users -Directory |
@@ -269,13 +291,13 @@ foreach ($User in $UserProfiles) {
         $json | ConvertTo-Json -Depth 10 | Set-Content $SettingsPath -Encoding UTF8
     }
     catch {
-        Write-Warn "`nTerminal update failed for user $($User.Name)"
+        Write-Warn "Terminal update failed for user $($User.Name)"
     }
 }
 
-# -------------------------------------------------
-# 5. Windows Terminal - new users
-# -------------------------------------------------
+# =================================================
+# 5. Windows Terminal – NEW USERS
+# =================================================
 Write-Info "Configuring Windows Terminal default for new users..."
 
 $DefaultUserPath = "C:\Users\Default\AppData\Local\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState"
@@ -328,12 +350,10 @@ foreach ($User in $UserProfiles) {
         }
     }
     catch {
-        Write-Warn "`nFailed to update Win+X menu for user: $($User.Name)"
+        Write-Warn "Failed to update Win+X menu for user: $($User.Name)"
     }
 }
 Write-OK "Win+X menu updated to use PowerShell ($PwshType) for all users."
 
-#------------------------------
-# 7. Kill New PowerShell
-#------------------------------
-#taskkill /im pwsh.exe /f
+taskkill /im powershell.exe /f
+taskkill /im pwsh.exe /f
