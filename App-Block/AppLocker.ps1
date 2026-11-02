@@ -63,7 +63,7 @@ if (-not (Test-Path $LogFile)) {
 # ============================================================
 # STOP APPLOCKER PROCESSES
 Get-Process -Name applocker,runtimesvc -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-do { Start-Sleep -Milliseconds 500; $RunningProcesses = Get-Process -Name applocker,runtimesvc -ErrorAction SilentlyContinue } while ($RunningProcesses)
+while (Get-Process -Name applocker,runtimesvc -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }
 
 # STOP APPIDSVC
 Stop-Service -Name AppIDSvc -Force -ErrorAction SilentlyContinue
