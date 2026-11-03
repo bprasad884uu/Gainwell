@@ -888,10 +888,6 @@ try {
     Set-ItemProperty -Path $MspBaseKey -Name '(default)' -Value "Install as administrator"
 
     Set-ItemProperty -Path $MspCmdKey -Name '(default)' -Value 'msiexec.exe /p "%1"'
-
-    Write-Host "`nSuccessfully added context menu options!" -ForegroundColor Green
-    Write-Host " MSI : Install as administrator"
-    Write-Host " MSP : Install as administrator"
 }
 catch {
     Write-Error "Failed to add context menu: $_"
