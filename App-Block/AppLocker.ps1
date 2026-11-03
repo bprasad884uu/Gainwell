@@ -863,32 +863,35 @@ $xml | Out-File -FilePath $tempXml -Encoding Unicode
 
 $null = Register-ScheduledTask -TaskName $TaskName -Xml (Get-Content $tempXml | Out-String) -Force
 
-# -----------------------------------------------------
-# Add "Install as administrator" option for .MSI files
-# -----------------------------------------------------
+# =====================================================
+# Add "Install as administrator" Context Menu
+# For MSI and MSP Files
+# =====================================================
 
 try {
-    $baseKey = "Registry::HKEY_CLASSES_ROOT\Msi.Package\shell\runas"
-    $cmdKey  = "$baseKey\command"
+    # MSI Context Menu
+    $MsiBaseKey = "Registry::HKEY_CLASSES_ROOT\Msi.Package\shell\runas"
+    $MsiCmdKey  = "$MsiBaseKey\command"
 
-    # Create parent key if not exists
-    if (-not (Test-Path $baseKey)) {
-        New-Item -Path $baseKey -Force | Out-Null
-    }
+    New-Item -Path $MsiCmdKey -Force | Out-Null
 
-    # Set the menu text
-    Set-ItemProperty -Path $baseKey -Name '(default)' -Value "Install as administrator"
+    Set-ItemProperty -Path $MsiBaseKey -Name '(default)' -Value "Install as administrator"
 
-    # Create command subkey if missing
-    if (-not (Test-Path $cmdKey)) {
-        New-Item -Path $cmdKey -Force | Out-Null
-    }
+    Set-ItemProperty -Path $MsiCmdKey -Name '(default)' -Value 'msiexec.exe /i "%1"'
 
-    # Set command line to use msiexec with elevation
-    Set-ItemProperty -Path $cmdKey -Name '(default)' -Value 'msiexec.exe /i "%1"'
+    # MSP Context Menu
+    $MspBaseKey = "Registry::HKEY_CLASSES_ROOT\Msi.Patch\shell\runas"
+    $MspCmdKey  = "$MspBaseKey\command"
 
-    # Write-Host "`n'Install as administrator' option added to MSI right-click menu."
-    # Write-Host "   Right-click any .MSI file -> You'll see 'Install as administrator'."
+    New-Item -Path $MspCmdKey -Force | Out-Null
+
+    Set-ItemProperty -Path $MspBaseKey -Name '(default)' -Value "Install as administrator"
+
+    Set-ItemProperty -Path $MspCmdKey -Name '(default)' -Value 'msiexec.exe /p "%1"'
+
+    Write-Host "`nSuccessfully added context menu options!" -ForegroundColor Green
+    Write-Host " MSI : Install as administrator"
+    Write-Host " MSP : Install as administrator"
 }
 catch {
     Write-Error "Failed to add context menu: $_"
