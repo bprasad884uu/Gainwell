@@ -460,10 +460,7 @@ if ($AppLockerActive) {
 	# 1) Stop service this session (ignore errors)
 	Stop-Service AppIDSvc -Force -ErrorAction SilentlyContinue
 
-	# 2) Set to Manual start (safer than Disabled on protected services)
-	Set-AppIdSvcStartType -StartType Disabled -ErrorAction SilentlyContinue
-
-	# 3) Clear AppLocker and SRP policies for machine + all user profiles
+	# 2) Clear AppLocker and SRP policies for machine + all user profiles
 
 	# Machine-wide
 	Remove-Item "HKLM:\SOFTWARE\Policies\Microsoft\Windows\SrpV2" -Recurse -Force -ErrorAction SilentlyContinue
@@ -480,36 +477,36 @@ if ($AppLockerActive) {
 		}
 	  }
 
-	# 4) Clear UAC installer-detection override (if any)
+	# 3) Clear UAC installer-detection override (if any)
 	$uacKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
 	if (Test-Path $uacKey) {
 		Remove-ItemProperty -Path $uacKey -Name "EnableInstallerDetection" -ErrorAction SilentlyContinue
 	}
 
-	# 5) Ensure Windows Installer policy allows MSI
+	# 4) Ensure Windows Installer policy allows MSI
 	$msiKey = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer"
 	if (Test-Path $msiKey) {
 		Remove-Item $msiKey -Recurse -Force -ErrorAction SilentlyContinue
 	}
 
-	# 6) Clear SRP for all users (policy-only)
+	# 5) Clear SRP for all users (policy-only)
 	Remove-AllUserSrpPolicies | Out-Null
 
-	# 7) Apply empty AppLocker policy
+	# 6) Apply empty AppLocker policy
 	Apply-Empty-AppLockerPolicy | Out-Null
 
-	# 8) Group Policy refresh; keep service stopped
+	# 7) Group Policy refresh; keep service stopped
 	gpupdate /force | Out-Null
 	Start-Sleep -Seconds 2
 	Stop-Service AppIDSvc -Force -ErrorAction SilentlyContinue
 
-	# 9) Clear AppLocker logs (fresh start)
+	# 8) Clear AppLocker logs (fresh start)
 	Clear-AppLockerLogs | Out-Null
 
-	# 10) Delete compiled AppLocker cache files
+	# 9) Delete compiled AppLocker cache files
 	Invoke-SystemAppLockerWipe | Out-Null
 
-	# 11) Cleanup optional backup directory, if present
+	# 10) Cleanup optional backup directory, if present
 	$backupRoot = "C:\PolicyBackup"
 	if (Test-Path $backupRoot) {
 		Remove-Item $backupRoot -Recurse -Force -ErrorAction SilentlyContinue
