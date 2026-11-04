@@ -46,6 +46,52 @@ if ($MsixStable -or $MsixPreview) {
     Write-Info "PowerShell 7 MSIX detected. Skipping MSI install."
 }
 
+# -------------------------------------------------
+# MSIX registration for the executing user
+# Direct execution from WindowsApps can return 0x80070005
+# when the package is staged but not registered for this user.
+# -------------------------------------------------
+if ($UseMsix) {
+    $MsixCandidates = @(
+        Get-ChildItem -Path $WindowsAppsPath -Directory `
+            -Filter "Microsoft.PowerShell_*" -ErrorAction SilentlyContinue |
+        Where-Object {
+            (Test-Path (Join-Path $_.FullName "AppxManifest.xml")) -and
+            $_.Name -match '_(\d+\.\d+\.\d+\.\d+)_'
+        } |
+        Sort-Object {
+            [version]([regex]::Match($_.Name, '_(\d+\.\d+\.\d+\.\d+)_').Groups[1].Value)
+        } -Descending
+    )
+
+    foreach ($MsixFolder in $MsixCandidates) {
+        $ManifestPath = Join-Path $MsixFolder.FullName "AppxManifest.xml"
+        $FolderVersion = [version]([regex]::Match(
+            $MsixFolder.Name, '_(\d+\.\d+\.\d+\.\d+)_'
+        ).Groups[1].Value)
+
+        $Registered = Get-AppxPackage -Name "Microsoft.PowerShell" `
+            -ErrorAction SilentlyContinue |
+            Where-Object { $_.Version -eq $FolderVersion.ToString() } |
+            Select-Object -First 1
+
+        if (!$Registered) {
+            Write-Info "Registering PowerShell MSIX $FolderVersion for current user..."
+            try {
+                Add-AppxPackage -Register $ManifestPath -DisableDevelopmentMode -ErrorAction Stop
+                Write-OK "MSIX registration completed for $FolderVersion."
+            }
+            catch {
+                Write-Warn "MSIX registration failed for $FolderVersion : $($_.Exception.Message)"
+                throw
+            }
+        }
+        else {
+            Write-OK "PowerShell MSIX $FolderVersion already registered for current user."
+        }
+    }
+}
+
 # -------------------------
 # Helper: Get pwsh version
 # -------------------------
@@ -218,6 +264,10 @@ else {
 
 Write-Info "Using PowerShell $PwshType as default: $DefaultPwsh"
 
+# Terminal/WinX should invoke the registered app execution command,
+# not launch the packaged executable directly from WindowsApps.
+$DefaultPwshCommand = "pwsh.exe"
+
 <# # =================================================
 # 3. Safe replace – All Users PowerShell 5.1 profile
 # =================================================
@@ -274,7 +324,7 @@ foreach ($User in $UserProfiles) {
         $json = Get-Content $SettingsPath -Raw | ConvertFrom-Json
 
         $pwshProfile = $json.profiles.list | Where-Object {
-            $_.commandline -eq $DefaultPwsh
+            $_.commandline -eq $DefaultPwshCommand
         }
 
         if (-not $pwshProfile) {
@@ -282,7 +332,7 @@ foreach ($User in $UserProfiles) {
             $pwshProfile = @{
                 guid        = $guid
                 name        = "PowerShell ($PwshType)"
-                commandline = $DefaultPwsh
+                commandline = $DefaultPwshCommand
             }
             $json.profiles.list += $pwshProfile
         }
@@ -316,7 +366,7 @@ if (!(Test-Path $DefaultSettings)) {
                 @{
                     guid        = $guid
                     name        = "PowerShell ($PwshType)"
-                    commandline = $DefaultPwsh
+                    commandline = $DefaultPwshCommand
                 }
             )
         }
@@ -342,8 +392,9 @@ foreach ($User in $UserProfiles) {
             $shortcut = $wshell.CreateShortcut($sc.FullName)
 
             if ($shortcut.TargetPath -match "powershell.exe") {
-                $shortcut.TargetPath  = $DefaultPwsh
-                $shortcut.IconLocation = "$DefaultPwsh,0"
+                $shortcut.TargetPath  = "pwsh.exe"
+                $shortcut.Arguments   = "-NoLogo"
+                $shortcut.IconLocation = "pwsh.exe,0"
                 $shortcut.Save()
                 Write-Info "Updated Win+X shortcut for user $($User.Name)."
             }
