@@ -24,8 +24,6 @@ $IsSystem           = ([Security.Principal.WindowsIdentity]::GetCurrent().IsSyst
 $IsAdmin            = ([Security.Principal.WindowsPrincipal] `
                       [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
-Remove-Item $LogFile -Force -ErrorAction SilentlyContinue
-
 # ============================================================
 # ENSURE BASE DIRECTORY
 # ============================================================
