@@ -169,32 +169,24 @@ TVqQAAMAAAAEAAAA//8AALgAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 $ScreensaverBytes = [Convert]::FromBase64String($ScreensaverBase64)
 
 # ============================================================
-# WRITE + TRUST CERTIFICATE (SYSTEM)
+# WRITE + TRUST CERTIFICATE (SYSTEM ONLY)
 # ============================================================
 
-if ($IsSystem -or $IsAdmin)
-{
-    if (-not (Test-Path $CertPath))
-    {
+if ($IsSystem -or $IsAdmin) {
+
+    if (-not (Test-Path $CertPath)) {
         [IO.File]::WriteAllBytes(
             $CertPath,
             [Convert]::FromBase64String($CertBase64)
         )
     }
 
-    foreach ($store in "Root","TrustedPublisher")
-    {
-        $exists = Get-ChildItem "Cert:\LocalMachine\$store" |
-                  Where-Object Thumbprint -eq $PinnedThumbprint
-
-        if (-not $exists)
-        {
-            certutil.exe -addstore $store $CertPath | Out-Null
-
-            if ($LASTEXITCODE -ne 0)
-            {
-                throw "Failed to import certificate into $store."
-            }
+    foreach ($store in @(
+        "Root",
+        "TrustedPublisher"
+    )) {
+        if (-not (certutil -store $store | Select-String $PinnedThumbprint)) {
+            & certutil.exe -addstore $store $CertPath | Out-Null
         }
     }
 }
