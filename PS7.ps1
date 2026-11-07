@@ -108,9 +108,6 @@ function Get-PwshVersion {
 # =================================================
 # 1. Ensure PowerShell 7 STABLE installed
 # =================================================
-# -------------------------------------------------
-# 1. Ensure PowerShell 7 (Stable) is installed
-# -------------------------------------------------
 if (-not $UseMsix) {
 
 Write-Info "Checking PowerShell 7 installation..."
