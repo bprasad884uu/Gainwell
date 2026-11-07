@@ -902,10 +902,6 @@ $UpdaterXml = @"
       <Enabled>true</Enabled>
     </LogonTrigger>
     <TimeTrigger>
-	<Repetition>
-        <Interval>PT10M</Interval>
-        <StopAtDurationEnd>false</StopAtDurationEnd>
-      </Repetition>
       <StartBoundary>$startTime</StartBoundary>
       <Enabled>true</Enabled>
     </TimeTrigger>
