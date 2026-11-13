@@ -180,7 +180,7 @@ if (-not (Test-Path $PolicyConfigPath)) {
         $PolicyJson = ConvertTo-Json -InputObject $PolicyConfig -Depth 10
         # ConvertTo-Json emits readable multi-line JSON (one property per line).
         [System.IO.File]::WriteAllText($PolicyConfigPath, $PolicyJson, ([System.Text.UTF8Encoding]::new($false)))
-        Write-Output "Created initial policy configuration.
+        Write-Output "Created initial policy configuration."
 }
 
 # ============================================================
