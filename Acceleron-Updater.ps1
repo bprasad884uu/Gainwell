@@ -17,7 +17,6 @@ $LogFile            = Join-Path $BaseDir "Updater.log"
 $PolicyConfigPath   = Join-Path $BaseDir "Policies.json"
 
 $UpdaterTaskName    = "Acceleron Updater"
-$UpdatertempXml     = "$env:TEMP\Updater.xml"
 
 $PinnedThumbprint   = "C9C559D901C9B31C90AF64D0D20A091013A3D4C3"
 
@@ -43,68 +42,55 @@ if (-not (Test-Path $LogFile)) {
     New-Item -Path $LogFile -ItemType File | Out-Null
 }
 
-# ============================================================
-# CLEAN OLD TASKS (SAFE)
-# ============================================================
+# If any later operation fails, never leave an existing updater task disabled.
+# This recovery handler does not change the SYSTEM principal or task definition.
+trap {
+    $OriginalError = $_
+    try {
+        $RecoveryTask = Get-ScheduledTask -TaskName $UpdaterTaskName -ErrorAction SilentlyContinue
+        if ($RecoveryTask) {
+            Enable-ScheduledTask -TaskName $UpdaterTaskName -ErrorAction Stop | Out-Null
+            $RecoveryTask = Get-ScheduledTask -TaskName $UpdaterTaskName -ErrorAction Stop
 
+            $RecoveryAction = [Environment]::ExpandEnvironmentVariables([string]$RecoveryTask.Actions[0].Execute)
+            $RecoveryIsSystem = (
+                $RecoveryTask.Principal.GroupId -eq 'S-1-5-18' -or
+                $RecoveryTask.Principal.UserId -in @('SYSTEM', 'NT AUTHORITY\SYSTEM', 'S-1-5-18')
+            )
 
-# Stop and temporarily disable the updater task so it cannot respawn Updater.exe
-try {
-    $existingTask = Get-ScheduledTask -TaskName $UpdaterTaskName -ErrorAction SilentlyContinue
-    if ($existingTask) {
-        Stop-ScheduledTask -TaskName $UpdaterTaskName -ErrorAction SilentlyContinue
-        Disable-ScheduledTask -TaskName $UpdaterTaskName -ErrorAction SilentlyContinue | Out-Null
-        Start-Sleep -Seconds 2
-    }
-} catch {
-    # Write-Warning "Unable to stop/disable scheduled task '$UpdaterTaskName': $($_.Exception.Message)"
-}
+            if (
+                $RecoveryTask.Settings.Enabled -and
+                $RecoveryIsSystem -and
+                [string]::Equals($RecoveryAction, $UpdaterPath, [StringComparison]::OrdinalIgnoreCase) -and
+                (Test-Path $UpdaterPath)
+            ) {
+                $RecoveryDeadline = (Get-Date).AddSeconds(20)
+                do {
+                    $RecoveryTask = Get-ScheduledTask -TaskName $UpdaterTaskName -ErrorAction Stop
+                    if ($RecoveryTask.State -ne 'Running') { break }
+                    Start-Sleep -Milliseconds 500
+                } while ((Get-Date) -lt $RecoveryDeadline)
 
-# Stop only Updater.exe instances whose executable path exactly matches the installed target.
-# Repeat until the process exits; task is disabled to prevent automatic respawn during replacement.
-$ProcessWaitSeconds = 30
-$ProcessDeadline = (Get-Date).AddSeconds($ProcessWaitSeconds)
-
-do {
-    $AllUpdaterProcesses = @(Get-CimInstance Win32_Process -Filter "Name='Updater.exe'" -ErrorAction SilentlyContinue)
-    $MatchingUpdaterProcesses = @($AllUpdaterProcesses | Where-Object {
-        $_.ExecutablePath -and
-        [string]::Equals($_.ExecutablePath, $UpdaterPath, [StringComparison]::OrdinalIgnoreCase)
-    })
-
-    if ($MatchingUpdaterProcesses.Count -eq 0) {
-        break
-    }
-
-    foreach ($UpdaterProc in $MatchingUpdaterProcesses) {
-        try {
-            Stop-Process -Id ([int]$UpdaterProc.ProcessId) -Force -ErrorAction Stop
-        } catch {
-            # Write-Warning "Could not terminate Updater.exe PID $($UpdaterProc.ProcessId): $($_.Exception.Message)"
+                if ($RecoveryTask.State -ne 'Running') {
+                    Start-ScheduledTask -TaskName $UpdaterTaskName -ErrorAction Stop
+                }
+            }
         }
+    } catch {
+        Write-Warning "Updater task recovery also failed: $($_.Exception.Message)"
     }
-
-    Start-Sleep -Milliseconds 750
-} while ((Get-Date) -lt $ProcessDeadline)
-
-# Final verification: do not replace the EXE if a matching process remains.
-$RemainingUpdaterProcesses = @(Get-CimInstance Win32_Process -Filter "Name='Updater.exe'" -ErrorAction SilentlyContinue |
-    Where-Object {
-        $_.ExecutablePath -and
-        [string]::Equals($_.ExecutablePath, $UpdaterPath, [StringComparison]::OrdinalIgnoreCase)
-    })
-
-if ($RemainingUpdaterProcesses.Count -gt 0) {
-    $ProcessDetails = ($RemainingUpdaterProcesses | ForEach-Object {
-        "PID=$($_.ProcessId); ExecutablePath=$($_.ExecutablePath); CommandLine=$($_.CommandLine)"
-    }) -join [Environment]::NewLine
-
-    throw "Updater.exe is still running after $ProcessWaitSeconds seconds. Replacement aborted.`n$ProcessDetails"
+    throw $OriginalError
 }
 
-if (Test-Path $PolicyConfigPath) {
-    Remove-Item $PolicyConfigPath -Force -ErrorAction SilentlyContinue | Out-Null
-}
+# ============================================================
+# PREPARE UPDATE (DO NOT DISABLE OR UNREGISTER THE TASK)
+# ============================================================
+# The scheduled task must remain enabled. The updater process is stopped only
+# immediately before the verified EXE is replaced.
+
+$UpdaterTempPath = Join-Path $BaseDir "Updater.new.exe"
+$UpdaterBackupPath = Join-Path $BaseDir "Updater.exe.bak"
+$ProcessWaitSeconds = 30
 
 # ============================================================
 # UPDATER DIRECTORY POLICY CONFIGURATION (POWERSHELL-OWNED)
@@ -235,54 +221,139 @@ if ($IsSystem -or $IsAdmin) {
 }
 
 # ============================================================
-# WRITE UPDATER EXE
+# VALIDATE, REPLACE AND VERIFY UPDATER EXE
 # ============================================================
 
-[IO.File]::WriteAllBytes(
-    $UpdaterPath,
-    $UpdaterExeBytes
+# Write the downloaded/embedded binary to a temporary file first. Never touch
+# the installed EXE until the temporary file has passed signature validation.
+[IO.File]::WriteAllBytes($UpdaterTempPath, $UpdaterExeBytes)
+
+$TempSig = Get-AuthenticodeSignature -FilePath $UpdaterTempPath
+if (
+    -not $TempSig.SignerCertificate -or
+    $TempSig.SignerCertificate.Thumbprint -ne $PinnedThumbprint -or
+    $TempSig.Status -ne 'Valid'
+) {
+    Remove-Item $UpdaterTempPath -Force -ErrorAction SilentlyContinue
+    throw "Temporary Updater.exe signature validation failed. Status: $($TempSig.Status)"
+}
+
+# Stop only the installed Updater.exe process. Do NOT disable the scheduled task.
+$ProcessDeadline = (Get-Date).AddSeconds($ProcessWaitSeconds)
+do {
+    $MatchingUpdaterProcesses = @(
+        Get-CimInstance Win32_Process -Filter "Name='Updater.exe'" -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.ExecutablePath -and
+                [string]::Equals($_.ExecutablePath, $UpdaterPath, [StringComparison]::OrdinalIgnoreCase)
+            }
+    )
+
+    if ($MatchingUpdaterProcesses.Count -eq 0) { break }
+
+    foreach ($UpdaterProc in $MatchingUpdaterProcesses) {
+        try {
+            Stop-Process -Id ([int]$UpdaterProc.ProcessId) -Force -ErrorAction Stop
+        } catch {
+            # The process may have exited between the CIM query and Stop-Process.
+        }
+    }
+
+    Start-Sleep -Milliseconds 500
+} while ((Get-Date) -lt $ProcessDeadline)
+
+$RemainingUpdaterProcesses = @(
+    Get-CimInstance Win32_Process -Filter "Name='Updater.exe'" -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.ExecutablePath -and
+            [string]::Equals($_.ExecutablePath, $UpdaterPath, [StringComparison]::OrdinalIgnoreCase)
+        }
 )
 
-$Sig = Get-AuthenticodeSignature -FilePath $UpdaterPath
+if ($RemainingUpdaterProcesses.Count -gt 0) {
+    Remove-Item $UpdaterTempPath -Force -ErrorAction SilentlyContinue
+    $ProcessDetails = ($RemainingUpdaterProcesses | ForEach-Object {
+        "PID=$($_.ProcessId); ExecutablePath=$($_.ExecutablePath); CommandLine=$($_.CommandLine)"
+    }) -join [Environment]::NewLine
+    throw "Updater.exe is still running after $ProcessWaitSeconds seconds. Replacement aborted.`n$ProcessDetails"
+}
 
-if (
-    -not $Sig.SignerCertificate -or
-    $Sig.SignerCertificate.Thumbprint -ne $PinnedThumbprint -or
-    $Sig.Status -in @(
-        'HashMismatch',
-        'NotSigned',
-        'UnknownError'
-    )
-) {
-    throw "Updater.exe signature validation failed. Status: $($Sig.Status)"
+# Replace atomically and retain a rollback copy until the installed signature
+# has been checked. Both files are on the same volume (BaseDir).
+$HadPreviousUpdater = Test-Path $UpdaterPath
+try {
+    if ($HadPreviousUpdater) {
+        Remove-Item $UpdaterBackupPath -Force -ErrorAction SilentlyContinue
+        [IO.File]::Replace($UpdaterTempPath, $UpdaterPath, $UpdaterBackupPath, $true)
+    } else {
+        Move-Item -Path $UpdaterTempPath -Destination $UpdaterPath -Force
+    }
+
+    $InstalledSig = Get-AuthenticodeSignature -FilePath $UpdaterPath
+    if (
+        -not $InstalledSig.SignerCertificate -or
+        $InstalledSig.SignerCertificate.Thumbprint -ne $PinnedThumbprint -or
+        $InstalledSig.Status -ne 'Valid'
+    ) {
+        throw "Installed Updater.exe signature validation failed. Status: $($InstalledSig.Status)"
+    }
+
+    Remove-Item $UpdaterBackupPath -Force -ErrorAction SilentlyContinue
+}
+catch {
+    # Restore the previous known-good executable if the replacement failed.
+    if (Test-Path $UpdaterBackupPath) {
+        Remove-Item $UpdaterPath -Force -ErrorAction SilentlyContinue
+        Move-Item -Path $UpdaterBackupPath -Destination $UpdaterPath -Force
+    }
+    throw
+}
+finally {
+    Remove-Item $UpdaterTempPath -Force -ErrorAction SilentlyContinue
 }
 
 # ------------------------------------------------------------
-# SCHEDULED TASK: APP LOCKER (INTERACTIVE USER)
+# SCHEDULED TASK: ACCELERON UPDATER (SYSTEM)
 # ------------------------------------------------------------
 
-# Generate correct timestamp
-$startTime = (Get-Date).AddMinutes(1).ToString("yyyy-MM-ddTHH:mm:ss")
+# Preserve an existing correctly configured SYSTEM task. Register it only if
+# missing or if its executable/principal is incorrect.
+$Task = Get-ScheduledTask -TaskName $UpdaterTaskName -ErrorAction SilentlyContinue
+$TaskNeedsRegistration = $false
 
-# ---------------- CLEAN OLD TASK ----------------
+if (-not $Task) {
+    $TaskNeedsRegistration = $true
+} else {
+    $TaskActionPath = [Environment]::ExpandEnvironmentVariables([string]$Task.Actions[0].Execute)
+    $TaskIsSystem = (
+        $Task.Principal.GroupId -eq 'S-1-5-18' -or
+        $Task.Principal.UserId -in @('SYSTEM', 'NT AUTHORITY\SYSTEM', 'S-1-5-18')
+    )
 
-Unregister-ScheduledTask -TaskName $UpdaterTaskName -Confirm:$false -ErrorAction SilentlyContinue
+    if (
+        -not [string]::Equals($TaskActionPath, $UpdaterPath, [StringComparison]::OrdinalIgnoreCase) -or
+        -not $TaskIsSystem
+    ) {
+        $TaskNeedsRegistration = $true
+    }
+}
 
-# ---------------- CREATE UPDATER XML ----------------
+if ($TaskNeedsRegistration) {
+    $StartBoundary = (Get-Date).AddMinutes(1).ToString('yyyy-MM-ddTHH:mm:ss')
 
-$UpdaterXml = @"
+    $UpdaterXml = @"
 <?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Author>Acceleron</Author>
-    <URI>\$UpdaterTaskName</URI>
+    <URI>\Acceleron Updater</URI>
   </RegistrationInfo>
   <Triggers>
     <LogonTrigger>
       <Enabled>true</Enabled>
     </LogonTrigger>
     <TimeTrigger>
-      <StartBoundary>$startTime</StartBoundary>
+      <StartBoundary>$StartBoundary</StartBoundary>
       <Enabled>true</Enabled>
     </TimeTrigger>
   </Triggers>
@@ -300,7 +371,7 @@ $UpdaterXml = @"
     <StartWhenAvailable>true</StartWhenAvailable>
     <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
     <IdleSettings>
-      <StopOnIdleEnd>true</StopOnIdleEnd>
+      <StopOnIdleEnd>false</StopOnIdleEnd>
       <RestartOnIdle>false</RestartOnIdle>
     </IdleSettings>
     <AllowStartOnDemand>true</AllowStartOnDemand>
@@ -319,34 +390,47 @@ $UpdaterXml = @"
 </Task>
 "@
 
-# ---------------- SAVE XML ----------------
+    # Replace only a missing/misconfigured task. The principal remains SYSTEM.
+    if ($Task) {
+        Unregister-ScheduledTask -TaskName $UpdaterTaskName -Confirm:$false -ErrorAction Stop
+    }
 
-$UpdaterXml | Out-File -FilePath $UpdatertempXml -Encoding Unicode
+    $null = Register-ScheduledTask -TaskName $UpdaterTaskName -Xml $UpdaterXml -Force -ErrorAction Stop
+}
 
-# ---------------- REGISTER TASK ----------------
+# Always restore the task to Enabled=True, including when it was disabled by
+# an earlier failed updater deployment.
+Enable-ScheduledTask -TaskName $UpdaterTaskName -ErrorAction Stop | Out-Null
 
-$null = Register-ScheduledTask -TaskName $UpdaterTaskName -Xml (Get-Content $UpdatertempXml | Out-String) -Force
+$Task = Get-ScheduledTask -TaskName $UpdaterTaskName -ErrorAction Stop
+if (-not $Task.Settings.Enabled) {
+    throw "Scheduled task '$UpdaterTaskName' is still disabled."
+}
 
-# ------------------------------------------------------------
-# Cleanup
-# ------------------------------------------------------------
+if ($Task.Principal.GroupId -ne 'S-1-5-18' -and $Task.Principal.UserId -notin @('SYSTEM', 'NT AUTHORITY\SYSTEM', 'S-1-5-18')) {
+    throw "Scheduled task '$UpdaterTaskName' is not running as SYSTEM."
+}
 
-Remove-Item $UpdatertempXml -Force -ErrorAction SilentlyContinue
+# The currently running instance may still be transitioning to Ready because
+# its Updater.exe parent was stopped above. Wait, then explicitly start it.
+$TaskReadyDeadline = (Get-Date).AddSeconds(30)
+do {
+    $Task = Get-ScheduledTask -TaskName $UpdaterTaskName -ErrorAction Stop
+    if ($Task.State -ne 'Running') { break }
+    Start-Sleep -Milliseconds 500
+} while ((Get-Date) -lt $TaskReadyDeadline)
 
-# Trigger immediately after registration. The task only runs if an interactive
-# user token is available; it cannot fall back to SYSTEM.
-try {
+if ($Task.State -eq 'Running') {
+    Write-Warning "Updater task is still Running; Task Scheduler will not launch a second instance (IgnoreNew). It remains enabled."
+} else {
     Start-ScheduledTask -TaskName $UpdaterTaskName -ErrorAction Stop
-    Start-Sleep -Seconds 3
-} catch {
-    # Write-Warning "Task is registered but could not start now. It will run at the next interactive logon. $($_.Exception.Message)"
 }
 
 # ------------------------------------------------------------
 # Final output only
 # ------------------------------------------------------------
 
-# Clear applied Certificate
+# Remove the temporary certificate file/folder after trust-store installation.
 Remove-Item $CertDir -Recurse -Force -ErrorAction SilentlyContinue
 
-Write-Host "Updater started."
+Write-Host "Acceleron Updater update completed."
