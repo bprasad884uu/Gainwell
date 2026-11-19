@@ -242,7 +242,6 @@ $BlockedJsonContent = @'
   "blockedApps": [
     "WinStore.App",
     "TeamViewer",
-    "WindowsTerminal",
 	"AnyDesk"
   ],
   "blockedPaths": [],
