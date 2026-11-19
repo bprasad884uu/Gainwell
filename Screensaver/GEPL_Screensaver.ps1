@@ -112,7 +112,7 @@ function Generate-MergedImage {
 
         $encoderParams.Dispose()
 
-        Write-Host "`nWallpaper Generated: $Company-Screensaver.jpg"
+        Write-Host "`nScreensaver Generated: $Company-Screensaver.jpg"
 
         $fileInfo = Get-Item $outputFile
         $fileSizeMB = [math]::Round($fileInfo.Length / 1MB, 2)
@@ -120,7 +120,7 @@ function Generate-MergedImage {
         Write-Host "File Size: $fileSizeMB MB`n"
     }
     catch {
-        Write-Error "Wallpaper generation failed: $_"
+        Write-Error "Screensaver generation failed: $_"
         throw
     }
     finally {
