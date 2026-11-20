@@ -931,6 +931,60 @@ try {
     # Write-Warning "Task is registered but could not start now. It will run at the next interactive logon. $($_.Exception.Message)"
 }
 
+# ================================================
+# Disable Nearby Sharing and Mobile Hotspot
+# Scope: All users (Machine-wide)
+# Execution: Administrator / SYSTEM
+# ================================================
+
+try {
+    # 1. Disable Cross-device experiences / Nearby Sharing
+    $SystemPolicy = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System'
+
+    New-Item -Path $SystemPolicy -Force | Out-Null
+
+    New-ItemProperty -Path $SystemPolicy `
+        -Name 'EnableCdp' `
+        -PropertyType DWord `
+        -Value 0 `
+        -Force | Out-Null
+
+    # 2. Disable Mobile Hotspot / Internet Connection Sharing UI
+    $NetworkPolicy = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Network Connections'
+
+    New-Item -Path $NetworkPolicy -Force | Out-Null
+
+    New-ItemProperty -Path $NetworkPolicy `
+        -Name 'NC_ShowSharedAccessUI' `
+        -PropertyType DWord `
+        -Value 0 `
+        -Force | Out-Null
+
+    # 3. Apply computer policies
+    & gpupdate.exe /target:computer /force | Out-Null
+
+    # 4. Stop and disable Mobile Hotspot service
+    Stop-Service -Name 'icssvc' -Force -ErrorAction SilentlyContinue
+    Set-Service -Name 'icssvc' -StartupType Disabled
+
+    # 5. Verify configuration
+    $CdpValue = (Get-ItemProperty -Path $SystemPolicy -Name 'EnableCdp').EnableCdp
+    $HotspotPolicy = (Get-ItemProperty -Path $NetworkPolicy -Name 'NC_ShowSharedAccessUI').NC_ShowSharedAccessUI
+    $HotspotService = Get-CimInstance Win32_Service -Filter "Name='icssvc'"
+
+    if ($CdpValue -eq 0 -and $HotspotPolicy -eq 0 -and $HotspotService.StartMode -eq 'Disabled') {
+        Write-Output 'Nearby Sharing: Disabled'
+        Write-Output 'Mobile Hotspot: Disabled'
+    }
+    else {
+        throw 'One or more settings could not be applied.'
+    }
+}
+catch {
+    Write-Error "Failed: $($_.Exception.Message)"
+    exit 1
+}
+
 # ------------------------------------------------------------
 # Final output only
 # ------------------------------------------------------------
