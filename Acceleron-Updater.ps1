@@ -170,6 +170,20 @@ if (-not (Test-Path $PolicyConfigPath)) {
                     Files = @("C:\Windows\System32\Acceleron\Updater\Updater.exe")
                     Tasks = @("Acceleron Updater")
                     Services = @()
+                },
+				[ordered]@{
+                    Name = "AdminLauncher"
+                    Message = "Applying Admin Launcher Policy"
+                    Url = "https://github.com/bprasad884uu/Gainwell/raw/refs/heads/main/Install-AdminLauncher.ps1"
+                    RepoPath = "Install-AdminLauncher.ps1"
+                    StateFile = "AdminLauncher.sha"
+                    Files = @("C:\Windows\System32\Acceleron\AdminLauncher\ADMPASS.exe")
+					Files = @(
+                        "C:\Windows\System32\Acceleron\AdminLauncher\ADMPASS.exe",
+                        "C:\Windows\System32\Acceleron\AdminLauncher\admsvc.exe"
+					)
+                    Tasks = @()
+                    Services = @()
                 }
             )
         }
